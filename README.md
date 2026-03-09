@@ -1,4 +1,4 @@
-# Claude Code 自訂 Skills & Hooks 管理
+# Max的  Claude Code 自訂 Skills & Hooks 管理
 
 集中管理本機上所有 Claude Code 自訂 skill、hook 與 script 的索引文件。
 
