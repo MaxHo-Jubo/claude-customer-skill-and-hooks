@@ -175,6 +175,37 @@
 
 ---
 
+## Plugins & MCP Servers
+
+> 完整說明見 [`plugins/README.md`](plugins/README.md)
+
+### 啟用的 Plugins
+
+| Plugin | 來源 | 用途 |
+|--------|------|------|
+| code-review | claude-plugins-official | PR 自動化 code review |
+| atlassian | claude-plugins-official | Jira & Confluence 整合 |
+| claude-md-management | claude-plugins-official | CLAUDE.md 維護工具 |
+| typescript-lsp | claude-plugins-official | TypeScript/JS Language Server |
+| context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
+| everything-claude-code | everything-claude-code | 13 agents + 20 skills + hooks + rules 完整配置集 |
+| claude-mem | thedotmack | 跨 session 持久記憶系統 |
+| context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
+| example-skills | anthropic-agent-skills | 範例 skills（pdf、xlsx、docx、pptx、skill-creator…） |
+| document-skills | anthropic-agent-skills | 文件處理套件 |
+
+### MCP Servers
+
+| Server | 用途 |
+|--------|------|
+| context7 | 函式庫文件即時查詢 |
+| context-mode | 沙盒執行 + FTS5 知識庫 |
+| mcp-search | 持久記憶語意搜尋 |
+| atlassian | Jira/Confluence CRUD |
+| typescript-lsp | TS/JS 型別檢查與導航 |
+
+---
+
 ## StatusLine 自訂狀態列
 
 - **位置**：`~/.claude/statusline-command.sh`

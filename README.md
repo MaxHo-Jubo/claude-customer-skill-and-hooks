@@ -13,6 +13,8 @@
 ├── statusline/            # 自訂狀態列腳本
 │   ├── statusline-command.sh
 │   └── README.md
+├── plugins/               # 插件與 MCP 伺服器索引
+│   └── README.md
 ├── docs/
 │   ├── skills.md          # Skills 完整參考手冊
 │   ├── hooks.md           # Hooks 完整參考手冊
@@ -55,6 +57,16 @@
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
 | PostToolUse (*) | 任何工具後 | `observe-wrapper.sh post` | 持續學習觀察記錄 |
 | Stop | Session 結束 | `analyze-on-stop.sh` | 分析觀察結果，產生學習 instinct |
+
+## Plugins & MCP Servers
+
+詳見 [`plugins/README.md`](plugins/README.md)。
+
+| 分類 | 數量 | 說明 |
+|------|------|------|
+| Plugins（啟用） | 10 | code-review、atlassian、claude-md-management、typescript-lsp、context7、everything-claude-code、claude-mem、context-mode、example-skills、document-skills |
+| Plugins（停用） | 3 | code-simplifier、frontend-design、github |
+| MCP Servers | 5 | context7、context-mode、mcp-search、atlassian、typescript-lsp |
 
 ## StatusLine 自訂狀態列
 
