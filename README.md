@@ -8,6 +8,11 @@
 .
 ├── README.md              # 本文件 — 總覽與快速查詢
 ├── skills/                # 自訂 skill 原始檔（symlink 或複本）
+├── hooks/                 # Hook 腳本
+├── scripts/               # 輔助 scripts
+├── statusline/            # 自訂狀態列腳本
+│   ├── statusline-command.sh
+│   └── README.md
 ├── docs/
 │   ├── skills.md          # Skills 完整參考手冊
 │   ├── hooks.md           # Hooks 完整參考手冊
@@ -51,6 +56,15 @@
 | PostToolUse (*) | 任何工具後 | `observe-wrapper.sh post` | 持續學習觀察記錄 |
 | Stop | Session 結束 | `analyze-on-stop.sh` | 分析觀察結果，產生學習 instinct |
 
+## StatusLine 自訂狀態列
+
+合併自兩個開源方案，詳見 [`statusline/README.md`](statusline/README.md)：
+
+| 來源 | 貢獻 |
+|------|------|
+| [sd0xdev/sd0x-dev-flow](https://github.com/sd0xdev/sd0x-dev-flow) | 佈局：目錄、git、model、context%、session、thinking |
+| [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline) | OAuth rate limits 進度條（5h / 7d / extra） |
+
 ## 檔案位置
 
 | 類別 | 路徑 |
@@ -59,4 +73,5 @@
 | Hooks 設定 | `~/.claude/settings.json` → `hooks` |
 | Hook 腳本 | `~/.claude/hooks/` |
 | 輔助 Scripts | `~/.claude/scripts/` |
+| StatusLine | `~/.claude/statusline-command.sh` |
 | 持續學習系統 | `~/.claude/homunculus/` |

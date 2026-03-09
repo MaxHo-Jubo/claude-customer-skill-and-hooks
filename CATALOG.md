@@ -175,6 +175,18 @@
 
 ---
 
+## StatusLine 自訂狀態列
+
+- **位置**：`~/.claude/statusline-command.sh`
+- **來源**：合併自 [sd0xdev/sd0x-dev-flow](https://github.com/sd0xdev/sd0x-dev-flow)（佈局）+ [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline)（rate limits）
+- **設定**：`~/.claude/settings.json` → `statusLine.command`
+- **顯示**：
+  - 第一行：目錄 (branch*) │ Model │ ctx:N% │ ⏱ session │ thinking
+  - 第二～四行：current / weekly / extra usage 進度條（需 OAuth）
+- **詳細說明**：[`statusline/README.md`](statusline/README.md)
+
+---
+
 ## 持續學習系統（Homunculus）
 
 - **位置**：`~/.claude/homunculus/`
