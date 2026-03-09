@@ -77,6 +77,22 @@
 | [sd0xdev/sd0x-dev-flow](https://github.com/sd0xdev/sd0x-dev-flow) | 佈局：目錄、git、model、context%、session、thinking |
 | [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline) | OAuth rate limits 進度條（5h / 7d / extra） |
 
+## GitNexus — 程式碼知識圖譜
+
+[GitNexus](https://github.com/abhigyanpatwari/GitNexus)（v1.2.8）是圖譜驅動的程式碼智慧工具，為 AI agent 提供 codebase 的結構化索引與查詢能力。
+
+- **安裝**：`npm install -g gitnexus`
+- **建立索引**：在專案目錄執行 `npx gitnexus analyze`，產生 `.gitnexus/` 索引
+- **整合方式**：透過 PreToolUse hook（`gitnexus-hook.cjs`）在 Grep/Glob/Bash 執行前自動注入圖譜上下文
+- **搭配的 Skills**：
+
+| Skill | 用途 |
+|-------|------|
+| gitnexus-exploring | 用知識圖譜導航不熟悉的 codebase，追蹤執行流程 |
+| gitnexus-debugging | 從錯誤訊息追蹤呼叫鏈，定位 root cause |
+| gitnexus-impact-analysis | 修改前分析 blast radius（d=1 必壞 / d=2 可能 / d=3 需測試） |
+| gitnexus-refactoring | 用依賴圖規劃安全的 rename、extract、split 重構 |
+
 ## 檔案位置
 
 | 類別 | 路徑 |
