@@ -1,0 +1,62 @@
+# Claude Code 自訂 Skills & Hooks 管理
+
+集中管理本機上所有 Claude Code 自訂 skill、hook 與 script 的索引文件。
+
+## 目錄結構
+
+```
+.
+├── README.md              # 本文件 — 總覽與快速查詢
+├── skills/                # 自訂 skill 原始檔（symlink 或複本）
+├── docs/
+│   ├── skills.md          # Skills 完整參考手冊
+│   ├── hooks.md           # Hooks 完整參考手冊
+│   └── scripts.md         # Scripts 完整參考手冊
+└── CATALOG.md             # 快速查詢表（一頁看完全部）
+```
+
+## 快速查詢
+
+詳細資訊請見 [CATALOG.md](CATALOG.md)。
+
+---
+
+## Skills 一覽
+
+| Skill | 指令 | 用途 |
+|-------|------|------|
+| jira | `/jira` | Jira Issue 管理，自動從 branch 識別 issue |
+| jira-acceptance | `/jira-acceptance` | 比對 Jira 需求與 git diff，驗收實作完成度 |
+| commit-spec | `/commit-spec` | 快速 commit spec/ 目錄改動 |
+| spec-module | `/spec-module <path>` | 探索模組並產出結構化 spec 文件 |
+| test-module | `/test-module <path>` | 掃描可測試函式，產出單元測試 |
+| explore-report | `/explore-report <dir>` | 探索目錄並強制產出結構化報告 |
+| method-refactor | `/method-refactor <method>` | 7 項檢查結構化優化重構方法 |
+| gitnexus-exploring | — | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
+| gitnexus-debugging | — | 用 GitNexus 追蹤呼叫鏈除錯 |
+| gitnexus-impact-analysis | — | 用 GitNexus 分析修改的影響範圍 |
+| gitnexus-refactoring | — | 用 GitNexus 規劃安全的重構 |
+
+## Hooks 一覽
+
+| Hook 類型 | 觸發時機 | 腳本 | 用途 |
+|-----------|----------|------|------|
+| SessionStart | 啟動 session | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
+| UserPromptSubmit | 使用者送出訊息 | `skill-activation-hook.cjs` | 檢查是否需要啟動 skill |
+| PreToolUse | 工具執行前 | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
+| PreToolUse | 工具執行前 | `observe-wrapper.sh pre` | 持續學習觀察記錄 |
+| PostToolUse (Bash) | Bash 執行後 | `spec-drift-detector.cjs` | 偵測 spec 與源碼的漂移 |
+| PostToolUse (Write/Edit) | 寫入/編輯後 | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
+| PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
+| PostToolUse (*) | 任何工具後 | `observe-wrapper.sh post` | 持續學習觀察記錄 |
+| Stop | Session 結束 | `analyze-on-stop.sh` | 分析觀察結果，產生學習 instinct |
+
+## 檔案位置
+
+| 類別 | 路徑 |
+|------|------|
+| Skills | `~/.claude/skills/` |
+| Hooks 設定 | `~/.claude/settings.json` → `hooks` |
+| Hook 腳本 | `~/.claude/hooks/` |
+| 輔助 Scripts | `~/.claude/scripts/` |
+| 持續學習系統 | `~/.claude/homunculus/` |

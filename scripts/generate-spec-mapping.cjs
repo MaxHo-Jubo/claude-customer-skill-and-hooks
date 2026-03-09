@@ -1,0 +1,1 @@
+/Users/maxhero/.claude/scripts/generate-spec-mapping.cjs

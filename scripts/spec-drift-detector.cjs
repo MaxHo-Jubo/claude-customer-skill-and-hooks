@@ -1,0 +1,1 @@
+/Users/maxhero/.claude/scripts/spec-drift-detector.cjs

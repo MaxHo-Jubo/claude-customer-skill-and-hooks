@@ -1,0 +1,1 @@
+/Users/maxhero/.claude/scripts/inventory-drift-detector.cjs

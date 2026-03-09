@@ -1,0 +1,1 @@
+/Users/maxhero/.claude/scripts/detect-jira-issue.sh
