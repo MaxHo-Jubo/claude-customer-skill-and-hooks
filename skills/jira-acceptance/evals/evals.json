@@ -1,0 +1,79 @@
+{
+  "skill_name": "jira-acceptance",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我剛在 ERPD-11696/feat/max_ho/移除codepush 這個 branch 上改了一些檔案，幫我驗收一下 Jira 需求有沒有都做到",
+      "expected_output": "產出結構化驗收報告，自動從 branch 解析出 ERPD-11696，抓取 Jira issue 描述，比對 git diff，逐條列出需求實作狀態",
+      "files": [],
+      "assertions": [
+        {
+          "name": "auto_detect_issue_key",
+          "description": "應自動從 branch 名稱解析出 Jira issue key",
+          "check": "報告中包含正確的 issue key（ERPD-11696）"
+        },
+        {
+          "name": "report_format",
+          "description": "輸出必須包含標準的驗收報告格式：表格 + 總結",
+          "check": "包含 '需求驗收報告'、需求項目表格（含 #/需求描述/狀態/對應改動 欄位）、總結（已實作/部分實作/未實作計數）"
+        },
+        {
+          "name": "status_icons",
+          "description": "每條需求必須標註 ✅/⚠️/❌ 狀態",
+          "check": "表格中每行都有 ✅ 已實作、⚠️ 部分實作、或 ❌ 未實作 之一"
+        },
+        {
+          "name": "line_range_evidence",
+          "description": "已實作和部分實作的項目必須附帶檔案路徑和行號範圍",
+          "check": "對應改動欄位包含 file:line-line 格式的證據"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "/jira-acceptance LVB-7866",
+      "expected_output": "使用手動傳入的 issue key LVB-7866，抓取需求並比對 diff，產出驗收報告",
+      "files": [],
+      "assertions": [
+        {
+          "name": "manual_issue_key",
+          "description": "應使用手動傳入的 issue key 而非從 branch 解析",
+          "check": "報告中的 Issue 欄位為 LVB-7866"
+        },
+        {
+          "name": "jira_fetch",
+          "description": "必須呼叫 Atlassian MCP 工具抓取 issue",
+          "check": "過程中使用了 getJiraIssue MCP 工具"
+        },
+        {
+          "name": "chinese_output",
+          "description": "報告全程使用繁體中文",
+          "check": "報告內容為繁體中文（包含標題、狀態描述、備註）"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "我在一個叫 fix/max_ho/修正登入問題 的 branch 上，沒有 Jira 編號，幫我驗收 CUP-183 的需求",
+      "expected_output": "branch 無 issue key 但使用者手動指定了 CUP-183，應使用 CUP-183 進行驗收。如果無 diff 則 fallback 到 branch diff",
+      "files": [],
+      "assertions": [
+        {
+          "name": "fallback_to_manual_key",
+          "description": "branch 無 issue key 時應使用使用者提供的 key",
+          "check": "報告中的 Issue 欄位為 CUP-183"
+        },
+        {
+          "name": "diff_fallback",
+          "description": "無 uncommitted changes 時應 fallback 到 branch diff",
+          "check": "比對範圍顯示 branch diff 而非 uncommitted changes，或有說明使用了 fallback"
+        },
+        {
+          "name": "summary_counts",
+          "description": "總結區域必須包含三種狀態的計數",
+          "check": "包含 '已實作: X/Y'、'部分實作: X/Y'、'未實作: X/Y' 格式的計數"
+        }
+      ]
+    }
+  ]
+}
