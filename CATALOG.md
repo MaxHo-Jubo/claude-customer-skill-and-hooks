@@ -47,12 +47,17 @@
 #### `/spec-module <path>` — 模組 Spec 產生
 
 - **位置**：`~/.claude/skills/spec-module/SKILL.md`
-- **用法**：`/spec-module <module-path>`、`/spec-module <path> --commit`
+- **用法**：
+  - `/spec-module <module-path>` — 快速模式，掃描結構產出概覽 spec
+  - `/spec-module <path> --full` — 強制完整掃描，透過 `routes/index.js` 的 `CONTROLLER_ROUTING_MAPPING` 找出所有相關 controller，確保 API 列表 100% 完整
+  - `/spec-module <path> --verify` — 驗證已存在 spec 的完整性，比對原始碼找出遺漏並補上
+  - `/spec-module <path> --commit` — 完成後自動 commit（可與 `--full` / `--verify` 組合）
 - **功能**：
   - 使用 Explore subagent 完整掃描模組
   - 產出結構化 spec：規模、入口架構、檔案一覽、品質觀察
   - 偵測 framework pattern、dead code
-  - `--commit` flag 會自動呼叫 `/commit-spec`
+  - `--full`：讀取路由映射表，逐一掃描所有相關 controller 的 route 定義，附帶完整性驗證 section
+  - `--verify`：三級優先序對應 spec 與原始碼（路由映射表 > Spec 內部標註 > 檔名推斷），找出遺漏 API 並補完，支援批次驗證整個目錄
 - **輸出**：`spec/<module-name>/index.md` 或 `spec/<module-name>.md`
 
 #### `/test-module <path>` — 批量測試產生
