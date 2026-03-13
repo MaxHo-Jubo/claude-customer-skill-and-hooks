@@ -53,6 +53,7 @@
 | PreToolUse | 工具執行前 | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
+| PreCompact | Context 壓縮前 | `pre-compact-snapshot.cjs` | 提醒存重要決策/糾正到 auto memory |
 
 ## Plugins & MCP Servers
 
