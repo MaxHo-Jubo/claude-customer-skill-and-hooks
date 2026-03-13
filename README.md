@@ -52,7 +52,6 @@
 | UserPromptSubmit | 使用者送出訊息 | `skill-activation-hook.cjs` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PreToolUse | 工具執行前 | `observe-wrapper.sh pre` | 持續學習觀察記錄 |
-| PostToolUse (Bash) | Bash 執行後 | `spec-drift-detector.cjs` | 偵測 spec 與源碼的漂移 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
 | PostToolUse (*) | 任何工具後 | `observe-wrapper.sh post` | 持續學習觀察記錄 |
