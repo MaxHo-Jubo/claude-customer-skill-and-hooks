@@ -1,1 +1,0 @@
-/Users/maxhero/.claude/scripts/observe-wrapper.sh
