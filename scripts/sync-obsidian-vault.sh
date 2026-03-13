@@ -20,10 +20,8 @@ get_friendly_name() {
     *erpv3-web-frontend) echo "V3-FE" ;;
     *renewContract) echo "RenewContract" ;;
     *process-moniter) echo "Process-Monitor" ;;
-    *claude-usage) echo "Claude-Usage" ;;
     *onboard) echo "Onboard" ;;
     *claude-customer-skill-and-hooks) echo "Skills-And-Hooks" ;;
-    *flutter-freelance-PT) echo "Flutter-PT" ;;
     *spec-presentation) echo "Spec-Presentation" ;;
     *-Users-maxhero) echo "Global" ;;
     *) echo "" ;;
