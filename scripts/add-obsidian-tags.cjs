@@ -25,10 +25,8 @@ function getProjectTag(filePath) {
     'erpv3-web-frontend': 'V3-FE',
     'renewContract': 'RenewContract',
     'process-moniter': 'Process-Monitor',
-    'claude-usage': 'Claude-Usage',
     'onboard': 'Onboard',
     'claude-customer-skill-and-hooks': 'Skills-And-Hooks',
-    'flutter-freelance-PT': 'Flutter-PT',
     'spec-presentation': 'Spec-Presentation',
   };
 

@@ -1,4 +1,4 @@
-# Max的  Claude Code 自訂 Skills & Hooks 管理
+# Max的 Claude Code 自訂 Skills & Hooks 管理
 
 集中管理本機上所有 Claude Code 自訂 skill、hook 與 script 的索引文件。
 
@@ -28,7 +28,9 @@
 
 ---
 
-## Skills 一覽
+## Skills 一覽（16 個）
+
+### 自訂 Skills（有 slash command）
 
 | Skill | 指令 | 用途 |
 |-------|------|------|
@@ -40,21 +42,31 @@
 | explore-report | `/explore-report <dir>` | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 每週工作回顧與記憶整理 |
-| gitnexus-exploring | — | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
-| gitnexus-debugging | — | 用 GitNexus 追蹤呼叫鏈除錯 |
-| gitnexus-impact-analysis | — | 用 GitNexus 分析修改的影響範圍 |
-| gitnexus-refactoring | — | 用 GitNexus 規劃安全的重構 |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 同步本機 Claude 設定到 Repo |
+| humanizer-zh-tw | `/humanizer-zh-tw` | 去除文字中的 AI 生成痕跡，使其更自然 |
+| ai-md | `/ai-md` | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
+
+### 無 slash command 的 Skills
+
+| Skill | 用途 |
+|-------|------|
+| gitnexus-exploring | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
+| gitnexus-debugging | 用 GitNexus 追蹤呼叫鏈除錯 |
+| gitnexus-impact-analysis | 用 GitNexus 分析修改的影響範圍 |
+| gitnexus-refactoring | 用 GitNexus 規劃安全的重構 |
+| document-skills | 文件技能（由 plugin 提供） |
 
 ## Hooks 一覽
 
-| Hook 類型 | 觸發時機 | 腳本 | 用途 |
-|-----------|----------|------|------|
-| SessionStart | 啟動 session | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
-| UserPromptSubmit | 使用者送出訊息 | `skill-activation-hook.cjs` | 檢查是否需要啟動 skill |
-| PreToolUse | 工具執行前 | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
-| PostToolUse (Write/Edit) | 寫入/編輯後 | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
-| PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
-| PreCompact | Context 壓縮前 | `pre-compact-snapshot.cjs` | 提醒存重要決策/糾正到 auto memory |
+| Hook 類型 | 觸發時機 | Matcher | 腳本 | 用途 |
+|-----------|----------|---------|------|------|
+| SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
+| UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.cjs` | 檢查是否需要啟動 skill |
+| PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
+| PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
+| PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
+| PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.cjs` | 提醒存重要決策/糾正到 auto memory |
+| Notification | 通知 | * | (inline printf) | 終端機通知 |
 
 ## Plugins & MCP Servers
 
@@ -104,18 +116,23 @@
 
 ## 變更紀錄
 
-### 2026-03-13: 移除 Homunculus / continuous-learning-v2
+### 2026-03-13: 新增 skills、移除 Homunculus 殘留、scripts 更新
+
+**新增項目：**
+- `sync-my-claude-setting` skill — 同步本機 Claude 設定到 Repo
+- `humanizer-zh-tw` skill — 去除文字中的 AI 生成痕跡，使其更自然
+- Notification hook — 終端機通知（inline printf）
 
 **移除項目：**
+- `observe-wrapper.sh`（Homunculus 殘留）
+
+**Scripts 更新：**
+- `add-obsidian-tags.cjs` 和 `sync-obsidian-vault.sh` 新增專案映射
+
+**過往移除（參考）：**
 - `observe-wrapper.sh` (PreToolUse + PostToolUse hooks) — 每次工具調用前後各跑一次 shell
 - `analyze-on-stop.sh` (Stop hook) — session 結束時呼叫 Haiku 分析觀察記錄
 - `spec-drift-detector.cjs` (PostToolUse hook) — spec 漂移偵測（已由公司遠端 Mac 每週自動執行並產出 PR）
-
-**移除理由：**
-- 運行 10 天，產出 0 個 instinct，400+ 個歸檔檔案
-- 記錄層級太低（工具名稱 + session_id），無法推斷語意模式
-- 每次工具調用增加 2 個 shell process，造成可感延遲
-- 每次 session 結束白呼叫 Haiku tokens
 
 **替代方案：**
 在 CLAUDE.md 新增 `LEARNING` 規則，利用既有的 auto memory（feedback/user type）+ claude-mem 實現跨 session 學習。被糾正時主動存 feedback memory，發現偏好時存 user memory，session 開始時讀取相關記憶。語意層級的學習比工具序列分析有效得多。

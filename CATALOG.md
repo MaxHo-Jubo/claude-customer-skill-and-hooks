@@ -53,6 +53,19 @@
   5. 記憶整理（過期/重複/升級建議，需使用者確認）
 - **依賴**：git、claude-mem MCP、auto memory
 
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo
+
+- **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
+- **用法**：`/sync-my-claude-setting`
+- **功能**：
+  1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開）
+  2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）
+  3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`
+  4. Commit & Push — 根據差異報告產生 commit message 並推送
+- **同步清單**：`settings.json`、`CLAUDE.md`、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **依賴**：git、rsync
+- **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
+
 ---
 
 ### 程式碼品質類
@@ -107,6 +120,22 @@
   6. 冗餘移除（含 NOTE 註解清理）
   7. 測試驗證（跑 test + lint + tsc）
 - **輸出**：每項檢查的 ✅/⏭️/❌ 狀態表
+
+---
+
+### 文字品質類
+
+#### `/humanizer-zh-tw` — 去除 AI 寫作痕跡
+
+- **位置**：`~/.claude/skills/humanizer-zh-tw/SKILL.md`
+- **用法**：`/humanizer-zh-tw`（提供需要人性化處理的文字）
+- **功能**：
+  - 辨識並修復 AI 生成文字的常見模式：誇大的象徵意義、宣傳性語言、以 -ing 結尾的膚淺分析、模糊的歸因、破折號過度使用、三段式法則、AI 詞彙、否定式排比、過多的連接性短語
+  - 5 條核心原則：刪除填充短語、打破公式結構、變化節奏、信任讀者、刪除金句
+  - 注入真實個性（有觀點、變化節奏、承認複雜性、適當使用第一人稱、允許混亂）
+  - 品質評分系統（直接性/節奏/信任度/真實性/精煉度，滿分 50）
+- **來源**：op7418/humanizer-zh 的分支，翻譯自 blader/humanizer，參考 hardikpandya/stop-slop
+- **依賴**：無（純文字編輯）
 
 ---
 
@@ -174,6 +203,12 @@
 |------|------|
 | `pre-compact-snapshot.cjs` | Context 壓縮前提醒存重要決策/糾正到 auto memory |
 
+### Notification
+
+| Matcher | 腳本 | 用途 |
+|---------|------|------|
+| `*` | (inline printf) | 終端機通知 |
+
 ---
 
 ## Scripts（輔助工具）
@@ -195,7 +230,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins
+### 啟用的 Plugins（12）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -212,7 +247,7 @@
 | document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
 | superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
 
-### 停用的 Plugins
+### 停用的 Plugins（3）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
@@ -272,4 +307,6 @@ gitnexus-hook ──→ gitnexus-exploring
 
 auto memory ──→ weekly-review（整理）
                Obsidian vault（瀏覽）
+
+~/.claude/ ──→ sync-my-claude-setting（同步到 repo）
 ```
