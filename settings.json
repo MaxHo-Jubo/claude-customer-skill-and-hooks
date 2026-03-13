@@ -276,17 +276,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/spec-drift-detector.cjs\"",
-            "timeout": 5000,
-            "statusMessage": "Checking spec drift..."
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit",
         "hooks": [
           {
