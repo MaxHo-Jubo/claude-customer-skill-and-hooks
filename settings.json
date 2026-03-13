@@ -1,0 +1,388 @@
+{
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forum.developer.samsung.com)",
+      "WebSearch",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm install:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(npm info:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(RCT_NEW_ARCH_ENABLED=1 bundle exec pod install:*)",
+      "Bash(RCT_NEW_ARCH_ENABLED=1 pod install:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(node --version:*)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(nvm use:*)",
+      "Bash(npx react-native run-ios:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx patch-package:*)",
+      "Bash(node scripts/patch-react-native-pdf.js:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(nvm list:*)",
+      "Bash(npm view:*)",
+      "Bash(adb devices:*)",
+      "Bash(./gradlew assembleRelease:*)",
+      "Bash(adb install:*)",
+      "Bash(ruby:*)",
+      "Bash(bundle -v:*)",
+      "Bash(export NVM_DIR=\"$HOME/.nvm\")",
+      "Bash([ -s \"$NVM_DIR/nvm.sh\" ])",
+      "Bash(. \"$NVM_DIR/nvm.sh\")",
+      "Bash(nvm alias:*)",
+      "Bash(npx react-native:*)",
+      "Bash(chmod:*)",
+      "Bash(xcrun simctl list:*)",
+      "Bash(xcrun simctl spawn:*)",
+      "WebFetch(domain:notifee.app)",
+      "Bash(npx eslint:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash($ANDROID_HOME/cmdline-tools/latest/bin/avdmanager list device)",
+      "Bash($ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list)",
+      "Bash(~/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager list:*)",
+      "Bash(~/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager create:*)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:cs.android.com)",
+      "Bash(.claude/scripts/detect-jira-issue.sh:*)",
+      "Bash(~/.claude/scripts/detect-jira-issue.sh:*)",
+      "Bash(git reset:*)",
+      "Bash(git stash:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/rebase-commands.txt\" git rebase -i 126af3f3)",
+      "Bash(gh api:*)",
+      "Bash(npm run build-android:*)",
+      "Bash(npx jetify:*)",
+      "Bash(npm run build-ios:*)",
+      "Bash(ls:*)",
+      "Bash(react-native bundle:*)",
+      "Bash(security find-identity:*)",
+      "Skill(jira)",
+      "Bash(jira issue view:*)",
+      "Bash(jira version:*)",
+      "Bash(jira init:*)",
+      "Bash(done)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(if [ -f \"$f\" ])",
+      "Bash(then)",
+      "Bash(TYPE=\"?\")",
+      "Bash(if grep -q \"extends.*Component\\\\|extends.*PureComponent\" \"$f\")",
+      "Bash(TYPE=\"Class\")",
+      "Bash(elif grep -q \"^const.*= \\(\\\\|^function \\\\|^export default function\\\\|^export const.*= \\(\" \"$f\")",
+      "Bash(TYPE=\"Function\")",
+      "Bash(elif grep -q \"StyleSheet.create\\\\|export default {\" \"$f\")",
+      "Bash(TYPE=\"Style\")",
+      "Bash(fi)",
+      "Bash(echo:*)",
+      "Bash(emulator -list-avds:*)",
+      "Bash(claude mcp --help:*)",
+      "Bash(claude mcp remove:*)",
+      "Bash(claude mcp add --scope user context7 -- npx -y @upstash/context7-mcp --api-key ctx7sk-97b9e21b-46b1-4ccb-a506-d89bffe8e548)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude --version:*)",
+      "Bash(npm show:*)",
+      "Bash(tar:*)",
+      "mcp__plugin_serena_serena__activate_project",
+      "mcp__plugin_serena_serena__check_onboarding_performed",
+      "mcp__plugin_serena_serena__onboarding",
+      "mcp__plugin_serena_serena__list_dir",
+      "mcp__plugin_serena_serena__read_file",
+      "mcp__plugin_serena_serena__write_memory",
+      "mcp__plugin_serena_serena__think_about_whether_you_are_done",
+      "Bash(adb:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/gh auth status)",
+      "Bash(/opt/homebrew/bin/gh pr list --head \"LVB-7762/fix/max_ho/修正畫面異常放大\" --json number,state,title,isDraft,url)",
+      "Bash(/opt/homebrew/bin/gh pr view:*)",
+      "Bash(/opt/homebrew/bin/gh pr diff 1048 --name-only)",
+      "Bash(/opt/homebrew/bin/gh pr diff:*)",
+      "Bash(/opt/homebrew/bin/gh pr list:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(/opt/homebrew/bin/gh pr comment:*)",
+      "mcp__plugin_atlassian_atlassian__getAccessibleAtlassianResources",
+      "mcp__plugin_atlassian_atlassian__getJiraIssue",
+      "mcp__context7__resolve-library-id",
+      "Bash(curl:*)",
+      "Bash(npm run android:*)",
+      "Bash(./gradlew app:packageDebug:*)",
+      "Bash(./gradlew app:installDebug:*)",
+      "Bash(npm start)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(./gradlew:*)",
+      "Bash(git log:*)",
+      "Bash(find:*)",
+      "Bash(xargs curl -s)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(git fetch:*)",
+      "Bash(node -e:*)",
+      "WebFetch(domain:gist.github.com)",
+      "Bash(bash)",
+      "Bash(export PATH=\"$PATH\":\"$HOME/.maestro/bin\")",
+      "Bash(maestro test:*)",
+      "Bash(maestro --device list:*)",
+      "Bash(maestro --device EDD77BA2-71A5-4787-9BF9-10F077480F75 test:*)",
+      "mcp__context7__query-docs",
+      "Bash(~/.maestro/bin/maestro test:*)",
+      "Bash(git push:*)",
+      "Bash(python3:*)",
+      "Bash(pbcopy:*)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff mv HomeCareStaffRN/.github/workflows/release.yml .github/workflows/release.yml)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff status)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff add .github/workflows/release.yml)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-修正workflow路徑與工作目錄\n\n- 將 release.yml 搬至 repo 根目錄 .github/workflows/（GitHub Actions 才能辨識）\n- 設定 defaults.run.working-directory: HomeCareStaffRN\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff push)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff diff --stat)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff add HomeCareStaffRN/fastlane/Appfile HomeCareStaffRN/fastlane/Fastfile)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] refactor\\(App\\): 居服App-將key路徑改為環境變數\n\n- App Store Connect API key_id/issuer_id/key_filepath 改從環境變數讀取\n- Google Play JSON key 路徑改從環境變數讀取\n- 未設定環境變數時 fallback 到原本的值，本地開發不受影響\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-設定CI git credential以支援push\n\n- Checkout 後設定 git url rewrite，使用 GITHUB_API_TOKEN secret\n- 讓 fastlane 的 push_to_git_remote 和 create_pull_request 能正常運作\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-改用checkout token設定git credential\n\n- 移除獨立的 git config step，改在 actions/checkout 帶入 GITHUB_API_TOKEN\n- 確保後續 fastlane 的 git push 和 create_pull_request 有寫入權限\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-直接設定remote URL帶token確保push權限\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-修正secrets名稱為API_TOKEN_FOR_RELEASE_ACTION\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-改用runner環境變數GITHUB_API_TOKEN設定git credential\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] fix\\(App\\): 居服App-關閉checkout persist-credentials避免覆蓋token\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff log --oneline ERPD-11731/feat/fastlane整合CICD --not master)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] chore\\(App\\): 居服App-新增debug step排查git push權限問題\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] chore\\(App\\): 居服App-移除debug step\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff add .github/workflows/release.yml HomeCareStaffRN/fastlane/Fastfile HomeCareStaffRN/fastlane/Appfile)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] refactor\\(App\\): 居服App-移除舊key fallback，改用secret遮蔽token\n\n- Fastfile/Appfile 的 key 路徑改用 ENV.fetch，未設定環境變數直接報錯\n- git remote URL 改從 GitHub Secret 讀取 token，避免明文出現在 job log\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff add HomeCareStaffRN/fastlane/Fastfile)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] chore\\(App\\): 居服App-暫時註解PR reviewer以供測試\nEOF\n\\)\")",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff add HomeCareStaffRN/ios/HomeCareStaffRN.xcodeproj/project.pbxproj)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff commit -m \"$\\(cat <<''EOF''\n[ERPD-11731] chore\\(App\\): 居服App-測試版號1.50.22\\(455\\)\nEOF\n\\)\")",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(gh pr list:*)",
+      "WebFetch(domain:docs.maestro.dev)",
+      "WebFetch(domain:maestro.dev)",
+      "Bash(xcrun simctl install:*)",
+      "Bash(xcrun simctl launch:*)",
+      "Bash(cat:*)",
+      "Bash(xargs cat:*)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff/HomeCareStaffRN remote -v)",
+      "Bash(claude setup-token:*)",
+      "Bash(claude help:*)",
+      "Bash(gtimeout:*)",
+      "Bash(git -C /Users/maxhero/Documents/Compal/luna_web/frontend rev-parse:*)",
+      "Bash(git pull:*)",
+      "Bash(gh pr view:*)",
+      "Bash(git mv:*)",
+      "Bash($ANDROID_HOME/emulator/emulator:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(wc:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebFetch(domain:xdaforums.com)",
+      "WebFetch(domain:repost.aws)",
+      "Bash(cd:*)",
+      "Bash(git restore:*)",
+      "mcp__plugin_serena_serena__list_memories",
+      "mcp__plugin_serena_serena__replace_content",
+      "Bash(npm run lint:*)",
+      "mcp__plugin_serena_serena__create_text_file",
+      "Bash(.head -20)",
+      "mcp__plugin_serena_serena__replace_symbol_body",
+      "mcp__plugin_serena_serena__read_memory",
+      "Bash(npm test:*)",
+      "Bash(npx jest:*)",
+      "Skill(code-review:code-review)",
+      "Bash(./gradlew bundleRelease)",
+      "Bash(open:*)",
+      "mcp__plugin_serena_serena__find_file",
+      "mcp__plugin_serena_serena__find_symbol",
+      "Bash(git grep:*)",
+      "Bash(xargs:*)",
+      "WebFetch(domain:jubo.atlassian.net)",
+      "Bash(/Users/maxhero/.nvm/versions/node/v20.20.0/bin/claude:*)",
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "mcp__plugin_serena_serena__get_symbols_overview",
+      "Bash(for c in b4a3e49 3a3637b c0da0a3 040e8b5 000e1f7 ed79c9b e5672fe bbdf541 90f2d36 9ae5a85 153dbeb)",
+      "Bash(do echo \"===== $c =====\")",
+      "Bash(pod cache clean:*)",
+      "Bash(npx @react-native-community/cli init:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git status:*)",
+      "Bash(defaults read:*)",
+      "Bash(emulator:*)",
+      "Bash(while read f)",
+      "Bash(do security cms:*)",
+      "Bash(agvtool what-marketing-version:*)",
+      "Bash(agvtool what-version:*)",
+      "Bash(typescript-language-server:*)",
+      "Bash(tsc:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(git clone:*)",
+      "Bash(node:*)",
+      "Bash(git config:*)",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "mcp__plugin_claude-mem_mcp-search__save_memory",
+      "Bash(fc-list:*)",
+      "Bash(ghostty +show-config:*)",
+      "mcp__plugin_context-mode_context-mode__execute_file",
+      "mcp__plugin_context-mode_context-mode__batch_execute",
+      "mcp__plugin_context-mode_context-mode__search",
+      "Bash(sed:*)",
+      "Bash(bash:*)",
+      "Bash(kill 88107:*)",
+      "mcp__plugin_context-mode_context-mode__execute",
+      "mcp__plugin_context-mode_context-mode__fetch_and_index",
+      "Bash(CLAUDE_USER_CONTENT=\"幫我看一下這個 PR 的 code review\" node:*)",
+      "Bash(CLAUDE_USER_CONTENT=\"這個改動的影響範圍有多大\" node:*)",
+      "Bash(CLAUDE_TOOL_NAME=\"Write\" CLAUDE_TOOL_INPUT='{\"file_path\":\"/Users/maxhero/.claude/skills/test-new-skill/SKILL.md\"}' node:*)",
+      "Bash(CLAUDE_TOOL_NAME=\"Edit\" CLAUDE_TOOL_INPUT='{\"file_path\":\"/Users/maxhero/.claude/settings.json\"}' node:*)",
+      "Bash(CLAUDE_TOOL_NAME=\"Edit\" CLAUDE_TOOL_INPUT='{\"\"file_path\"\":\"\"/Users/maxhero/.claude/projects/-Users-maxhero/memory/inventory.md\"\"}' node:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr create:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /Users/maxhero/.claude/scripts/skill-activation-hook.cjs",
+            "timeout": 3000,
+            "statusMessage": "Checking skill activation..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/detect-jira-issue.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/scripts/spec-drift-detector.cjs\"",
+            "timeout": 5000,
+            "statusMessage": "Checking spec drift..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/scripts/spec-section-validator.cjs\"",
+            "timeout": 3000,
+            "statusMessage": "Validating spec sections..."
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/scripts/inventory-drift-detector.cjs\"",
+            "timeout": 5000,
+            "statusMessage": "Checking inventory drift..."
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/maxhero/.claude/scripts/observe-wrapper.sh post",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\e]9;Claude Code: %s\\a' \"$CLAUDE_NOTIFICATION_MESSAGE\"",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/maxhero/.claude/homunculus/hooks/analyze-on-stop.sh",
+            "timeout": 60000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.cjs\"",
+            "timeout": 8000,
+            "statusMessage": "Enriching with GitNexus graph context..."
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Write|Edit|Bash|Grep|Glob|Agent|Skill|NotebookEdit|LSP",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/maxhero/.claude/scripts/observe-wrapper.sh pre",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /Users/maxhero/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": false,
+    "code-review@claude-plugins-official": true,
+    "atlassian@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": false,
+    "claude-md-management@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "github@claude-plugins-official": false,
+    "claude-mem@thedotmack": true,
+    "context-mode@claude-context-mode": true,
+    "everything-claude-code@everything-claude-code": true,
+    "example-skills@anthropic-agent-skills": true,
+    "document-skills@anthropic-agent-skills": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "jdtls-lsp@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "language": "繁體中文",
+  "skipDangerousModePermissionPrompt": true
+}

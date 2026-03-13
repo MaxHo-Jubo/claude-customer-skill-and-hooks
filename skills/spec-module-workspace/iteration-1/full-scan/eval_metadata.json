@@ -1,0 +1,6 @@
+{
+  "eval_id": 3,
+  "eval_name": "full-scan",
+  "prompt": "/spec-module backend/controllers/caseController.js --full",
+  "assertions": []
+}

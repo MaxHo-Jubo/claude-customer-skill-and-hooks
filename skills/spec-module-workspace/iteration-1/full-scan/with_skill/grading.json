@@ -1,0 +1,12 @@
+{
+  "eval_id": 3,
+  "eval_name": "full-scan",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "lists_all_routes", "passed": true, "evidence": "列出全部 12 個 route，每個含行號、Bean 驗證、參數、業務邏輯"},
+    {"text": "includes_http_method", "passed": true, "evidence": "每個 route 標註 POST"},
+    {"text": "includes_route_path", "passed": true, "evidence": "每個 route 標註完整路徑如 /case/create"},
+    {"text": "has_verification_section", "passed": true, "evidence": "包含完整性驗證 section（驗證日期、route 總數、完整度）+ Route 對照表"},
+    {"text": "verification_counts_match", "passed": true, "evidence": "原始碼 12 = Spec 12，100%"}
+  ]
+}
