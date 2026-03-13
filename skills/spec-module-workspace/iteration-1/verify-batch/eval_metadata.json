@@ -1,0 +1,6 @@
+{
+  "eval_id": 2,
+  "eval_name": "verify-batch",
+  "prompt": "/spec-module backend/spec/controllers/ --verify",
+  "assertions": []
+}

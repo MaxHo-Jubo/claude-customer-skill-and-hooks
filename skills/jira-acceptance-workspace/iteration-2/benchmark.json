@@ -1,0 +1,72 @@
+{
+  "skill_name": "jira-acceptance",
+  "iteration": 2,
+  "timestamp": "2026-03-09T11:50:00+08:00",
+  "configurations": [
+    {
+      "name": "with_skill",
+      "label": "With Skill (iteration 2)",
+      "evals": [
+        {
+          "eval_id": 1,
+          "eval_name": "auto-branch-detect",
+          "pass_rate": 1.0,
+          "passed": 8,
+          "total": 8,
+          "tokens": 33947,
+          "duration_seconds": 68.3,
+          "assertions": [
+            {"text": "auto_detect_issue_key", "passed": true, "evidence": "第 3 行: **Issue**: CMD-276"},
+            {"text": "report_has_table", "passed": true, "evidence": "第 9-15 行有正確的 markdown 表格，含 #/需求描述/狀態/對應改動 欄位"},
+            {"text": "status_icons_present", "passed": true, "evidence": "5 條需求都使用 ✅ 已實作 標記"},
+            {"text": "line_range_evidence", "passed": true, "evidence": "每條都有具體行號：caseAssignActionCreator.js:13, caseAssignReducer.js:12-13, AssignSearchForm.jsx:31-34 等"},
+            {"text": "summary_counts", "passed": true, "evidence": "第 19-21 行: 已實作: 5/5, 部分實作: 0/5, 未實作: 0/5"},
+            {"text": "requirement_extraction", "passed": true, "evidence": "拆出 5 條需求：分頁查詢、查詢條件、搜尋 UI、操作後保留搜尋條件、loading 狀態"},
+            {"text": "untracked_files_detected", "passed": true, "evidence": "報告引用 AssignSearchForm.jsx:1-54, CaseAssignEnum.js:7-8"},
+            {"text": "chinese_output", "passed": true, "evidence": "全文繁體中文"}
+          ]
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 1.0,
+        "mean_tokens": 33947,
+        "mean_duration_seconds": 68.3
+      }
+    },
+    {
+      "name": "without_skill",
+      "label": "Baseline (no skill)",
+      "evals": [
+        {
+          "eval_id": 1,
+          "eval_name": "auto-branch-detect",
+          "pass_rate": 0.375,
+          "passed": 3,
+          "total": 8,
+          "tokens": 30793,
+          "duration_seconds": 104.1,
+          "assertions": [
+            {"text": "auto_detect_issue_key", "passed": true, "evidence": "票號: CMD-276"},
+            {"text": "report_has_table", "passed": false, "evidence": "使用多個子表格而非標準單一總表，缺少 #/需求描述/狀態/對應改動 的統一表格"},
+            {"text": "status_icons_present", "passed": false, "evidence": "使用 ✅ 通過 / ⚠️ 未見，不是標準的 ✅ 已實作 / ⚠️ 部分實作 / ❌ 未實作 三分法"},
+            {"text": "line_range_evidence", "passed": false, "evidence": "列出功能描述但無具體 file:line-line 格式的行號範圍"},
+            {"text": "summary_counts", "passed": false, "evidence": "無標準 已實作: X/Y、部分實作: X/Y、未實作: X/Y 計數格式"},
+            {"text": "requirement_extraction", "passed": true, "evidence": "正確拆出 3 條需求並識別 untracked 檔案中的實作"},
+            {"text": "untracked_files_detected", "passed": true, "evidence": "正確識別 AssignSearchForm.jsx 和 CaseAssignEnum.js"},
+            {"text": "chinese_output", "passed": true, "evidence": "全文繁體中文"}
+          ]
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 0.375,
+        "mean_tokens": 30793,
+        "mean_duration_seconds": 104.1
+      }
+    }
+  ],
+  "delta": {
+    "pass_rate": "+62.5%",
+    "tokens": "+10.2%",
+    "duration": "-34.4% (faster)"
+  }
+}

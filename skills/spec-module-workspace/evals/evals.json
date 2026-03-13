@@ -1,0 +1,47 @@
+{
+  "skill_name": "spec-module",
+  "evals": [
+    {
+      "id": 1,
+      "name": "verify-single-spec",
+      "prompt": "/spec-module backend/spec/controllers/employee.md --verify",
+      "expected_output": "讀取 employee.md spec，比對 employeeController.js 原始碼的所有 router.route 定義，產出完整性報告。",
+      "files": [],
+      "assertions": [
+        {"text": "report_contains_route_count", "description": "報告中包含原始碼 route 總數"},
+        {"text": "report_contains_spec_count", "description": "報告中包含 spec 列出的 API 數量"},
+        {"text": "report_contains_percentage", "description": "報告中包含完整度百分比"},
+        {"text": "identifies_source_file", "description": "正確識別對應的原始碼檔案"},
+        {"text": "follows_phase_1_5_steps", "description": "按照 Phase 1.5 步驟執行（定位→提取→比對→報告）"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "verify-batch",
+      "prompt": "/spec-module backend/spec/controllers/ --verify",
+      "expected_output": "批次驗證目錄下所有 spec 檔案，對每個 spec 比對原始碼，輸出摘要表格。",
+      "files": [],
+      "assertions": [
+        {"text": "covers_all_spec_files", "description": "報告涵蓋目錄下所有 spec 檔案"},
+        {"text": "summary_table_format", "description": "輸出包含摘要表格或列表（每個 spec 一行）"},
+        {"text": "each_entry_has_counts", "description": "每個 entry 包含 spec 數量和原始碼數量"},
+        {"text": "each_entry_has_percentage", "description": "每個 entry 包含完整度百分比"},
+        {"text": "correctly_maps_spec_to_source", "description": "正確將 spec 檔名對應到 controller 原始碼"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "full-scan",
+      "prompt": "/spec-module backend/controllers/caseController.js --full",
+      "expected_output": "強制完整掃描 caseController，產出含完整性驗證 section 的 spec 文件。",
+      "files": [],
+      "assertions": [
+        {"text": "lists_all_routes", "description": "spec 列出所有 route 定義"},
+        {"text": "includes_http_method", "description": "每個 route 標註 HTTP method"},
+        {"text": "includes_route_path", "description": "每個 route 標註完整路徑"},
+        {"text": "has_verification_section", "description": "包含完整性驗證 section"},
+        {"text": "verification_counts_match", "description": "驗證 section 中的數量與實際 route 數一致"}
+      ]
+    }
+  ]
+}

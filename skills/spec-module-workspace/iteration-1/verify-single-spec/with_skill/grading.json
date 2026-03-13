@@ -1,0 +1,12 @@
+{
+  "eval_id": 1,
+  "eval_name": "verify-single-spec",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "report_contains_route_count", "passed": true, "evidence": "報告明確顯示「原始碼 route 總數：26」"},
+    {"text": "report_contains_spec_count", "passed": true, "evidence": "報告明確顯示「Spec 列出數量：26」"},
+    {"text": "report_contains_percentage", "passed": true, "evidence": "報告明確顯示「完整度：100%」"},
+    {"text": "identifies_source_file", "passed": true, "evidence": "正確識別 controllers/employeeController.js"},
+    {"text": "follows_phase_1_5_steps", "passed": true, "evidence": "按 Phase 1.5 六個步驟逐一執行（Step 1-6 完整標記）"}
+  ]
+}

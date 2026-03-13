@@ -1,0 +1,99 @@
+{
+  "skill_name": "spec-module",
+  "iteration": 1,
+  "timestamp": "2026-03-11T11:30:00+08:00",
+  "configurations": [
+    {
+      "name": "with_skill",
+      "description": "使用更新後的 spec-module skill（含 --verify 和 --full）",
+      "results": [
+        {
+          "eval_id": 1,
+          "eval_name": "verify-single-spec",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 39637,
+          "duration_seconds": 63.2
+        },
+        {
+          "eval_id": 2,
+          "eval_name": "verify-batch",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 81653,
+          "duration_seconds": 474.2
+        },
+        {
+          "eval_id": 3,
+          "eval_name": "full-scan",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 53912,
+          "duration_seconds": 166.2
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 1.0,
+        "mean_tokens": 58401,
+        "mean_duration_seconds": 234.5,
+        "total_tokens": 175202,
+        "total_duration_seconds": 703.6
+      }
+    },
+    {
+      "name": "without_skill",
+      "description": "不使用任何 skill，讓 AI 自由發揮",
+      "results": [
+        {
+          "eval_id": 1,
+          "eval_name": "verify-single-spec",
+          "pass_rate": 0.8,
+          "passed": 4,
+          "total": 5,
+          "tokens": 48566,
+          "duration_seconds": 118.8
+        },
+        {
+          "eval_id": 2,
+          "eval_name": "verify-batch",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 84479,
+          "duration_seconds": 441.7
+        },
+        {
+          "eval_id": 3,
+          "eval_name": "full-scan",
+          "pass_rate": 0.6,
+          "passed": 3,
+          "total": 5,
+          "tokens": 44975,
+          "duration_seconds": 147.2
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 0.8,
+        "mean_tokens": 59340,
+        "mean_duration_seconds": 235.9,
+        "total_tokens": 178020,
+        "total_duration_seconds": 707.7
+      }
+    }
+  ],
+  "delta": {
+    "pass_rate": "+0.20 (with_skill 1.00 vs without_skill 0.80)",
+    "tokens": "-939 (with_skill saves slightly more tokens)",
+    "duration": "-1.4s (roughly equal)"
+  },
+  "analyst_observations": [
+    "Eval 1 (verify-single): with_skill 嚴格按 Phase 1.5 執行但只檢查直接對應的 controller（26 routes）；without_skill 自由探索找到了 6 個相關 controller（87 routes）。skill 的對應規則過於狹隘，需要改進。",
+    "Eval 2 (verify-batch): 兩者表現相當，都能涵蓋所有 spec 並產出結構化報告。without_skill 額外發現了 routes/index.js 的 CONTROLLER_ROUTING_MAPPING 來建立精確對應。skill 應參考此方法。",
+    "Eval 3 (full-scan): with_skill 明顯優於 without_skill — 包含完整性驗證 section、行號、Bean 驗證細節、品質觀察。without_skill 缺少驗證 section。",
+    "非歧視性 assertion: follows_phase_1_5_steps 對 without_skill 永遠失敗（因為沒有 skill），不適合作為比較指標。",
+    "關鍵改進方向: --verify 的對應規則應參考 routes/index.js 的 CONTROLLER_ROUTING_MAPPING 而非僅靠檔名推斷，這樣才能找到所有相關 controller。"
+  ]
+}

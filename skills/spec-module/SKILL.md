@@ -9,9 +9,9 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
 
 ## 使用方式
 
-- `/spec-module <模組路徑>` — 探索模組並產出 spec（快速模式，不逐一讀完所有原始碼）
-- `/spec-module <模組路徑> --full` — 強制完整掃描，逐一讀取所有 route/method 定義，確保 API 列表 100% 完整
-- `/spec-module <模組路徑> --verify` — 驗證已存在的 spec 完整性，比對原始碼找出遺漏並補上
+- `/spec-module <模組路徑>` — 探索模組並產出 spec（讀取基本架構與每個函式，不深入研究業務邏輯，保證正確性與完整性）
+- `/spec-module <模組路徑> --full` — 深度分析模式，除了基本架構與函式外，深入研究業務邏輯、演算法、資料流，產出包含關鍵演算法與設計模式的完整 spec
+- `/spec-module <模組路徑> --verify` — 比對既有 spec 與原始碼，報告差異並補完有變更的地方
 - `/spec-module <模組路徑> --commit` — 完成後自動 commit（可與 `--full` / `--verify` 組合）
 
 範例：
@@ -20,82 +20,108 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
 - `/spec-module backend/controllers/employeeController.js --full`
 - `/spec-module backend/spec/controllers/employee.md --verify`
 - `/spec-module backend/spec/controllers/ --verify` — 批次驗證目錄下所有 spec
+- `/spec-module backend/spec/controllers/employee.md --verify --commit` — 驗證補完後自動 commit
 
 ## 執行步驟
 
 ### Phase 1: 探索（使用 subagent）
 
-1. 用 Explore subagent 對目標目錄進行完整掃描：
+1. 用 subagent 對目標目錄進行完整掃描：
    - 列出所有檔案，統計數量與行數
    - 識別檔案類型（元件、工具函式、樣式、設定檔等）
    - 偵測框架特徵（React Class/Functional、Redux connect/hooks、Router 等）
    - 識別跨模組引用與外部依賴
 
-2. subagent 回傳結構化資料：
-   - 檔案清單（路徑、行數、類型）
-   - 層級關係（元件樹、呼叫鏈）
-   - 外部依賴（Redux、API、第三方函式庫）
-   - 疑似死程式碼
-
-3. **`--full` 模式額外步驟（強制完整掃描）：**
-   - **後端 controller**：
-     1. 先讀 `routes/index.js` 的路由映射表，找出目標 controller 對應的所有相關 controller 檔案
-     2. 對每個相關 controller 用 grep 搜尋所有 `router.route(` / `router.get(` / `router.post(` 等 route 定義，逐一列出
-     3. 產出的 spec 必須包含「完整性驗證」section，記錄：原始碼 route 總數 vs spec 列出數量
+2. **必須讀取每個函式定義**（預設模式與 `--full` 模式皆須）：
+   - **後端 controller**：找出目標模組對應的所有 controller 檔案，搜尋所有 route 定義，讀取每個 export 的函式/方法簽名、參數、用途
    - **前端元件**：讀取所有 export 的元件和 hooks，列出完整 props interface
-   - **禁止**只掃檔案結構就跳到 Phase 2，必須讀到 route/method 層級
+   - **工具函式庫**（非 HTTP controller）：讀取所有 export 的函式簽名與用途
+   - **禁止**只掃檔案結構就跳到 Phase 2，必須讀到函式層級
+
+3. **預設模式 vs `--full` 模式的差異：**
+   - **預設模式**：讀取函式簽名與參數，從命名和結構推斷用途，**不逐行分析業務邏輯和演算法**
+   - **`--full` 模式**：逐行閱讀關鍵函式的實作，分析演算法邏輯、資料流、邊界條件、設計模式
+
+4. **正確性保證**（兩種模式皆須）：
+   - Spec 中列出的每個 route/函式必須在原始碼中有對應，不得猜測或編造
+   - 原始碼中的每個 route/export 函式必須出現在 spec 中，不得遺漏
+   - 行數、檔案數等數值必須實測，不得估算
 
 ### Phase 1.5: 驗證模式（`--verify` 專用）
 
-當指定 `--verify` 時，跳過 Phase 1 的一般探索，改為：
+當指定 `--verify` 時，跳過 Phase 1 的一般探索，改為通用驗證流程（適用任何模組類型）：
 
-1. **定位 spec 與原始碼的對應關係：**
-   - 如果傳入的是 spec 檔案路徑（如 `backend/spec/controllers/employee.md`），讀取 spec 內容，從中找出對應的原始碼檔案
-   - 如果傳入的是 spec 目錄（如 `backend/spec/controllers/`），對目錄下每個 spec 檔案逐一執行驗證
-   - **對應規則（按優先序）：**
-     1. **路由映射表**（最精確）：讀取 `routes/index.js`（或專案的路由註冊檔），找到 `CONTROLLER_ROUTING_MAPPING` 或類似的路由映射定義，從中建立「路由前綴 → controller 檔案」的完整對應關係
-     2. **Spec 內部標註**：如果 spec 檔案中已標註對應的原始碼路徑，以此為準
-     3. **檔名推斷**（fallback）：`spec/controllers/X.md` → `controllers/XController.js`
-   - **關鍵**：一個 spec 可能對應多個 controller（例如 `employee.md` 對應 `employeeController.js` + `employeeDayCare.js` + `employeeShare.js` + `employeeLeave.js` + `employeeformController.js` + `employeeRecordController.js`）。必須透過路由映射表找出所有共用相同路由前綴的 controller，不能只靠檔名推斷
+1. **讀取既有 spec，提取記錄的所有項目：**
+   - 檔案清單（檔案一覽 section）
+   - 函式/方法清單（API 端點、export 函式、元件、hooks 等）
+   - 行數、規模等數值
+   - 如果傳入的是 spec 目錄，對目錄下每個 spec 檔案逐一執行驗證
 
-2. **從原始碼提取完整 API 清單：**
-   - 對 Step 1 找到的**所有**對應 controller 檔案，用 grep 搜尋所有 `router.route(` / `router.get(` / `router.post(` / `router.put(` / `router.delete(` / `router.patch(` 定義
-   - 記錄每個 route 的：路徑、HTTP method、綁定的 controller method、來源檔案
+2. **定位對應的原始碼：**
+   - **Spec 內部標註**（優先）：如果 spec 中已標註對應的原始碼路徑，以此為準
+   - **檔名推斷**（fallback）：從 spec 檔名與路徑推斷目標原始碼目錄
 
-3. **比對 spec 與原始碼：**
-   - spec 列出但原始碼沒有的 → 標記為「已移除？」
-   - 原始碼有但 spec 沒列的 → 標記為「遺漏」
+3. **掃描原始碼，提取實際存在的項目：**
+   - 掃描目標目錄的所有檔案
+   - 提取所有 export 函式/元件/hooks/route 定義
+   - 記錄檔案行數等數值
+
+4. **雙向比對，產出差異報告：**
+   - spec 有但原始碼沒有 → 標記為「已移除？」
+   - 原始碼有但 spec 沒有 → 標記為「遺漏」
+   - 數值不一致（行數、檔案數變動） → 標記為「過時」
    - 產出比對報告表格
 
-4. **補完 spec：**
-   - 如果有遺漏的 API，讀取對應的 controller method 實作，提取參數資訊
-   - 將遺漏的 API 補入 spec 的對應 section
-   - 不覆蓋已有的正確內容，只追加遺漏的部分
+5. **補完有變更的地方：**
+   - 移除 spec 中已不存在的項目（或標註已移除）
+   - 將遺漏的項目補入 spec 的對應 section
+   - 更新過時的數值（行數、檔案數等）
+   - 不覆蓋已有的正確內容
 
-5. **在 spec 末尾更新驗證紀錄：**
+6. **`--verify --full` 額外行為：**
+   - 不只補差異，而是完整重新掃描所有函式/元件的簽名與用途
+   - 等同於以既有 spec 為基礎，重建完整 spec 內容
+   - 適用於 spec 嚴重過時或需要全面更新的場景
+
+7. **在 spec 末尾更新驗證紀錄：**
    ```markdown
    ## 完整性驗證
    - 驗證日期：YYYY-MM-DD
-   - 原始碼 route 總數：N
+   - 原始碼項目總數：N
    - Spec 列出數量：N
    - 完整度：100%
    ```
 
-6. **批次模式輸出摘要：**
+8. **批次模式輸出摘要：**
    ```
    ✅ employee.md — 26/26 (100%)
-   ⚠️ case.md — 18/22 (82%) — 補了 4 個遺漏 API
-   ✅ fee.md — 17/17 (100%)
+   ⚠️ case.md — 18/22 → 22/22 — 補了 4 個遺漏
+   🔄 utils.md — 更新 3 個過時項目
+   ❌ deprecated.md — 原始碼已移除，建議刪除此 spec
    ```
 
 ### Phase 2: 撰寫 Spec
 
-> `--verify` 模式在 Phase 1.5 完成後直接跳到 Phase 3 收尾。
+> `--verify` 模式在 Phase 1.5 完成後直接跳到 Phase 3 收尾。`--verify --full` 模式則在 Phase 1.5 完成完整重建後跳到 Phase 3。
 
-3. 根據探索結果，撰寫 spec markdown 檔案：
+1. 根據探索結果，撰寫 spec markdown 檔案：
    - 模組 spec：`spec/<module-name>/index.md` 或 `spec/<module-name>.md`
    - 子系統 spec：`spec/<module-name>/<subsystem>.md`
    - 如果目標路徑已有 spec 檔案，更新而不是覆蓋
+
+2. **預設模式撰寫原則：**
+   - 每個函式/方法都必須出現在 spec 中（函式名、參數、一句話用途說明）
+   - 每個 route 都必須列出（路徑、HTTP method、handler）
+   - **不寫**：演算法步驟、資料流分析、邊界條件、設計模式解析
+   - **不寫**：業務邏輯的「為什麼」，只寫「是什麼」和「做什麼」
+   - 用途說明從函式名稱、參數名稱、JSDoc 推斷，不深入閱讀實作
+
+3. **`--full` 模式額外撰寫內容：**
+   - 關鍵演算法的步驟拆解
+   - 資料流與狀態變化分析
+   - 設計模式識別
+   - 業務邏輯的詳細描述（含邊界條件與特殊處理）
+   - 依賴矩陣（哪個 controller 用哪個 model/service）
 
 4. Spec 檔案結構（根據模組特性選用適合的 section）：
 
@@ -130,7 +156,7 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
    ```markdown
    ## State 結構
    ## Action 分類
-   ## 關鍵業務邏輯
+   ## 關鍵業務邏輯（僅 --full 模式）
    ```
 
    **後端模組額外 section（視情況加入）：**
@@ -143,17 +169,20 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
 
    ## 中介層
    Middleware / Guard / Interceptor
+
+   ## 關鍵演算法（僅 --full 模式）
+   ## 依賴矩陣（僅 --full 模式）
    ```
 
 ### Phase 3: 收尾
 
-5. 如果帶 `--commit` 參數：
+1. 如果帶 `--commit` 參數：
    - 調用 `/commit-spec` 的邏輯（stage + commit）
 
-6. 檢查 `spec/file-mapping.json` 是否需要更新：
+2. 檢查 `spec/file-mapping.json` 是否需要更新：
    - 提醒執行 `node ~/.claude/scripts/generate-spec-mapping.cjs <project-root>`
 
-7. 報告摘要：
+3. 報告摘要：
    - 掃描了多少檔案
    - 產出了哪些 spec 檔案
    - 關鍵發現（死程式碼數量、技術債等）
@@ -170,7 +199,8 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
 ## 注意事項
 
 - 探索階段用 subagent 保持主 context 乾淨
-- 不要在探索階段花超過 40% 的 effort，剩下給撰寫（`--full` 模式例外，可花 60%）
+- 預設模式：探索 50%、撰寫 50%（需讀完所有函式簽名，但不深入實作）
+- `--full` 模式：探索 60%、撰寫 40%（需逐行閱讀關鍵實作）
 - 如果模組超過 200 檔，拆成多個子系統 spec
 - 已有的 spec 只更新，不覆蓋（先讀取現有內容再決定改動）
 - Spec section 不是死板模板——根據模組實際特性選用，沒有 Redux 就不寫 Redux section
@@ -179,7 +209,7 @@ description: "對指定模組進行完整探索，產出結構化 spec markdown 
 
 | 模式 | 適用場景 | Token 消耗 |
 |------|---------|-----------|
-| 預設（無參數） | 快速產出概覽 spec，掌握模組結構 | 低 |
-| `--full` | 新模組首次建 spec，需要 100% API 完整度 | 高 |
-| `--verify` | 已有 spec，想確認是否有遺漏並補完 | 中（只讀 route 定義，不讀全部原始碼） |
-| `--verify --full` | 已有 spec，要連參數細節一起驗證補完 | 高 |
+| 預設（無參數） | 完整架構 + 所有函式簽名，保證正確性與完整性 | 中 |
+| `--full` | 深度分析業務邏輯、演算法、資料流、設計模式 | 高 |
+| `--verify` | 已有 spec，比對原始碼差異並補完變更 | 中 |
+| `--verify --full` | 已有 spec，完整重新掃描補完（等同重建） | 高 |

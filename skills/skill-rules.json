@@ -1,0 +1,218 @@
+{
+  "skills": {
+    "jira": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["jira", "issue", "ticket", "工單", "ERPD", "LVB", "CUP"],
+        "intentPatterns": [
+          "(fetch|get|show|看|查|拉).*(jira|issue|ticket|工單)",
+          "(create|建立).*(branch|分支).*(jira|issue)",
+          "jira\\s*(fetch|show|branch)"
+        ]
+      }
+    },
+    "commit-spec": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["commit spec", "提交 spec", "spec commit"],
+        "intentPatterns": [
+          "(commit|提交).*(spec|規格)",
+          "spec.*(commit|提交)"
+        ]
+      }
+    },
+    "spec-module": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["spec-module", "產生 spec", "寫 spec", "建立 spec", "生成規格"],
+        "intentPatterns": [
+          "(generate|create|write|產生|寫|建立).*(spec|規格文件)",
+          "(spec|規格).*(module|模組)"
+        ]
+      }
+    },
+    "explore-report": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["explore-report", "探索報告", "exploration"],
+        "intentPatterns": [
+          "(explore|scan|探索|掃描).*(directory|dir|目錄|資料夾|模組)",
+          "(report|報告).*(codebase|程式碼)"
+        ]
+      }
+    },
+    "test-module": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["test-module", "寫測試", "產生測試", "mutation test"],
+        "intentPatterns": [
+          "(generate|write|create|寫|產生|建立).*(test|測試)",
+          "(test|測試).*(module|模組|coverage|覆蓋)",
+          "mutation.*(test|testing)"
+        ]
+      }
+    },
+    "gitnexus-debugging": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["trace bug", "追蹤 bug", "call chain", "呼叫鏈"],
+        "intentPatterns": [
+          "(trace|追蹤|找).*(bug|error|錯誤|問題).*(chain|鏈|flow|流程)",
+          "(debug|除錯).*(call|呼叫).*(chain|graph|圖)"
+        ]
+      }
+    },
+    "gitnexus-impact-analysis": {
+      "enforcement": "suggest",
+      "priority": "critical",
+      "promptTriggers": {
+        "keywords": ["impact analysis", "blast radius", "影響範圍", "影響分析"],
+        "intentPatterns": [
+          "(impact|影響|blast).*(analysis|分析|radius|範圍)",
+          "(改|修改|refactor|重構).*(之前|before).*(分析|check|檢查)",
+          "這個改動.*影響"
+        ]
+      }
+    },
+    "gitnexus-refactoring": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["重構", "refactor", "rename", "extract module"],
+        "intentPatterns": [
+          "(refactor|重構|rename|重新命名|extract|抽取).*(safe|安全|plan|計畫)",
+          "(plan|規劃).*(refactor|重構)"
+        ]
+      }
+    },
+    "gitnexus-exploring": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["navigate code", "導覽程式碼", "不熟悉的程式碼"],
+        "intentPatterns": [
+          "(navigate|導覽|understand|理解).*(unfamiliar|不熟|new|新).*(code|程式碼|module|模組)",
+          "(怎麼運作|how.*work).*(module|模組|system|系統)"
+        ]
+      }
+    },
+    "code-review:code-review": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["code review", "review PR", "PR review", "審查"],
+        "intentPatterns": [
+          "(review|審查|檢查).*(PR|pull request|code|程式碼)",
+          "(PR|pull request).*(review|審查)"
+        ]
+      }
+    },
+    "simplify": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["simplify", "簡化", "review changed", "check quality"],
+        "intentPatterns": [
+          "(simplify|簡化).*(code|程式碼)",
+          "(review|檢查).*(changed|修改過的).*(code|程式碼)"
+        ]
+      }
+    },
+    "atlassian:search-company-knowledge": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["confluence", "搜尋知識庫", "internal docs", "公司文件"],
+        "intentPatterns": [
+          "(search|find|搜尋|找).*(confluence|knowledge|知識庫|內部文件)",
+          "(我們|公司).*(有沒有|有無|有).*(文件|doc|document)"
+        ]
+      }
+    },
+    "atlassian:triage-issue": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["triage", "duplicate issue", "重複 issue", "bug report", "bug 回報"],
+        "intentPatterns": [
+          "(triage|分類).*(bug|issue|問題)",
+          "(duplicate|重複).*(issue|bug|ticket)",
+          "(回報|report).*(bug|error|錯誤)"
+        ]
+      }
+    },
+    "atlassian:generate-status-report": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["status report", "狀態報告", "project status", "進度報告"],
+        "intentPatterns": [
+          "(generate|produce|產生|建立).*(status|progress|進度|狀態).*(report|報告)",
+          "(project|專案).*(status|進度|狀態)"
+        ]
+      }
+    },
+    "atlassian:capture-tasks-from-meeting-notes": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["meeting notes", "會議記錄", "action items", "待辦事項"],
+        "intentPatterns": [
+          "(extract|capture|擷取|抓).*(action|task|待辦).*(meeting|會議)",
+          "(meeting|會議).*(notes|記錄).*(task|ticket|工單)"
+        ]
+      }
+    },
+    "atlassian:spec-to-backlog": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["spec to backlog", "spec 轉 backlog", "spec 建 ticket"],
+        "intentPatterns": [
+          "(convert|轉換|轉).*(spec|規格).*(backlog|ticket|工單)",
+          "(spec|規格).*(to|轉).*(jira|backlog|ticket)"
+        ]
+      }
+    },
+    "claude-mem:mem-search": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["上次怎麼", "之前怎麼", "past session", "remember", "有印象"],
+        "intentPatterns": [
+          "(上次|之前|以前|過去).*(怎麼|如何).*(做|解|修|處理)",
+          "(remember|記得|記憶).*(how|怎麼|what|什麼)",
+          "(did we|have we|我們有沒有).*(already|before|之前)"
+        ]
+      }
+    },
+    "method-refactor": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["優化方法", "精簡方法", "重構方法", "method refactor", "refactor method"],
+        "intentPatterns": [
+          "(優化|精簡|重構|refactor|simplify).*(method|方法|函式|function)",
+          "(method|方法|函式).*(優化|精簡|重構|refactor|cleanup)",
+          "(逐一|逐個|一個一個).*(優化|重構|檢查)"
+        ]
+      }
+    },
+    "claude-md-management:revise-claude-md": {
+      "enforcement": "suggest",
+      "priority": "low",
+      "promptTriggers": {
+        "keywords": ["update CLAUDE.md", "更新 CLAUDE.md", "revise claude"],
+        "intentPatterns": [
+          "(update|revise|更新|修改).*(CLAUDE\\.md|claude md)"
+        ]
+      }
+    }
+  }
+}

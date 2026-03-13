@@ -1,0 +1,12 @@
+{
+  "eval_id": 1,
+  "eval_name": "verify-single-spec",
+  "configuration": "without_skill",
+  "expectations": [
+    {"text": "report_contains_route_count", "passed": true, "evidence": "列出 87 條 route（含所有 employee 相關 controller）"},
+    {"text": "report_contains_spec_count", "passed": true, "evidence": "顯示 spec 列出 26 條"},
+    {"text": "report_contains_percentage", "passed": true, "evidence": "顯示覆蓋率 29.9%"},
+    {"text": "identifies_source_file", "passed": true, "evidence": "識別了全部 6 個 controller 檔案"},
+    {"text": "finds_multiple_controllers_via_mapping", "passed": true, "evidence": "自主搜尋 CONTROLLER_ROUTING_MAPPING 找到所有相關 controller"}
+  ]
+}

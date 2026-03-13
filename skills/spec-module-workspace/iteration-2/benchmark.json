@@ -1,0 +1,107 @@
+{
+  "skill_name": "spec-module",
+  "iteration": 2,
+  "timestamp": "2026-03-11T12:30:00+08:00",
+  "change_summary": "Phase 1.5 Step 1 改用 routes/index.js CONTROLLER_ROUTING_MAPPING 作為主要 controller 對應來源（三級優先序：路由映射表 > Spec 內部標註 > 檔名推斷）",
+  "configurations": [
+    {
+      "name": "with_skill",
+      "description": "使用改進後的 spec-module skill（CONTROLLER_ROUTING_MAPPING 優先）",
+      "results": [
+        {
+          "eval_id": 1,
+          "eval_name": "verify-single-spec",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 49102,
+          "duration_seconds": 138.7
+        },
+        {
+          "eval_id": 2,
+          "eval_name": "verify-batch",
+          "pass_rate": null,
+          "passed": null,
+          "total": 5,
+          "tokens": 308,
+          "duration_seconds": 448.4,
+          "status": "failed",
+          "reason": "rate limit"
+        },
+        {
+          "eval_id": 3,
+          "eval_name": "full-scan",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 86389,
+          "duration_seconds": 242.3
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 1.0,
+        "note": "基於 eval 1 和 eval 3（eval 2 因 rate limit 失敗）",
+        "total_tokens": 135799
+      }
+    },
+    {
+      "name": "without_skill",
+      "description": "不使用任何 skill，讓 AI 自由發揮",
+      "results": [
+        {
+          "eval_id": 1,
+          "eval_name": "verify-single-spec",
+          "pass_rate": 1.0,
+          "passed": 5,
+          "total": 5,
+          "tokens": 50514,
+          "duration_seconds": 144.9
+        },
+        {
+          "eval_id": 2,
+          "eval_name": "verify-batch",
+          "pass_rate": null,
+          "passed": null,
+          "total": 5,
+          "tokens": 228,
+          "duration_seconds": 115.5,
+          "status": "failed",
+          "reason": "prompt too long"
+        },
+        {
+          "eval_id": 3,
+          "eval_name": "full-scan",
+          "pass_rate": 0.4,
+          "passed": 2,
+          "total": 5,
+          "tokens": 65773,
+          "duration_seconds": 200.2
+        }
+      ],
+      "aggregate": {
+        "mean_pass_rate": 0.7,
+        "note": "基於 eval 1 和 eval 3（eval 2 因 prompt too long 失敗）",
+        "total_tokens": 116515
+      }
+    }
+  ],
+  "comparison_with_iteration_1": {
+    "eval_1_verify_single": {
+      "iteration_1_with_skill": "只找到 1 個 controller（26 routes），報告 100% 完整",
+      "iteration_2_with_skill": "透過 CONTROLLER_ROUTING_MAPPING 找到 6 個 controller（87 routes），報告 30% 完整",
+      "improvement": "關鍵改進 — 不再錯誤宣稱 100% 完整，正確識別遺漏"
+    },
+    "eval_3_full_scan": {
+      "iteration_1_with_skill": "只掃描 caseController.js（12 routes）",
+      "iteration_2_with_skill": "透過 CONTROLLER_ROUTING_MAPPING 找到 9 個 case 相關 controller（142 routes）",
+      "improvement": "從 12 routes 擴展到 142 routes，完整度質的飛躍"
+    }
+  },
+  "analyst_observations": [
+    "Eval 1: with_skill 成功透過 CONTROLLER_ROUTING_MAPPING 找到 4 個共用 /employee 前綴的 controller（52 routes）+ 2 個獨立前綴 controller（35 routes），總計 87 routes。iteration 1 只找到 1 個 controller（26 routes）。改進有效。",
+    "Eval 1: without_skill 也找到全部 6 個 controller，表現與 with_skill 相當。兩者都自主發現了 CONTROLLER_ROUTING_MAPPING。",
+    "Eval 2: 兩個配置都因基礎設施問題失敗（rate limit / prompt too long），無法比較。批次驗證 25+ spec 對 context window 壓力大。",
+    "Eval 3: with_skill 大幅領先 — 找到 9 個 case 相關 controller、142 條 route、完整性驗證 section、品質觀察。without_skill 只掃描指定的 caseController.js（12 routes），不知道要去查路由映射表找相關 controller。",
+    "關鍵結論：CONTROLLER_ROUTING_MAPPING 改進在 --full 模式效果最明顯（12→142 routes）。--verify 模式下 without_skill 也能自主找到映射表，但 --full 模式下 skill 的引導不可或缺。"
+  ]
+}

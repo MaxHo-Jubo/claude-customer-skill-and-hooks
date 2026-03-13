@@ -1,0 +1,6 @@
+{
+  "eval_id": 1,
+  "eval_name": "verify-single-spec",
+  "prompt": "/spec-module backend/spec/controllers/employee.md --verify",
+  "assertions": []
+}

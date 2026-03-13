@@ -1,0 +1,12 @@
+{
+  "eval_id": 2,
+  "eval_name": "verify-batch",
+  "configuration": "without_skill",
+  "expectations": [
+    {"text": "covers_all_spec_files", "passed": true, "evidence": "涵蓋 26 個 spec"},
+    {"text": "summary_table_format", "passed": true, "evidence": "有詳細表格和統計"},
+    {"text": "each_entry_has_counts", "passed": true, "evidence": "每個 entry 有 spec/原始碼數量"},
+    {"text": "each_entry_has_percentage", "passed": true, "evidence": "每個 entry 有百分比"},
+    {"text": "correctly_maps_spec_to_source", "passed": true, "evidence": "通過 routes/index.js 的 CONTROLLER_ROUTING_MAPPING 建立對應，更精確"}
+  ]
+}

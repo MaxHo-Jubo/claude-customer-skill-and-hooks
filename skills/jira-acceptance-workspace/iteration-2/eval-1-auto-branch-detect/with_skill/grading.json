@@ -1,0 +1,49 @@
+{
+  "eval_id": 1,
+  "eval_name": "auto-branch-detect",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "auto_detect_issue_key",
+      "passed": true,
+      "evidence": "第 3 行: **Issue**: CMD-276"
+    },
+    {
+      "text": "report_has_table",
+      "passed": true,
+      "evidence": "第 9-15 行有正確的 markdown 表格，含 #/需求描述/狀態/對應改動 欄位"
+    },
+    {
+      "text": "status_icons_present",
+      "passed": true,
+      "evidence": "5 條需求都使用 ✅ 已實作 標記"
+    },
+    {
+      "text": "line_range_evidence",
+      "passed": true,
+      "evidence": "每條都有具體行號：caseAssignActionCreator.js:13, caseAssignReducer.js:12-13, AssignSearchForm.jsx:31-34 等"
+    },
+    {
+      "text": "summary_counts",
+      "passed": true,
+      "evidence": "第 19-21 行: 已實作: 5/5, 部分實作: 0/5, 未實作: 0/5"
+    },
+    {
+      "text": "requirement_extraction",
+      "passed": true,
+      "evidence": "拆出 5 條需求：分頁查詢、查詢條件、搜尋 UI、操作後保留搜尋條件、loading 狀態。正確識別新檔案中的實作。"
+    },
+    {
+      "text": "untracked_files_detected",
+      "passed": true,
+      "evidence": "報告引用 AssignSearchForm.jsx:1-54, AssignSearchForm.jsx:31-34, CaseAssignEnum.js:7-8"
+    },
+    {
+      "text": "chinese_output",
+      "passed": true,
+      "evidence": "全文繁體中文"
+    }
+  ],
+  "pass_rate": 1.0,
+  "notes": "修正 git status 檢查 untracked 檔案後，所有 assertions 通過。格式正確、行號證據完整、需求拆解細緻。"
+}

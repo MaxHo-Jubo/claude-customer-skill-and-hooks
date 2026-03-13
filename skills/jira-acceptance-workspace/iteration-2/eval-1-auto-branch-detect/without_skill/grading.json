@@ -1,0 +1,49 @@
+{
+  "eval_id": 1,
+  "eval_name": "auto-branch-detect",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "auto_detect_issue_key",
+      "passed": true,
+      "evidence": "票號: CMD-276"
+    },
+    {
+      "text": "report_has_table",
+      "passed": false,
+      "evidence": "使用多個子表格而非標準單一總表"
+    },
+    {
+      "text": "status_icons_present",
+      "passed": false,
+      "evidence": "使用 ✅ 通過 / ⚠️ 未見，不是標準 已實作/部分實作/未實作"
+    },
+    {
+      "text": "line_range_evidence",
+      "passed": false,
+      "evidence": "列出功能描述但無具體行號範圍"
+    },
+    {
+      "text": "summary_counts",
+      "passed": false,
+      "evidence": "無標準 X/Y 計數格式"
+    },
+    {
+      "text": "requirement_extraction",
+      "passed": true,
+      "evidence": "正確拆出 3 條需求並識別 untracked 檔案"
+    },
+    {
+      "text": "untracked_files_detected",
+      "passed": true,
+      "evidence": "正確識別 AssignSearchForm.jsx 和 CaseAssignEnum.js"
+    },
+    {
+      "text": "chinese_output",
+      "passed": true,
+      "evidence": "全文繁體中文"
+    }
+  ],
+  "pass_rate": 0.375,
+  "notes": "分析品質不錯但格式完全不符標準規格"
+}
