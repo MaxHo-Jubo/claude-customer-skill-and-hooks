@@ -291,16 +291,6 @@
             "statusMessage": "Checking inventory drift..."
           }
         ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/maxhero/.claude/scripts/observe-wrapper.sh post",
-            "timeout": 5000
-          }
-        ]
       }
     ],
     "Notification": [
@@ -315,17 +305,6 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/maxhero/.claude/homunculus/hooks/analyze-on-stop.sh",
-            "timeout": 60000
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Grep|Glob|Bash",
@@ -335,16 +314,6 @@
             "command": "node \"/Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.cjs\"",
             "timeout": 8000,
             "statusMessage": "Enriching with GitNexus graph context..."
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Write|Edit|Bash|Grep|Glob|Agent|Skill|NotebookEdit|LSP",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/maxhero/.claude/scripts/observe-wrapper.sh pre",
-            "timeout": 5000
           }
         ]
       }

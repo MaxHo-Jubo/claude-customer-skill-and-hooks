@@ -51,11 +51,8 @@
 | SessionStart | 啟動 session | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
 | UserPromptSubmit | 使用者送出訊息 | `skill-activation-hook.cjs` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
-| PreToolUse | 工具執行前 | `observe-wrapper.sh pre` | 持續學習觀察記錄 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
 | PostToolUse (Write/Edit) | 寫入/編輯後 | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
-| PostToolUse (*) | 任何工具後 | `observe-wrapper.sh post` | 持續學習觀察記錄 |
-| Stop | Session 結束 | `analyze-on-stop.sh` | 分析觀察結果，產生學習 instinct |
 
 ## Plugins & MCP Servers
 
@@ -101,4 +98,22 @@
 | Hook 腳本 | `~/.claude/hooks/` |
 | 輔助 Scripts | `~/.claude/scripts/` |
 | StatusLine | `~/.claude/statusline-command.sh` |
-| 持續學習系統 | `~/.claude/homunculus/` |
+| 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
+
+## 變更紀錄
+
+### 2026-03-13: 移除 Homunculus / continuous-learning-v2
+
+**移除項目：**
+- `observe-wrapper.sh` (PreToolUse + PostToolUse hooks) — 每次工具調用前後各跑一次 shell
+- `analyze-on-stop.sh` (Stop hook) — session 結束時呼叫 Haiku 分析觀察記錄
+- `spec-drift-detector.cjs` (PostToolUse hook) — spec 漂移偵測（已由公司遠端 Mac 每週自動執行並產出 PR）
+
+**移除理由：**
+- 運行 10 天，產出 0 個 instinct，400+ 個歸檔檔案
+- 記錄層級太低（工具名稱 + session_id），無法推斷語意模式
+- 每次工具調用增加 2 個 shell process，造成可感延遲
+- 每次 session 結束白呼叫 Haiku tokens
+
+**替代方案：**
+在 CLAUDE.md 新增 `LEARNING` 規則，利用既有的 auto memory（feedback/user type）+ claude-mem 實現跨 session 學習。被糾正時主動存 feedback memory，發現偏好時存 user memory，session 開始時讀取相關記憶。語意層級的學習比工具序列分析有效得多。
