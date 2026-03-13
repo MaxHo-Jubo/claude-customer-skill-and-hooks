@@ -82,10 +82,11 @@ cp "$SOURCE/statusline-command.sh" "$TARGET/statusline/statusline-command.sh"
 **目錄同步（mirror 模式）：**
 ```bash
 # rsync --delete 確保 repo 側多出的檔案也會被刪除
-rsync -av --delete "$SOURCE/skills/" "$TARGET/skills/"
-rsync -av --delete "$SOURCE/hooks/" "$TARGET/hooks/"
-rsync -av --delete "$SOURCE/scripts/" "$TARGET/scripts/"
-rsync -av --delete "$SOURCE/rules/" "$TARGET/rules/"
+# -L: follow symlinks（部分 skill 是 symlink 指向 ~/.agents/skills/）
+rsync -avL --delete "$SOURCE/skills/" "$TARGET/skills/"
+rsync -avL --delete "$SOURCE/hooks/" "$TARGET/hooks/"
+rsync -avL --delete "$SOURCE/scripts/" "$TARGET/scripts/"
+rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
 ```
 
 ### STEP 03: Generate Docs — 自動產生 README.md 與 CATALOG.md
