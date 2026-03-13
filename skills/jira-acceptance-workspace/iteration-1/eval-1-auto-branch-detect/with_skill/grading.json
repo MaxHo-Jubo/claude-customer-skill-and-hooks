@@ -1,0 +1,44 @@
+{
+  "eval_id": 1,
+  "eval_name": "auto-branch-detect",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "auto_detect_issue_key",
+      "passed": true,
+      "evidence": "報告第 3 行: **Issue**: CMD-276 - 115年彰化照管..."
+    },
+    {
+      "text": "report_has_table",
+      "passed": true,
+      "evidence": "第 9-13 行有正確的 markdown 表格，含 #/需求描述/狀態/對應改動 欄位"
+    },
+    {
+      "text": "status_icons_present",
+      "passed": true,
+      "evidence": "3 條需求都標為 ⚠️ 部分實作"
+    },
+    {
+      "text": "line_range_evidence",
+      "passed": true,
+      "evidence": "對應改動欄有 caseAssignActionCreator.js:19-22、caseAssignReducer.js:16-17,24-30 等行號"
+    },
+    {
+      "text": "summary_counts",
+      "passed": true,
+      "evidence": "第 17-19 行: 已實作: 0/3、部分實作: 3/3、未實作: 0/3"
+    },
+    {
+      "text": "requirement_extraction",
+      "passed": false,
+      "evidence": "拆出分頁查詢、查詢條件、搜尋介面 3 條需求，但因漏看 untracked 新檔案（AssignSearchForm.jsx、CaseAssignEnum.js），錯誤判定全部為部分實作。實際上查詢條件和搜尋 UI 已完成。"
+    },
+    {
+      "text": "chinese_output",
+      "passed": true,
+      "evidence": "全文繁體中文輸出"
+    }
+  ],
+  "pass_rate": 0.857,
+  "notes": "格式完全正確，但因 skill 步驟 4 只看 git diff 漏掉 untracked 檔案，導致需求判定嚴重偏差（0/3 已實作 vs 實際應為 2-3/3）"
+}

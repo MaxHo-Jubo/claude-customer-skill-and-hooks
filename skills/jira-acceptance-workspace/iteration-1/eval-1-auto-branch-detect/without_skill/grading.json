@@ -1,0 +1,44 @@
+{
+  "eval_id": 1,
+  "eval_name": "auto-branch-detect",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "auto_detect_issue_key",
+      "passed": true,
+      "evidence": "報告第 4 行: Issue Key = CMD-276"
+    },
+    {
+      "text": "report_has_table",
+      "passed": false,
+      "evidence": "使用了不同格式 — 每個需求有獨立子表格而非單一總表。沒有 #/需求描述/狀態/對應改動 的統一表格"
+    },
+    {
+      "text": "status_icons_present",
+      "passed": false,
+      "evidence": "使用 ✅ 通過 / ⚠️ 未確認 但不是標準的 已實作/部分實作/未實作 三分法"
+    },
+    {
+      "text": "line_range_evidence",
+      "passed": false,
+      "evidence": "列出了檔案名稱和功能描述，但沒有具體行號範圍（如 file:10-25）"
+    },
+    {
+      "text": "summary_counts",
+      "passed": false,
+      "evidence": "用「核心需求覆蓋率約 80%」而非 已實作: X/Y 格式"
+    },
+    {
+      "text": "requirement_extraction",
+      "passed": true,
+      "evidence": "正確拆出 3 條需求，且正確識別了 untracked 檔案中的 AssignSearchForm 和 CaseAssignEnum，判定查詢條件和搜尋 UI 已完成"
+    },
+    {
+      "text": "chinese_output",
+      "passed": true,
+      "evidence": "全文繁體中文"
+    }
+  ],
+  "pass_rate": 0.429,
+  "notes": "需求判定準確度更高（正確識別 untracked 檔案），但輸出格式完全不符合標準規格"
+}

@@ -1,0 +1,12 @@
+{
+  "eval_id": 1,
+  "eval_name": "verify-single-spec",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "report_contains_route_count", "passed": true, "evidence": "報告顯示 /employee 前綴 52 條 route，全模組 87 條"},
+    {"text": "report_contains_spec_count", "passed": true, "evidence": "報告顯示 Spec 列出 26 條"},
+    {"text": "report_contains_percentage", "passed": true, "evidence": "報告顯示 50%（/employee 前綴）和 30%（全模組）"},
+    {"text": "identifies_source_file", "passed": true, "evidence": "正確識別 6 個 controller（4 個 /employee 前綴 + 2 個獨立前綴）"},
+    {"text": "finds_multiple_controllers_via_mapping", "passed": true, "evidence": "透過 CONTROLLER_ROUTING_MAPPING 找到 employeeDayCare、employeeShare、employeeLeave 映射到 /employee 前綴"}
+  ]
+}

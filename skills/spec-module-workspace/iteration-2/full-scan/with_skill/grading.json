@@ -1,0 +1,12 @@
+{
+  "eval_id": 3,
+  "eval_name": "full-scan",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "lists_all_routes", "passed": true, "evidence": "找到 9 個 case 相關 controller，列出全部 142 條 route"},
+    {"text": "includes_http_method", "passed": true, "evidence": "每個 route 標註 POST"},
+    {"text": "includes_route_path", "passed": true, "evidence": "每個 route 標註完整路徑（含 /case、/caseCharts、/caseform 三個前綴）"},
+    {"text": "has_verification_section", "passed": true, "evidence": "包含完整性驗證 section，逐檔列出 route 數量"},
+    {"text": "verification_counts_match", "passed": true, "evidence": "原始碼 142 = Spec 142，100%"}
+  ]
+}

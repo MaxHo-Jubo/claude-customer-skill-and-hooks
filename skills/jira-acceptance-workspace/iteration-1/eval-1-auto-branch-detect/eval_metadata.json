@@ -1,0 +1,42 @@
+{
+  "eval_id": 1,
+  "eval_name": "auto-branch-detect",
+  "prompt": "我在 CMD-276/feat/alex_cheng/派案分頁查詢 這個 branch 上改了一些檔案，幫我驗收一下 Jira 需求有沒有都做到",
+  "assertions": [
+    {
+      "name": "auto_detect_issue_key",
+      "description": "應自動從 branch 名稱解析出 CMD-276",
+      "check": "報告中的 Issue 欄位包含 CMD-276"
+    },
+    {
+      "name": "report_has_table",
+      "description": "報告必須包含需求項目表格",
+      "check": "輸出包含 markdown 表格，含 #/需求描述/狀態/對應改動 欄位"
+    },
+    {
+      "name": "status_icons_present",
+      "description": "每條需求標註 ✅/⚠️/❌ 狀態",
+      "check": "表格中每行包含 ✅ 已實作、⚠️ 部分實作、或 ❌ 未實作"
+    },
+    {
+      "name": "line_range_evidence",
+      "description": "已實作項目附帶檔案路徑與行號",
+      "check": "對應改動欄位有 file:line 格式"
+    },
+    {
+      "name": "summary_counts",
+      "description": "報告底部有三種狀態的計數總結",
+      "check": "包含 已實作: X/Y、部分實作: X/Y、未實作: X/Y"
+    },
+    {
+      "name": "requirement_extraction",
+      "description": "正確從 Jira 描述拆解出需求：分頁查詢 + 查詢條件（未派案/已派案）",
+      "check": "需求列表至少包含「分頁查詢」和「查詢條件」相關項目"
+    },
+    {
+      "name": "chinese_output",
+      "description": "報告全程使用繁體中文",
+      "check": "報告標題、狀態、備註均為繁體中文"
+    }
+  ]
+}
