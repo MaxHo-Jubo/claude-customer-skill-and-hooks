@@ -293,6 +293,18 @@
         ]
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /Users/maxhero/.claude/scripts/pre-compact-snapshot.cjs",
+            "timeout": 3000,
+            "statusMessage": "Saving pre-compact snapshot..."
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "*",
