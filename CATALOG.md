@@ -1,6 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
+> 上次更新：2026-03-13
 
 ---
 
@@ -39,6 +40,18 @@
   - 自動分析新增/修改/刪除的 spec 檔案
   - 依 CLAUDE.md 規則產生 commit message（含 Jira 編號、專案標識）
 - **依賴**：git、CLAUDE.md commit 規則
+
+#### `/weekly-review` — 每週工作回顧
+
+- **位置**：`~/.claude/skills/weekly-review/SKILL.md`
+- **用法**：`/weekly-review`、`/weekly-review --days 14`
+- **功能**：
+  1. Git 工作摘要（按專案分組）
+  2. 觀察記錄回顧（claude-mem timeline/search）
+  3. Auto Memory 變動掃描
+  4. 週報彙整與模式提取
+  5. 記憶整理（過期/重複/升級建議，需使用者確認）
+- **依賴**：git、claude-mem MCP、auto memory
 
 ---
 
@@ -134,35 +147,32 @@
 
 | 腳本 | 用途 |
 |------|------|
-| `~/.claude/scripts/detect-jira-issue.sh` | 從 git branch 名稱偵測 Jira issue 編號，注入 session context |
+| `detect-jira-issue.sh` | 從 git branch 名稱偵測 Jira issue 編號，注入 session context |
 
 ### UserPromptSubmit
 
 | 腳本 | 用途 |
 |------|------|
-| `~/.claude/scripts/skill-activation-hook.cjs` | 分析使用者輸入，檢查是否觸發特定 skill |
+| `skill-activation-hook.cjs` | 分析使用者輸入，檢查是否觸發特定 skill |
 
 ### PreToolUse
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Grep\|Glob\|Bash` | `~/.claude/hooks/gitnexus/gitnexus-hook.cjs` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
-| `*` | `~/.claude/scripts/observe-wrapper.sh pre` | 持續學習系統 — 記錄工具使用前的觀察 |
+| `Grep\|Glob\|Bash` | `gitnexus-hook.cjs` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
 
 ### PostToolUse
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Bash` | `~/.claude/scripts/spec-drift-detector.cjs` | 偵測 git commit 後 spec 與源碼是否有漂移 |
-| `Write\|Edit` | `~/.claude/scripts/spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
-| `Write\|Edit` | `~/.claude/scripts/inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
-| `*` | `~/.claude/scripts/observe-wrapper.sh post` | 持續學習系統 — 記錄工具使用後的觀察 |
+| `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
+| `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
 
-### Stop
+### PreCompact
 
 | 腳本 | 用途 |
 |------|------|
-| `~/.claude/homunculus/hooks/analyze-on-stop.sh` | Session 結束時分析所有觀察，透過 Haiku 產生新的學習 instinct |
+| `pre-compact-snapshot.cjs` | Context 壓縮前提醒存重要決策/糾正到 auto memory |
 
 ---
 
@@ -172,11 +182,12 @@
 |------|------|
 | `detect-jira-issue.sh` | 從 git branch 解析 Jira issue key |
 | `generate-spec-mapping.cjs` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
-| `spec-drift-detector.cjs` | 比對 file-mapping，偵測 spec 漂移 |
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
-| `observe-wrapper.sh` | 持續學習觀察包裝器（pre/post 模式） |
+| `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
+| `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
+| `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
 
 ---
 
@@ -190,14 +201,24 @@
 |--------|------|------|
 | code-review | claude-plugins-official | PR 自動化 code review |
 | atlassian | claude-plugins-official | Jira & Confluence 整合 |
+| frontend-design | claude-plugins-official | 前端設計輔助 |
 | claude-md-management | claude-plugins-official | CLAUDE.md 維護工具 |
 | typescript-lsp | claude-plugins-official | TypeScript/JS Language Server |
+| gopls-lsp | claude-plugins-official | Go Language Server |
+| jdtls-lsp | claude-plugins-official | Java Language Server |
 | context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
-| everything-claude-code | everything-claude-code | 13 agents + 20 skills + hooks + rules 完整配置集 |
 | claude-mem | thedotmack | 跨 session 持久記憶系統 |
 | context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
-| example-skills | anthropic-agent-skills | 範例 skills（pdf、xlsx、docx、pptx、skill-creator…） |
-| document-skills | anthropic-agent-skills | 文件處理套件 |
+| document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
+| superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
+
+### 停用的 Plugins
+
+| Plugin | 來源 | 理由 |
+|--------|------|------|
+| code-simplifier | claude-plugins-official | 極少使用 |
+| github | claude-plugins-official | 用 gh CLI 替代 |
+| everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
 
 ### MCP Servers
 
@@ -223,15 +244,15 @@
 
 ---
 
-## 持續學習系統（Homunculus）
+## 持續學習系統
 
-- **位置**：`~/.claude/homunculus/`
-- **機制**：
-  1. 每次工具使用時 `observe-wrapper.sh` 記錄觀察到 `observations.jsonl`
-  2. Session 結束時 `analyze-on-stop.sh` 分析觀察
-  3. 透過 Haiku 模型歸納出 instinct（行為模式）
-  4. Instinct 存於 `~/.claude/homunculus/instincts/`
-  5. 高信心 instinct 可透過 `/evolve` 升級為 skill 或 agent
+> Homunculus 觀察系統已於 2026-03-13 移除（運行 10 天，0 產出）。
+> 改用以下機制：
+
+- **LEARNING 規則**（CLAUDE.md）：被糾正時存 feedback memory、發現偏好時存 user memory
+- **PreCompact hook**：context 壓縮前提醒存重要決策
+- **`/weekly-review` skill**：每週整理記憶、清理過期資訊、提取模式
+- **Obsidian 整合**：symlink vault 瀏覽所有專案的 auto memory
 
 ---
 
@@ -249,6 +270,6 @@ gitnexus-hook ──→ gitnexus-exploring
                   gitnexus-impact-analysis
                   gitnexus-refactoring
 
-observe-wrapper ──→ homunculus/analyze-on-stop
-                    └──→ instincts ──→ /evolve → skills
+auto memory ──→ weekly-review（整理）
+               Obsidian vault（瀏覽）
 ```

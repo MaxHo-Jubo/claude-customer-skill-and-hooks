@@ -39,6 +39,7 @@
 | test-module | `/test-module <path>` | 掃描可測試函式，產出單元測試 |
 | explore-report | `/explore-report <dir>` | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 7 項檢查結構化優化重構方法 |
+| weekly-review | `/weekly-review` | 每週工作回顧與記憶整理 |
 | gitnexus-exploring | — | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
 | gitnexus-debugging | — | 用 GitNexus 追蹤呼叫鏈除錯 |
 | gitnexus-impact-analysis | — | 用 GitNexus 分析修改的影響範圍 |
@@ -61,8 +62,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 10 | code-review、atlassian、claude-md-management、typescript-lsp、context7、everything-claude-code、claude-mem、context-mode、example-skills、document-skills |
-| Plugins（停用） | 3 | code-simplifier、frontend-design、github |
+| Plugins（啟用） | 12 | code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-mem、context-mode、document-skills、superpowers |
+| Plugins（停用） | 3 | code-simplifier、github、everything-claude-code |
 | MCP Servers | 5 | context7、context-mode、mcp-search、atlassian、typescript-lsp |
 
 ## StatusLine 自訂狀態列
