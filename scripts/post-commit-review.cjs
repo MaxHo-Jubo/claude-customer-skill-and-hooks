@@ -54,7 +54,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 05: 輸出 AI 指令
+    // STEP 05: 輸出 AI 指令（利用本機 repo 做更精確的 review）
     const instructions = [
       '',
       '🔄 Post-Commit Review Hook 觸發',
@@ -66,13 +66,20 @@ process.stdin.on('end', () => {
       '- 若 /simplify 產生修改 → `git add` 變更的檔案，然後 `git commit --amend --no-edit` 合併到上一個 commit',
       '- 若無變更 → 跳過，維持原 commit',
       '',
-      '**步驟 2 — /code-review**',
-      '- 對目前 commit 改動執行 /code-review',
+      '**步驟 2 — 收集本機 repo 上下文**',
+      '- 執行 `git diff HEAD~1 --name-only` 取得變更檔案清單',
+      '- 對每個變更檔案執行 `git blame HEAD -- <file>` 取得歷史脈絡',
+      '- 讀取每個變更檔案的完整內容（特別注意函式頂部的註解和約束條件）',
+      '- 檢查變更檔案所在目錄是否有 CLAUDE.md，有則一併讀取',
+      '',
+      '**步驟 3 — /code-review（帶入本機上下文）**',
+      '- 將步驟 2 收集的上下文（blame、完整檔案、CLAUDE.md）提供給 review agents',
+      '- review 時優先使用本機 `git` 指令而非 `gh api`，因為已在本機 repo 中',
       '- 自動修正所有 **80 分以上** 的 issue（直接改檔案）',
       '- **不要 commit** 這些修正',
       '- 列出所有找到的 issue（含分數與說明）',
       '',
-      '**步驟 3 — 終端機通知**',
+      '**步驟 4 — 終端機通知**',
       '- 發送通知：「commit 與 review 完成，等待下一步」',
       '',
       '⚠️ 這是自動觸發的 post-commit 流程，請依序完成。',
