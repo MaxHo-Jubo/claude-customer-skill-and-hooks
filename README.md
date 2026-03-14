@@ -20,6 +20,7 @@
 ├── statusline/            # 自訂狀態列腳本
 │   ├── statusline-command.sh
 │   └── README.md
+├── claude-mem-customize-TC/ # claude-mem 繁體中文化客製（修改檔、patch、翻譯對照表）
 ├── plugins/               # 插件與 MCP 伺服器索引
 │   └── README.md
 ├── docs/
@@ -110,6 +111,17 @@
 | gitnexus-debugging | 從錯誤訊息追蹤呼叫鏈，定位 root cause |
 | gitnexus-impact-analysis | 修改前分析 blast radius（d=1 必壞 / d=2 可能 / d=3 需測試） |
 | gitnexus-refactoring | 用依賴圖規劃安全的 rename、extract、split 重構 |
+
+## claude-mem 繁體中文化
+
+詳見 [`claude-mem-customize-TC/README.md`](claude-mem-customize-TC/README.md)。
+
+claude-mem 插件的 UI 輸出預設英文，此資料夾保存繁體中文化的改動：
+- **修改後的完整檔案**（可直接覆蓋 plugin cache）
+- **Patch 檔**（基於 10.3.1 版本的 diff）
+- **翻譯對照表**（插件更新後 patch 失效時，依此表手動替換）
+
+> 插件更新會覆蓋 cache，翻譯對照表是最可靠的重新套用方式。
 
 ## 檔案位置
 
