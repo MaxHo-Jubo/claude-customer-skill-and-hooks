@@ -2,6 +2,13 @@
 
 集中管理本機上所有 Claude Code 自訂 skill、hook 與 script 的索引文件。
 
+## Remote Repositories
+
+| Remote | URL |
+|--------|-----|
+| origin (GitHub) | https://github.com/MaxHo-Jubo/claude-customer-skill-and-hooks.git |
+| gitlab | https://gitlab.webotopia.work/maxhero/claude-customer-skill-and-hooks.git |
+
 ## 目錄結構
 
 ```
