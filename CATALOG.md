@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-13
+> 上次更新：2026-03-14
 
 ---
 
@@ -197,6 +197,12 @@
 | `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
 
+#### Bash（git commit 後）
+
+| Matcher | 腳本 | 用途 |
+|---------|------|------|
+| `Bash` | `post-commit-review.cjs` | git commit 後自動 /simplify + /code-review（利用本機 repo 上下文），commit and push 時跳過 |
+
 ### PreCompact
 
 | 腳本 | 用途 |
@@ -220,6 +226,7 @@
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
+| `post-commit-review.cjs` | PostToolUse hook — git commit 後自動 /simplify + /code-review |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
 | `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
