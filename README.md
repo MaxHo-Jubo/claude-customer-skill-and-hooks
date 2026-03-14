@@ -65,6 +65,7 @@
 | PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.cjs` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.cjs` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.cjs` | 偵測 inventory 漂移 |
+| PostToolUse | git commit 後 | Bash | `post-commit-review.cjs` | 自動執行 /simplify + /code-review（利用本機 repo 上下文） |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.cjs` | 提醒存重要決策/糾正到 auto memory |
 | Notification | 通知 | * | (inline printf) | 終端機通知 |
 
@@ -115,6 +116,26 @@
 | 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
 
 ## 變更紀錄
+
+### 2026-03-14: 新增 post-commit-review hook、同步 scripts、Linus Style 研究
+
+**新增項目：**
+- `post-commit-review.cjs` hook — git commit 後自動依序執行 /simplify → /code-review
+  - /simplify 有變更則 amend commit，無變更跳過
+  - /code-review 自動修正 80+ 分 issue（不 commit），列出所有 issue
+  - 完成後發終端機通知
+  - 例外：命令包含 `push` 時跳過（commit and push 場景）
+  - 利用本機 repo 上下文（git blame、完整檔案、目錄 CLAUDE.md）提升 review 精確度
+
+**Scripts 更新：**
+- `generate-spec-mapping.cjs` 同步本機版本，新增後端專案支援（`detectProjectType()`）與 blockquote 標頭路徑提取（`extractHeaderPaths()`）
+
+**待辦事項（見 TODO.md）：**
+- CLAUDE.md 補充 Linus Torvalds 工程哲學（資料結構至上、抽象代價、命名簡潔、好品味範例等 7 項）
+- 將 Linus Style 需求分析框架做成 skill，含「不要過度泛化」與「Show me the case」兩個現有流程缺少的步驟
+- Good Taste 原則加入 coding rule 和 code review rule（if 是未找到正確抽象的症狀）
+- skill 完成後做 hook，/jira 分析需求後自動回寫結論到 Jira issue comment
+- Code Review 大 PR 偵測：超過閾值時建議先 clone repo 再本機 review
 
 ### 2026-03-13: 新增 skills、移除 Homunculus 殘留、scripts 更新
 
