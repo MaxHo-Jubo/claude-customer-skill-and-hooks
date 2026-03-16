@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-16（PostToolUse catch-all hook、skill 錯誤追蹤整合至 weekly-review）
+> 上次更新：2026-03-16（sync skill 新增 `<conn>` 過濾安全規則、weekly-review STEP 04 加入 MCP Server 建議判斷、CLAUDE.md 歷史清除重建）
 
 ---
 
@@ -65,7 +65,7 @@
   1. Git 工作摘要（按專案分組）
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
-  4. 週報彙整與模式提取（含 Skill/Subagent/MCP Server 建議）
+  4. 週報彙整與模式提取（含 Skill/Subagent/MCP Server 建議；MCP Server 建議判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式）
   5. 記憶整理（過期/重複/升級建議，需使用者確認）
   6. Skill 錯誤 Pattern 分析（Subagent A，與 STEP 08 平行）— 執行 `summarize_errors.py`，提取高頻 pattern（≥3 次）
   7. Skill 修補建議（依賴 STEP 06）— 讀取 SKILL.md，產出 before/after 建議，不自動修改
@@ -79,11 +79,12 @@
 - **用法**：`/sync-my-claude-setting`
 - **功能**：
   1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開）
-  2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）
+  2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`
   4. Commit & Push — 根據差異報告產生 commit message 並推送
-- **同步清單**：`settings.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
-- **依賴**：git、rsync
+- **同步清單**：`settings.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
+- **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
 
 ---
