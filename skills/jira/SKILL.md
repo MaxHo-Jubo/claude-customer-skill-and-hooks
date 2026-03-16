@@ -234,3 +234,4 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 - `/jira fetch` 和 `/jira branch` 都使用 Atlassian MCP 工具抓取 issue，不依賴 jira CLI
 - 確保 `.claude/` 目錄存在（如不存在則建立）
 - branch 建立前會從 master 拉最新程式碼
+- 完成 fetch 或 branch 建立後，提示使用者：「是否使用 /linus-requirements-analysis 分析需求？」
