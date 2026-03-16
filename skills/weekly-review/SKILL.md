@@ -107,10 +107,11 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 ### 反覆出現的模式
 - {出現 2+ 次的工作流程或行為模式}
 
-### 建議提取為 Skill
-- {反覆執行的流程} → 建議建立 `/skill-name`
-  - 觸發條件: ...
-  - 核心步驟: ...
+### 建議提取為 Skill 或 Subagent
+- {反覆執行的流程} → 建議建立 `/skill-name` 或 subagent
+  - 判斷標準：需要使用者互動/確認 → Skill；獨立可平行/結果回傳即可 → Subagent
+  - **Skill**：觸發條件、核心步驟、互動點
+  - **Subagent**：任務描述、輸入/輸出格式、適合平行的場景、建議放在哪個 skill 內呼叫
 ```
 
 **輸出週報後，等待使用者確認再進入步驟 5。**
