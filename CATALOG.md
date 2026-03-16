@@ -82,7 +82,8 @@
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`
   4. Commit & Push — 根據差異報告產生 commit message 並推送
-- **同步清單**：`settings.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **同步清單**：`settings.json`、`mcp-servers.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **MCP Server 同步**：支援 MCP Server 設定同步（過濾 env 敏感資料），新增 restore 反向同步模式（從 repo 還原到本機）
 - **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
 - **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
@@ -288,13 +289,17 @@
 
 ### MCP Servers
 
-| Server | 用途 |
-|--------|------|
-| context7 | 函式庫文件即時查詢 |
-| context-mode | 沙盒執行 + FTS5 知識庫 |
-| mcp-search | 持久記憶語意搜尋 |
-| atlassian | Jira/Confluence CRUD |
-| typescript-lsp | TS/JS 型別檢查與導航 |
+> 設定檔：[`mcp-servers.json`](mcp-servers.json)
+
+| Server | 類型 | 連線方式 | 用途 |
+|--------|------|----------|------|
+| context7 | stdio | `npx -y @upstash/context7-mcp` | 取得最新函式庫文件與範例程式碼 |
+| gitlab | http | `gitlab.webotopia.work` | GitLab API 整合 |
+| gitnexus | stdio | `npx -y gitnexus mcp` | 程式碼知識圖譜（call chain、blast radius、重構分析） |
+| context-mode | stdio | — | 沙盒執行 + FTS5 知識庫 |
+| mcp-search | stdio | — | 持久記憶語意搜尋 |
+| atlassian | stdio | — | Jira/Confluence CRUD |
+| typescript-lsp | stdio | — | TS/JS 型別檢查與導航 |
 
 ---
 
