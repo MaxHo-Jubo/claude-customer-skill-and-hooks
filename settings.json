@@ -9,6 +9,7 @@
       "WebFetch(domain:forum.developer.samsung.com)",
       "WebSearch",
       "Bash(git checkout:*)",
+      "Bash(osascript -e 'display notification*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(npm install:*)",
       "Bash(./gradlew assembleDebug:*)",
@@ -291,17 +292,6 @@
             "statusMessage": "Checking inventory drift..."
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/post-commit-review.cjs\"",
-            "timeout": 5000,
-            "statusMessage": "Checking post-commit review..."
-          }
-        ]
       }
     ],
     "PreCompact": [
@@ -361,7 +351,16 @@
     "document-skills@anthropic-agent-skills": true,
     "gopls-lsp@claude-plugins-official": true,
     "jdtls-lsp@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "claude-hud@claude-hud": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-hud": {
+      "source": {
+        "source": "github",
+        "repo": "jarrodwatts/claude-hud"
+      }
+    }
   },
   "language": "繁體中文",
   "skipDangerousModePermissionPrompt": true
