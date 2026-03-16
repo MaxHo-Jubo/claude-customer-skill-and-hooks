@@ -81,12 +81,14 @@ diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
 **檔案複製：**
 ```bash
 cp "$SOURCE/settings.json" "$TARGET/settings.json"
-# 複製當日版本，然後移除先前日期的備份
+# CLAUDE.md：複製當日版本，移除 <conn> 區段（含個人資訊），再刪除先前日期備份
 TODAY=$(date +%Y%m%d)
-cp "$SOURCE/CLAUDE.md" "$TARGET/CLAUDE.md.$TODAY"
+sed '/<conn /,/<\/conn>/d' "$SOURCE/CLAUDE.md" > "$TARGET/CLAUDE.md.$TODAY"
 find "$TARGET" -maxdepth 1 -name "CLAUDE.md.*" ! -name "CLAUDE.md.$TODAY" -delete
 cp "$SOURCE/statusline-command.sh" "$TARGET/statusline/statusline-command.sh"
 ```
+
+> **安全規則**：CLAUDE.md 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），禁止同步到 repo。
 
 **目錄同步（mirror 模式）：**
 ```bash
@@ -160,5 +162,6 @@ git push
 
 - `~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤
 - `settings.local.json` 不同步（本機專屬設定）
+- `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除
 - 如果 `diff` 回報無任何差異，直接告知使用者「已同步，無需更新」並結束
