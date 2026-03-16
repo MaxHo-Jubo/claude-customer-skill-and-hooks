@@ -100,6 +100,8 @@ rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
 
 ### STEP 03: Generate Docs — 自動產生 README.md 與 CATALOG.md
 
+**禁止跳過此步驟。** 不論 STEP 01 的 diff 大小，都必須掃描 repo 完整狀態並比對現有文件。先前 session 的改動可能已存在 repo 但尚未反映到 README/CATALOG。
+
 讀取同步後的 repo 內容，自動重新產生文件。
 
 #### 3.1 掃描資料來源
