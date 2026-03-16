@@ -65,7 +65,7 @@
   1. Git 工作摘要（按專案分組）
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
-  4. 週報彙整與模式提取
+  4. 週報彙整與模式提取（含 Skill/Subagent 建議）
   5. 記憶整理（過期/重複/升級建議，需使用者確認）
   6. Skill 錯誤 Pattern 分析（Subagent A，與 STEP 08 平行）— 執行 `summarize_errors.py`，提取高頻 pattern（≥3 次）
   7. Skill 修補建議（依賴 STEP 06）— 讀取 SKILL.md，產出 before/after 建議，不自動修改
