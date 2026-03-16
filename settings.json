@@ -292,6 +292,16 @@
             "statusMessage": "Checking inventory drift..."
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/post_tool_error.py",
+            "timeout": 3000
+          }
+        ]
       }
     ],
     "PreCompact": [
