@@ -10,6 +10,7 @@
 - [ ] auth/authz verified
 - [ ] rate limiting on all endpoints
 - [ ] error messages don't leak sensitive data
+- [ ] logs don't contain sensitive data(token/password/API key/session)
 
 </checklist>
 
@@ -20,6 +21,10 @@ SECRET-MGMT:
   action: environment variables or secret manager
   startup: validate required secrets present
   exposed: rotate immediately
+
+LOG-SAFETY:
+  banned: 禁止在 log 中印出敏感資料（token/password/API key/session）
+  action: log 前過濾或遮罩敏感欄位
 
 SECURITY-INCIDENT:
   1: STOP immediately

@@ -314,6 +314,35 @@
 
 ---
 
+## Rules（編碼規則）
+
+> 規則分為 **common**（語言無關）與 **語言特定**（目前有 TypeScript）兩層。語言特定規則繼承 common 並補充框架細節。
+
+### common/
+
+| 規則檔 | 重點規則 |
+|--------|---------|
+| `coding-style.md` | IMMUTABILITY、FILE-ORG、ERROR-HANDLING、INPUT-VALIDATION、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY |
+| `security.md` | SECRET-MGMT、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
+| `testing.md` | 80% coverage、TDD（RED→GREEN→IMPROVE）、unit/integration/e2e |
+| `git-workflow.md` | commit format、PR workflow |
+| `performance.md` | model selection（haiku/sonnet/opus）、context window 管理、thinking 設定 |
+| `patterns.md` | skeleton project、repository pattern、API response envelope |
+| `hooks.md` | hook types（Pre/Post/Stop）、auto-accept、TodoWrite |
+| `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
+
+### typescript/
+
+| 規則檔 | 重點規則 |
+|--------|---------|
+| `coding-style.md` | IMMUTABILITY（spread）、ERROR-HANDLING（async/await）、INPUT-VALIDATION（Zod）、CONSOLE-LOG、REACT（re-render/useEffect cleanup）、REACT-NATIVE（FlatList/StyleSheet.create） |
+| `testing.md` | E2E: Playwright |
+| `patterns.md` | ApiResponse\<T\>、useDebounce hook、Repository\<T\> |
+| `hooks.md` | PostToolUse: prettier/tsc/console-log-warn；Stop: console-log-audit |
+| `security.md` | SECRET-MGMT: process.env + startup validation |
+
+---
+
 ## 依賴關係圖
 
 ```

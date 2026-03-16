@@ -30,6 +30,19 @@ INPUT-VALIDATION:
   fail-fast: clear error message
   trust: never trust external data(API responses/user input/file content)
 
+MAGIC-NUMBER:
+  banned: 未經解釋的數字常數
+  action: 抽出為具名常數並加上用途註解
+
+NULL-SAFETY:
+  action: 空值/undefined 存取必須做防護
+  patterns: optional chaining(?.) / guard clause / default value
+  scope: 所有可能為 null/undefined 的變數存取
+
+COMMENT-ACCURACY:
+  rule: 程式邏輯與註解必須一致
+  banned: 過時註解 / 錯誤註解 / 註解錯字
+
 </rules>
 
 <checklist label="完工前檢查">
@@ -40,6 +53,9 @@ INPUT-VALIDATION:
 - [ ] nesting ≤4 levels
 - [ ] proper error handling
 - [ ] no hardcoded values → constants/config
+- [ ] no magic numbers → named constants with comments
 - [ ] no mutation → immutable patterns
+- [ ] null/undefined access guarded
+- [ ] comments match actual logic (no stale/wrong comments, no typos)
 
 </checklist>
