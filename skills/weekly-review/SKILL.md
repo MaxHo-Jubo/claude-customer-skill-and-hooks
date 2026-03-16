@@ -107,11 +107,22 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 ### 反覆出現的模式
 - {出現 2+ 次的工作流程或行為模式}
 
-### 建議提取為 Skill 或 Subagent
-- {反覆執行的流程} → 建議建立 `/skill-name` 或 subagent
-  - 判斷標準：需要使用者互動/確認 → Skill；獨立可平行/結果回傳即可 → Subagent
-  - **Skill**：觸發條件、核心步驟、互動點
-  - **Subagent**：任務描述、輸入/輸出格式、適合平行的場景、建議放在哪個 skill 內呼叫
+### 建議提取為 Skill / Subagent / MCP Server
+- {反覆執行的流程} → 依據判斷標準建議最適合的形式：
+
+| 判斷條件 | 建議形式 |
+|---------|---------|
+| 需要使用者互動/確認的多步驟流程 | **Skill** |
+| 獨立可平行、結果回傳即可的子任務 | **Subagent** |
+| 多個 skill 重複呼叫同一外部 API/服務 | **MCP Server** |
+| 需要跨 session 持久化狀態（DB/cache/索引） | **MCP Server** |
+| 提供通用能力（tool library）而非特定流程 | **MCP Server** |
+
+- **Skill**：觸發條件、核心步驟、互動點
+- **Subagent**：任務描述、輸入/輸出格式、適合平行的場景、建議放在哪個 skill 內呼叫
+- **MCP Server**：共用的 API/服務名稱、哪些 skill 會用到、需要的持久化狀態、建議提供的 tools 清單
+  - MCP 建議的判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式
+  - 定位為「可能適合 MCP」的提示，附理由，由使用者最終決定
 ```
 
 **輸出週報後，等待使用者確認再進入步驟 5。**
