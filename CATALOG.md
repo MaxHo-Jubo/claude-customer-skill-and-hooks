@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-14
+> 上次更新：2026-03-16
 
 ---
 
@@ -19,6 +19,22 @@
   - 建立開發筆記 `.claude/{ISSUE_ID}.md` 與原始資料 `.claude/{ISSUE_ID}-Jira.md`
   - 管理 branch 建立
 - **依賴**：Atlassian MCP、`JIRA_CLOUD_ID`、`JIRA_USERNAME`（設定於 `~/.claude/CLAUDE.md`）
+- **連動**：完成 fetch 或 branch 建立後，提示使用者呼叫 `/linus-requirements-analysis`
+
+#### `/linus-requirements-analysis` — Linus Style 需求分析
+
+- **位置**：`~/.claude/skills/linus-requirements-analysis/SKILL.md`
+- **用法**：`/linus-requirements-analysis`、`/linus-requirements-analysis {需求描述}`
+- **功能**：6 步結構化需求審查
+  1. 這是真問題嗎？（法規/真實痛點/想像中的問題）
+  2. Show me the case（要求具體案例，不憑空分析）
+  3. 資料結構先行（先定義 data model）
+  4. 有更簡單的方案嗎？（現有功能組合、改設定、最小改動量）
+  5. 會破壞什麼？（資料相容性、其他模組影響、向後相容）
+  6. 不要過度泛化（先解決眼前案例）
+- **輸出**：【核心判斷】→【關鍵洞察】→【資料結構影響】→【方案】→【風險】→【不做的事】
+- **Jira 回寫**：分析完成後可選擇將結論寫入 Jira issue comment
+- **依賴**：Atlassian MCP（回寫時）
 
 #### `/jira-acceptance` — Jira 需求驗收
 
@@ -62,7 +78,7 @@
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`
   4. Commit & Push — 根據差異報告產生 commit message 並推送
-- **同步清單**：`settings.json`、`CLAUDE.md`、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **同步清單**：`settings.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
 - **依賴**：git、rsync
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
 
@@ -302,6 +318,8 @@
 
 ```
 jira ←── jira-acceptance（取得需求資料）
+  │
+  ├── linus-requirements-analysis（需求分析，可回寫 Jira comment）
   │
   └── commit-spec ←── spec-module（--commit flag）
                          ↑
