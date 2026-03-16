@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-16（statusline 第二行、claude-hud plugin、post-commit-review 改為規則）
+> 上次更新：2026-03-16（PostToolUse catch-all hook、skill 錯誤追蹤整合至 weekly-review）
 
 ---
 
@@ -61,13 +61,17 @@
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
-- **功能**：
+- **功能**（8 步驟）：
   1. Git 工作摘要（按專案分組）
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
   4. 週報彙整與模式提取
   5. 記憶整理（過期/重複/升級建議，需使用者確認）
-- **依賴**：git、claude-mem MCP、auto memory
+  6. Skill 錯誤 Pattern 分析（Subagent A，與 STEP 08 平行）— 執行 `summarize_errors.py`，提取高頻 pattern（≥3 次）
+  7. Skill 修補建議（依賴 STEP 06）— 讀取 SKILL.md，產出 before/after 建議，不自動修改
+  8. Amendment 成效追蹤（Subagent B，與 STEP 06 平行）— 比對 `AMENDMENTS.md` 修補前後錯誤頻率
+- **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
+- **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
 
 #### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo
 
@@ -212,6 +216,7 @@
 |---------|------|------|
 | `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
+| —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 #### ~~Bash（git commit 後）~~ — 已改為 CLAUDE.md POST-COMMIT-REVIEW 規則（2026-03-16）
 
@@ -244,6 +249,7 @@
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
 | `post-commit-review.cjs` | ~~PostToolUse hook~~ → 改為 CLAUDE.md 規則驅動；腳本保留供 systemMessage 提醒 |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
+| `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
 | `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
 
