@@ -18,7 +18,7 @@ TARGET: ~/Documents/projects/claude-customer-skill-and-hooks
 | 來源 (`~/.claude/`) | 目標 (repo) | 類型 |
 |---------------------|-------------|------|
 | `settings.json` | `settings.json` | 檔案 |
-| `CLAUDE.md` | `CLAUDE.md` | 檔案 |
+| `CLAUDE.md` | `CLAUDE.md.{YYYYMMDD}`（如 `CLAUDE.md.20260316`） | 檔案（日期後綴） |
 | `skills/` | `skills/` | 目錄 |
 | `hooks/` | `hooks/` | 目錄 |
 | `scripts/` | `scripts/` | 目錄 |
@@ -34,7 +34,13 @@ TARGET: ~/Documents/projects/claude-customer-skill-and-hooks
 **檔案比對：**
 ```bash
 diff -u "$SOURCE/settings.json" "$TARGET/settings.json" || true
-diff -u "$SOURCE/CLAUDE.md" "$TARGET/CLAUDE.md" || true
+# CLAUDE.md 比對最新的日期後綴版本
+LATEST_CLAUDE=$(ls -1 "$TARGET"/CLAUDE.md.* 2>/dev/null | sort -r | head -1)
+if [ -n "$LATEST_CLAUDE" ]; then
+  diff -u "$SOURCE/CLAUDE.md" "$LATEST_CLAUDE" || true
+else
+  echo "尚無 CLAUDE.md 備份，將建立首份"
+fi
 diff -u "$SOURCE/statusline-command.sh" "$TARGET/statusline/statusline-command.sh" || true
 ```
 
@@ -75,7 +81,10 @@ diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
 **檔案複製：**
 ```bash
 cp "$SOURCE/settings.json" "$TARGET/settings.json"
-cp "$SOURCE/CLAUDE.md" "$TARGET/CLAUDE.md"
+# 複製當日版本，然後移除先前日期的備份
+TODAY=$(date +%Y%m%d)
+cp "$SOURCE/CLAUDE.md" "$TARGET/CLAUDE.md.$TODAY"
+find "$TARGET" -maxdepth 1 -name "CLAUDE.md.*" ! -name "CLAUDE.md.$TODAY" -delete
 cp "$SOURCE/statusline-command.sh" "$TARGET/statusline/statusline-command.sh"
 ```
 
