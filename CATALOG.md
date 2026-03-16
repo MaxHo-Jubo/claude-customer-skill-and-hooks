@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-16
+> 上次更新：2026-03-16（statusline 第二行、claude-hud plugin、post-commit-review 改為規則）
 
 ---
 
@@ -213,11 +213,11 @@
 | `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
 
-#### Bash（git commit 後）
+#### ~~Bash（git commit 後）~~ — 已改為 CLAUDE.md POST-COMMIT-REVIEW 規則（2026-03-16）
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Bash` | `post-commit-review.cjs` | git commit 後自動 /simplify + /code-review（利用本機 repo 上下文），commit and push 時跳過 |
+| ~~`Bash`~~ | ~~`post-commit-review.cjs`~~ | ~~git commit 後自動 /simplify + /code-review~~ → 改為 `~/.claude/CLAUDE.md` 的 `POST-COMMIT-REVIEW` 規則（hook stdout 無法注入 AI context） |
 
 ### PreCompact
 
@@ -242,7 +242,7 @@
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
-| `post-commit-review.cjs` | PostToolUse hook — git commit 後自動 /simplify + /code-review |
+| `post-commit-review.cjs` | ~~PostToolUse hook~~ → 改為 CLAUDE.md 規則驅動；腳本保留供 systemMessage 提醒 |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
 | `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
@@ -253,7 +253,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（12）
+### 啟用的 Plugins（13）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -269,6 +269,7 @@
 | context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
 | document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
 | superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
+| claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 
 ### 停用的 Plugins（3）
 
@@ -293,11 +294,13 @@
 ## StatusLine 自訂狀態列
 
 - **位置**：`~/.claude/statusline-command.sh`
-- **來源**：合併自 [sd0xdev/sd0x-dev-flow](https://github.com/sd0xdev/sd0x-dev-flow)（佈局）+ [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline)（rate limits）
+- **來源**：合併自 [sd0xdev/sd0x-dev-flow](https://github.com/sd0xdev/sd0x-dev-flow)（佈局）+ [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline)（rate limits）+ [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud)（概念參考：transcript 解析）
 - **設定**：`~/.claude/settings.json` → `statusLine.command`
 - **顯示**：
   - 第一行：目錄 (branch*) │ Model │ ctx:N% │ ⏱ session │ thinking
-  - 第二～四行：current / weekly / extra usage 進度條（需 OAuth）
+  - 第二行：session name │ 工具統計（前 5 名×次數）│ agent 數量 │ todo 進度 │ config counts
+  - 第三～五行：current / weekly / extra usage 進度條（需 OAuth）
+- **快取**：rate limit 60 秒、transcript 3 秒、config 120 秒
 - **詳細說明**：[`statusline/README.md`](statusline/README.md)
 
 ---

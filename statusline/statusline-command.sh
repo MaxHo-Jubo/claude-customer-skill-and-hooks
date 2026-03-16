@@ -147,6 +147,9 @@ else
 fi
 pct_remaining=$(( 100 - pct_used ))
 
+# transcript 路徑（用於取得工具/agent/todo 資料）
+transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
+
 thinking_on=false
 settings_path="$HOME/.claude/settings.json"
 if [ -f "$settings_path" ]; then
@@ -216,6 +219,118 @@ if $thinking_on; then
 else
     line1+="${dim}◑ thinking${reset}"
 fi
+
+# ── Transcript data (cached 3s) ────────────────────────
+t_tools="" t_agents=0 t_todo="" t_session_name=""
+t_cache="/tmp/claude/statusline-transcript.json"
+
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    t_refresh=true
+    if [ -f "$t_cache" ]; then
+        t_age=$(( $(date +%s) - $(stat -f %m "$t_cache" 2>/dev/null || echo 0) ))
+        [ "$t_age" -lt 3 ] && t_refresh=false
+    fi
+
+    if $t_refresh; then
+        # STEP 01: session name（第一行）
+        t_session_name=$(head -1 "$transcript_path" | jq -r '.slug // .customTitle // ""' 2>/dev/null)
+
+        # STEP 02: 工具統計（streaming jq，逐行處理不載入全檔）
+        t_tools=$(jq -r '.message?.content[]? | select(.type == "tool_use") | .name' "$transcript_path" 2>/dev/null \
+            | sort | uniq -c | sort -rn | head -5 \
+            | awk '{printf "%s×%s ", $2, $1}' | sed 's/ $//')
+
+        # STEP 03: agent 數量
+        t_agents=$(jq -r '.message?.content[]? | select(.type == "tool_use" and .name == "Agent") | "x"' "$transcript_path" 2>/dev/null \
+            | wc -l | tr -d ' ')
+        [ -z "$t_agents" ] && t_agents=0
+
+        # STEP 04: todo 進度（從最後一筆 TodoWrite 取）
+        t_todo=""
+        t_todo_json=$(tail -r "$transcript_path" 2>/dev/null \
+            | jq -c '.message?.content[]? | select(.type == "tool_use" and .name == "TodoWrite") | .input' 2>/dev/null \
+            | head -1)
+        if [ -n "$t_todo_json" ] && [ "$t_todo_json" != "null" ]; then
+            t_total=$(echo "$t_todo_json" | jq '.todos | length' 2>/dev/null)
+            t_done=$(echo "$t_todo_json" | jq '[.todos[] | select(.status == "completed")] | length' 2>/dev/null)
+            [ -n "$t_total" ] && [ "$t_total" != "0" ] && [ "$t_total" != "null" ] && t_todo="${t_done}/${t_total}"
+        fi
+
+        # STEP 05: 寫入 cache
+        jq -nc --arg name "$t_session_name" --arg tools "$t_tools" \
+            --argjson agents "${t_agents:-0}" --arg todo "$t_todo" \
+            '{name:$name,tools:$tools,agents:$agents,todo:$todo}' > "$t_cache" 2>/dev/null
+    else
+        # STEP 06: 讀取 cache
+        t_data=$(cat "$t_cache" 2>/dev/null)
+        t_session_name=$(echo "$t_data" | jq -r '.name // ""' 2>/dev/null)
+        t_tools=$(echo "$t_data" | jq -r '.tools // ""' 2>/dev/null)
+        t_agents=$(echo "$t_data" | jq -r '.agents // 0' 2>/dev/null)
+        t_todo=$(echo "$t_data" | jq -r '.todo // ""' 2>/dev/null)
+    fi
+fi
+
+# ── Config counts (cached 120s) ────────────────────────
+cfg_md=0 cfg_rules=0 cfg_hooks=0
+cfg_cache="/tmp/claude/statusline-config.json"
+
+cfg_refresh=true
+if [ -f "$cfg_cache" ]; then
+    cfg_age=$(( $(date +%s) - $(stat -f %m "$cfg_cache" 2>/dev/null || echo 0) ))
+    [ "$cfg_age" -lt 120 ] && cfg_refresh=false
+fi
+
+if $cfg_refresh; then
+    # STEP 01: 計算 CLAUDE.md 數量
+    cfg_md=0
+    [ -f "$HOME/.claude/CLAUDE.md" ] && cfg_md=$((cfg_md + 1))
+    [ -n "$cwd" ] && [ -f "$cwd/CLAUDE.md" ] && cfg_md=$((cfg_md + 1))
+
+    # STEP 02: 計算 rules 數量
+    cfg_rules=$(find "$HOME/.claude/rules" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    # STEP 03: 計算 hooks 數量
+    cfg_hooks=$(jq '.hooks | keys | length' "$HOME/.claude/settings.json" 2>/dev/null || echo 0)
+
+    # STEP 04: 寫入 cache
+    jq -nc --argjson md "$cfg_md" --argjson rules "${cfg_rules:-0}" --argjson hooks "${cfg_hooks:-0}" \
+        '{md:$md,rules:$rules,hooks:$hooks}' > "$cfg_cache" 2>/dev/null
+else
+    cfg_data=$(cat "$cfg_cache" 2>/dev/null)
+    cfg_md=$(echo "$cfg_data" | jq -r '.md // 0' 2>/dev/null)
+    cfg_rules=$(echo "$cfg_data" | jq -r '.rules // 0' 2>/dev/null)
+    cfg_hooks=$(echo "$cfg_data" | jq -r '.hooks // 0' 2>/dev/null)
+fi
+
+# ── LINE 2: Session │ Tools │ Agents │ Todos │ Config ──
+line2=""
+
+# session name
+if [ -n "$t_session_name" ] && [ "$t_session_name" != "null" ]; then
+    line2+="${magenta}${t_session_name}${reset}"
+fi
+
+# 工具統計
+if [ -n "$t_tools" ]; then
+    [ -n "$line2" ] && line2+="${sep}"
+    line2+="${cyan}◐${reset} ${white}${t_tools}${reset}"
+fi
+
+# agent 數量
+if [ "$t_agents" -gt 0 ] 2>/dev/null; then
+    [ -n "$line2" ] && line2+="${sep}"
+    line2+="${green}⚡${t_agents} agents${reset}"
+fi
+
+# todo 進度
+if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
+    [ -n "$line2" ] && line2+="${sep}"
+    line2+="${yellow}☑ ${t_todo}${reset}"
+fi
+
+# config counts
+[ -n "$line2" ] && line2+="${sep}"
+line2+="${dim}${cfg_md}md ${cfg_rules}rules ${cfg_hooks}hooks${reset}"
 
 # ── OAuth token resolution ──────────────────────────────
 get_oauth_token() {
@@ -339,6 +454,7 @@ fi
 
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
+[ -n "$line2" ] && printf "\n%b" "$line2"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
 
 exit 0
