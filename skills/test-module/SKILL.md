@@ -1,6 +1,7 @@
 ---
 name: test-module
-description: "對指定模組掃描可測試函式，產出單元測試並驗證品質。當使用者提到 /test-module、想為某個模組寫測試、說「幫這個寫測試」、或想批量產生測試時使用此 skill。"
+description: "對指定模組掃描可測試函式並產出單元測試。當使用者提到 /test-module、「幫這個寫測試」、「批量產生測試」時觸發。"
+version: 1.0.0
 ---
 
 # Test Module 測試產生

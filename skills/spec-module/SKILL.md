@@ -1,6 +1,7 @@
 ---
 name: spec-module
-description: "對指定模組進行完整探索，產出結構化 spec markdown 文件。當使用者提到 /spec-module、想產出模組文件、想建立 spec、或說「幫我寫這個模組的 spec」時使用此 skill。"
+description: "對指定模組探索並產出結構化 spec markdown。當使用者提到 /spec-module、「寫 spec」、「模組文件」、想建立 spec 時觸發。"
+version: 1.0.0
 ---
 
 # Spec Module 文件產生

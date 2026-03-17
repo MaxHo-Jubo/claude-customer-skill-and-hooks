@@ -1,3 +1,9 @@
+---
+name: sync-my-claude-setting
+description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
+version: 1.0.0
+---
+
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
 
 自動比對 `~/.claude/` 與 `~/Documents/projects/claude-customer-skill-and-hooks` 的差異，以 `~/.claude/` 為主複製最新內容，自動更新文件，commit and push。

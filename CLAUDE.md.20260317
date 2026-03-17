@@ -1,4 +1,4 @@
-# MAX-HERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
+# MAXHERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
 
 
 <gates label="硬性閘門 | 優先序: GATE-1>GATE-2>GATE-3 | 缺一項=STOP">
@@ -159,6 +159,17 @@ POST-COMMIT-REVIEW:
   on-complete: 三步驟全部完成後才算結束，回報結果給使用者
 
 </rhythm>
+
+<compact label="壓縮時保留優先序 | 高→低">
+
+PRESERVE:
+  1-must: 架構決策（完整保留，禁止摘要化）
+  2-keep: 已修改檔案及關鍵變更
+  3-keep: 當前驗證狀態（pass/fail）
+  4-keep: 未完成 TODO 與 rollback 備註
+  5-drop: 工具輸出（僅保留 pass/fail 結果）
+
+</compact>
 
 <ref label="on-demand — 已由 rules/ 自動載入，勿重複內容">
 

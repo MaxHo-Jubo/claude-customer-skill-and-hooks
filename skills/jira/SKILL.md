@@ -1,6 +1,7 @@
 ---
 name: jira
-description: "Jira Issue 管理工具。從 Git branch 名稱自動識別 Jira issue，抓取 issue 詳情，建立開發筆記，管理 branch。當使用者提到 /jira、想查看目前的 Jira issue、要從 Jira 抓資料建立開發文件、或想根據 issue 建立新 branch 時使用此 skill。"
+description: "Jira Issue 管理工具。從 branch 自動識別 issue、抓詳情、建開發筆記、管理 branch。當使用者提到 /jira、「看一下 issue」、「建 branch」、想從 Jira 抓資料時觸發。"
+version: 1.0.0
 ---
 
 # Jira Issue 管理
