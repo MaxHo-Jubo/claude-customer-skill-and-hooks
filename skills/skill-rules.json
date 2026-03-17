@@ -12,17 +12,6 @@
         ]
       }
     },
-    "commit-spec": {
-      "enforcement": "suggest",
-      "priority": "medium",
-      "promptTriggers": {
-        "keywords": ["commit spec", "提交 spec", "spec commit"],
-        "intentPatterns": [
-          "(commit|提交).*(spec|規格)",
-          "spec.*(commit|提交)"
-        ]
-      }
-    },
     "spec-module": {
       "enforcement": "suggest",
       "priority": "medium",

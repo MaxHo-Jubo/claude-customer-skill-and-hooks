@@ -178,7 +178,9 @@ version: 1.0.0
 ### Phase 3: 收尾
 
 1. 如果帶 `--commit` 參數：
-   - 調用 `/commit-spec` 的邏輯（stage + commit）
+   - `git add` 所有新增/修改的 spec 檔案
+   - commit message 格式：`docs: spec-module 產出 <模組名稱> spec`
+   - 如果是 `--verify` 模式：`docs: spec-module 驗證補完 <模組名稱> spec`
 
 2. 檢查 `spec/file-mapping.json` 是否需要更新：
    - 提醒執行 `node ~/.claude/scripts/generate-spec-mapping.cjs <project-root>`
