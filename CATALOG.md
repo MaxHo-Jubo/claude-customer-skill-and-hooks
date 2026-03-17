@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-16（sync skill 新增 `<conn>` 過濾安全規則、weekly-review STEP 04 加入 MCP Server 建議判斷、CLAUDE.md 歷史清除重建）
+> 上次更新：2026-03-17（health skill 新增、commit-spec 移除、post-commit-review hook 恢復、hooks.md 新增 HOOK-OUTPUT、version 號批量加入）
 
 ---
 
@@ -9,7 +9,7 @@
 
 ### 開發流程類
 
-#### `/jira` — Jira Issue 管理
+#### `/jira` — Jira Issue 管理（v1.0.0）
 
 - **位置**：`~/.claude/skills/jira/SKILL.md`
 - **用法**：`/jira`、`/jira fetch`、`/jira branch {ISSUE_ID}`
@@ -21,7 +21,7 @@
 - **依賴**：Atlassian MCP、`JIRA_CLOUD_ID`、`JIRA_USERNAME`（設定於 `~/.claude/CLAUDE.md`）
 - **連動**：完成 fetch 或 branch 建立後，提示使用者呼叫 `/linus-requirements-analysis`
 
-#### `/linus-requirements-analysis` — Linus Style 需求分析
+#### `/linus-requirements-analysis` — Linus Style 需求分析（v1.0.0）
 
 - **位置**：`~/.claude/skills/linus-requirements-analysis/SKILL.md`
 - **用法**：`/linus-requirements-analysis`、`/linus-requirements-analysis {需求描述}`
@@ -36,7 +36,7 @@
 - **Jira 回寫**：分析完成後可選擇將結論寫入 Jira issue comment
 - **依賴**：Atlassian MCP（回寫時）
 
-#### `/jira-acceptance` — Jira 需求驗收
+#### `/jira-acceptance` — Jira 需求驗收（v1.0.0）
 
 - **位置**：`~/.claude/skills/jira-acceptance/SKILL.md`
 - **用法**：`/jira-acceptance`、`/jira-acceptance {ISSUE_KEY}`
@@ -47,17 +47,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/commit-spec` — 提交 Spec 文件
-
-- **位置**：`~/.claude/skills/commit-spec/SKILL.md`
-- **用法**：`/commit-spec`、`/commit-spec <description>`
-- **功能**：
-  - 專門 commit `spec/` 目錄的改動
-  - 自動分析新增/修改/刪除的 spec 檔案
-  - 依 CLAUDE.md 規則產生 commit message（含 Jira 編號、專案標識）
-- **依賴**：git、CLAUDE.md commit 規則
-
-#### `/weekly-review` — 每週工作回顧
+#### `/weekly-review` — 每週工作回顧（v1.0.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -73,7 +63,7 @@
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.0.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -92,7 +82,7 @@
 
 ### 程式碼品質類
 
-#### `/spec-module <path>` — 模組 Spec 產生
+#### `/spec-module <path>` — 模組 Spec 產生（v1.0.0）
 
 - **位置**：`~/.claude/skills/spec-module/SKILL.md`
 - **用法**：
@@ -108,7 +98,7 @@
   - `--verify`：三級優先序對應 spec 與原始碼（路由映射表 > Spec 內部標註 > 檔名推斷），找出遺漏 API 並補完，支援批次驗證整個目錄
 - **輸出**：`spec/<module-name>/index.md` 或 `spec/<module-name>.md`
 
-#### `/test-module <path>` — 批量測試產生
+#### `/test-module <path>` — 批量測試產生（v1.0.0）
 
 - **位置**：`~/.claude/skills/test-module/SKILL.md`
 - **用法**：`/test-module <file-or-dir>`、`--plan-only`、`--phase <N>`
@@ -119,7 +109,7 @@
   - Phase 3：提交
 - **依賴**：jest / vitest / mocha（依專案而定）
 
-#### `/explore-report <dir>` — 探索報告
+#### `/explore-report <dir>` — 探索報告（v1.0.0）
 
 - **位置**：`~/.claude/skills/explore-report/SKILL.md`
 - **用法**：`/explore-report <directory>`、`--to-spec`
@@ -129,7 +119,7 @@
   - `--to-spec`：將探索報告轉換為正式 spec
 - **輸出**：`spec/.exploration-log.md`（append 模式）
 
-#### `/method-refactor <method>` — 方法重構
+#### `/method-refactor <method>` — 方法重構（v1.0.0）
 
 - **位置**：`~/.claude/skills/method-refactor/SKILL.md`
 - **用法**：`/method-refactor <method-name or file:line>`
@@ -142,6 +132,20 @@
   6. 冗餘移除（含 NOTE 註解清理）
   7. 測試驗證（跑 test + lint + tsc）
 - **輸出**：每項檢查的 ✅/⏭️/❌ 狀態表
+
+#### `/health` — 設定健康度稽核（v1.5.0）
+
+- **位置**：`~/.claude/skills/health/SKILL.md`
+- **用法**：`/health`
+- **功能**：六層架構健康度稽核
+  - Step 0：評估專案 tier（Simple / Standard / Complex）
+  - Step 1：單一 bash 區塊收集所有資料（CLAUDE.md、rules、skills、hooks、MCP、conversation files）
+  - Step 2：啟動兩個平行診斷 subagent
+    - Agent 1 — Context + Security Audit（context layer、skill security/quality/provenance）
+    - Agent 2 — Control + Behavior Audit（hooks、allowedTools、cache hygiene、三層防禦一致性、行為 pattern）
+  - Step 3：彙整報告（🔴 Critical / 🟡 Structural / 🟢 Incremental）
+- **特性**：`disable-model-invocation: true`（不會被自動觸發，僅手動執行）
+- **依賴**：無外部依賴
 
 ---
 
@@ -158,6 +162,17 @@
   - 品質評分系統（直接性/節奏/信任度/真實性/精煉度，滿分 50）
 - **來源**：op7418/humanizer-zh 的分支，翻譯自 blader/humanizer，參考 hardikpandya/stop-slop
 - **依賴**：無（純文字編輯）
+
+#### `/ai-md` — CLAUDE.md AI-native 轉換（v4.0.0）
+
+- **位置**：`~/.claude/skills/ai-md/SKILL.md`
+- **用法**：`/ai-md`、「蒸餾」、「distill my CLAUDE.md」、「rewrite my MD for AI」
+- **功能**：
+  - 將 human-written CLAUDE.md 轉為 AI-native 結構化格式
+  - 經 5 輪、4 模型（GPT-5.3、Gemini 2.5 Pro、Grok-4、Claude Opus 4.6）實戰測試
+  - Structured-label 格式使 Codex compliance 從 6/8 提升至 8/8
+  - 同樣規則、更少 token、更高精確度
+- **依賴**：無
 
 ---
 
@@ -218,13 +233,10 @@
 |---------|------|------|
 | `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
+| `Bash` | `post-commit-review.cjs` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（搭配 CLAUDE.md 規則使用） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
-#### ~~Bash（git commit 後）~~ — 已改為 CLAUDE.md POST-COMMIT-REVIEW 規則（2026-03-16）
-
-| Matcher | 腳本 | 用途 |
-|---------|------|------|
-| ~~`Bash`~~ | ~~`post-commit-review.cjs`~~ | ~~git commit 後自動 /simplify + /code-review~~ → 改為 `~/.claude/CLAUDE.md` 的 `POST-COMMIT-REVIEW` 規則（hook stdout 無法注入 AI context） |
+> **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
 
 ### PreCompact
 
@@ -249,7 +261,7 @@
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
-| `post-commit-review.cjs` | ~~PostToolUse hook~~ → 改為 CLAUDE.md 規則驅動；腳本保留供 systemMessage 提醒 |
+| `post-commit-review.cjs` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（搭配 CLAUDE.md POST-COMMIT-REVIEW 規則） |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
@@ -289,17 +301,15 @@
 
 ### MCP Servers
 
-> 設定檔：[`mcp-servers.json`](mcp-servers.json)
+> 設定檔：[`mcp-servers.json`](mcp-servers.json)（目前為空物件 `{}`，MCP Servers 由啟用的 plugins 自行註冊管理）
 
-| Server | 類型 | 連線方式 | 用途 |
-|--------|------|----------|------|
-| context7 | stdio | `npx -y @upstash/context7-mcp` | 取得最新函式庫文件與範例程式碼 |
-| gitlab | http | `gitlab.webotopia.work` | GitLab API 整合 |
-| gitnexus | stdio | `npx -y gitnexus mcp` | 程式碼知識圖譜（call chain、blast radius、重構分析） |
-| context-mode | stdio | — | 沙盒執行 + FTS5 知識庫 |
-| mcp-search | stdio | — | 持久記憶語意搜尋 |
-| atlassian | stdio | — | Jira/Confluence CRUD |
-| typescript-lsp | stdio | — | TS/JS 型別檢查與導航 |
+| Server | 來源 Plugin | 用途 |
+|--------|------------|------|
+| context7 | context7@claude-plugins-official | 取得最新函式庫文件與範例程式碼 |
+| context-mode | context-mode@claude-context-mode | 沙盒執行 + FTS5 知識庫 |
+| mcp-search | claude-mem@thedotmack | 持久記憶語意搜尋 |
+| atlassian | atlassian@claude-plugins-official | Jira/Confluence CRUD |
+| typescript-lsp | typescript-lsp@claude-plugins-official | TS/JS 型別檢查與導航 |
 
 ---
 
@@ -343,7 +353,7 @@
 | `git-workflow.md` | commit format、PR workflow |
 | `performance.md` | model selection（haiku/sonnet/opus）、context window 管理、thinking 設定 |
 | `patterns.md` | skeleton project、repository pattern、API response envelope |
-| `hooks.md` | hook types（Pre/Post/Stop）、auto-accept、TodoWrite |
+| `hooks.md` | hook types（Pre/Post/Stop）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、auto-accept、TodoWrite |
 | `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
 
 ### typescript/
@@ -365,17 +375,22 @@ jira ←── jira-acceptance（取得需求資料）
   │
   ├── linus-requirements-analysis（需求分析，可回寫 Jira comment）
   │
-  └── commit-spec ←── spec-module（--commit flag）
-                         ↑
-              explore-report（--to-spec flag）
+  └── spec-module（--commit flag）
+         ↑
+      explore-report（--to-spec flag）
 
 gitnexus-hook ──→ gitnexus-exploring
                   gitnexus-debugging
                   gitnexus-impact-analysis
                   gitnexus-refactoring
 
-auto memory ──→ weekly-review（整理）
+auto memory ──→ weekly-review（整理 + skill 錯誤分析）
                Obsidian vault（瀏覽）
 
 ~/.claude/ ──→ sync-my-claude-setting（同步到 repo）
+
+health（獨立稽核，無外部依賴）
+
+post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 Claude）
+post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
 ```

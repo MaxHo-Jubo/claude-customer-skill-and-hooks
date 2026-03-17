@@ -1,6 +1,7 @@
 ---
 name: jira-acceptance
-description: "Jira 需求驗收工具。比對 Jira issue 需求描述與當前程式碼改動（git diff），逐條判斷需求是否已實作，產出結構化驗收報告。當使用者提到 /jira-acceptance、想驗收需求、說「檢查這個 issue 做完了沒」、「驗收」、「需求比對」、想確認程式碼改動是否符合 Jira 需求時使用此 skill。即使使用者只說「看看做完了沒」或「diff 跟 issue 對得上嗎」也應觸發。"
+description: "Jira 需求驗收。比對 issue 需求與 git diff，逐條判斷是否已實作並產出驗收報告。當使用者提到 /jira-acceptance、「驗收」、「做完了沒」、「diff 跟 issue 對得上嗎」、「需求比對」時觸發。"
+version: 1.0.0
 ---
 
 # Jira 需求驗收

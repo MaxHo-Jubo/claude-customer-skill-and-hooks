@@ -1,6 +1,7 @@
 ---
 name: linus-requirements-analysis
-description: "Linus Style 需求分析。對需求進行結構化審查：判斷真假問題、資料結構先行、破壞性評估、反對過度泛化。當使用者提到 /linus-requirements-analysis、想分析需求、說「分析這個需求」、「這個值得做嗎」、「需求審查」時使用此 skill。"
+description: "Linus Style 需求分析。判斷真假問題、資料結構先行、破壞性評估、反對過度泛化。當使用者提到 /linus-requirements-analysis、「分析需求」、「值得做嗎」、「需求審查」時觸發。"
+version: 1.0.0
 ---
 
 # Linus Style 需求分析

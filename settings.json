@@ -294,6 +294,17 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/scripts/post-commit-review.cjs\"",
+            "timeout": 5000,
+            "statusMessage": "Checking post-commit review..."
+          }
+        ]
+      },
+      {
         "matcher": "",
         "hooks": [
           {
@@ -373,5 +384,6 @@
     }
   },
   "language": "繁體中文",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "effortLevel": "high"
 }

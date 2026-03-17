@@ -1,6 +1,7 @@
 ---
 name: method-refactor
-description: "對指定方法進行結構化優化重構，逐項檢查並改善程式碼品質。當使用者提到 /method-refactor、想優化某個方法、說「精簡這個 function」、「重構這段程式碼」、或想改善方法的可讀性時使用此 skill。"
+description: "對指定方法進行結構化重構，逐項檢查並改善品質。當使用者提到 /method-refactor、「精簡這個 function」、「重構這段」、想優化某個方法時觸發。"
+version: 1.0.0
 ---
 
 # Method Refactor

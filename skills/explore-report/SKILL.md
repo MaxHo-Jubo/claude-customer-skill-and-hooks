@@ -1,6 +1,7 @@
 ---
 name: explore-report
-description: "探索指定目錄並強制產出結構化報告，確保每次探索都有具體產出。當使用者提到 /explore-report、想探索某個目錄、說「看看這個資料夾」、或想了解某個模組的架構時使用此 skill。"
+description: "探索指定目錄並產出結構化報告。當使用者提到 /explore-report、「看看這個資料夾」、「這個模組的架構」、想了解目錄結構時觸發。"
+version: 1.0.0
 ---
 
 # Explore Report 探索報告

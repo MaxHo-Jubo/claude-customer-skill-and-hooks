@@ -1,6 +1,7 @@
 ---
 name: weekly-review
-description: "每週工作回顧與記憶整理。彙整一週 commit、觀察記錄、auto memory，產出結構化週報，清理過期記憶，提取反覆模式為 skill，分析 skill 執行錯誤並提出修補建議。當使用者提到 /weekly-review、想回顧工作、說「整理記憶」、「週報」、「回顧一下這週做了什麼」、「review skill errors」時使用此 skill。"
+description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
+version: 1.0.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
