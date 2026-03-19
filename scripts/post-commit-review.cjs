@@ -55,7 +55,7 @@ process.stdin.on('end', () => {
 
     // STEP 05: 透過 systemMessage 提醒使用者
     console.log(JSON.stringify({
-      systemMessage: '📋 Post-commit review 觸發 — Claude 應自動執行 /simplify → code review → 通知'
+      systemMessage: '📋 Post-commit review 觸發 — Claude 應自動執行 /simplify → /pr-review-toolkit:review-pr code comments errors tests types → 通知'
     }));
   } catch {
     process.exit(0);
