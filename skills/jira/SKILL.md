@@ -1,7 +1,7 @@
 ---
 name: jira
 description: "Jira Issue 管理工具。從 branch 自動識別 issue、抓詳情、建開發筆記、管理 branch。當使用者提到 /jira、「看一下 issue」、「建 branch」、想從 Jira 抓資料時觸發。"
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Jira Issue 管理
@@ -64,14 +64,16 @@ version: 1.0.0
 
 ## 執行步驟
 
+0. **解析文件存放路徑**：使用主要工作目錄（primary working directory）的絕對路徑作為基底，組合 `.claude/` 作為文件目錄。例如主要工作目錄為 `/Users/maxhero/Documents/Compal/luna_web/frontend`，則文件目錄為 `/Users/maxhero/Documents/Compal/luna_web/frontend/.claude/`。後續步驟中的 `{CLAUDE_DIR}` 皆指此絕對路徑。**禁止使用相對路徑 `.claude/`**，因為 git 操作會改變 cwd。
+
 1. 先執行以下指令取得當前 branch 的 Jira issue ID：
 ```bash
 git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 ```
 
-2. 根據取得的 ISSUE_ID，檢查 `.claude/` 目錄下是否存在對應文件：
-   - `.claude/{ISSUE_ID}.md` - Issue 開發筆記
-   - `.claude/{ISSUE_ID}-Jira.md` - Jira 原始資訊
+2. 根據取得的 ISSUE_ID，檢查 `{CLAUDE_DIR}` 下是否存在對應文件：
+   - `{CLAUDE_DIR}/{ISSUE_ID}.md` - Issue 開發筆記
+   - `{CLAUDE_DIR}/{ISSUE_ID}-Jira.md` - Jira 原始資訊
 
 3. **如果是 `/jira`（無參數）**：
    - 讀取並顯示已存在的 issue 文件內容
@@ -82,8 +84,8 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
      1. 用 `getJiraIssue`（含 `issuelinks` 欄位）取得 issue（使用設定中的 `JIRA_CLOUD_ID`）
      2. 從回傳結果提取：標題、描述、類型、優先順序、狀態、指派人、子任務、相關連結
      3. **關聯追蹤**：若 description 為空，執行「關聯 Issue 需求追蹤」流程（見下方）
-   - 將結果格式化寫入 `.claude/{ISSUE_ID}-Jira.md`（包含追蹤鏈與需求來源）
-   - 如果 `.claude/{ISSUE_ID}.md` 不存在，建立開發筆記模板
+   - 將結果格式化寫入 `{CLAUDE_DIR}/{ISSUE_ID}-Jira.md`（包含追蹤鏈與需求來源）
+   - 如果 `{CLAUDE_DIR}/{ISSUE_ID}.md` 不存在，建立開發筆記模板
 
 5. **如果是 `/jira branch {ISSUE_ID}`**：
    - 見下方「Branch 建立流程」
@@ -162,7 +164,7 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 ### 步驟 4: 建立開發筆記
 
-在 `.claude/` 目錄下建立 `{ISSUE_ID}.md` 和 `{ISSUE_ID}-Jira.md`：
+在 `{CLAUDE_DIR}` 下建立 `{ISSUE_ID}.md` 和 `{ISSUE_ID}-Jira.md`：
 - `{ISSUE_ID}-Jira.md`：儲存從 Jira 抓到的原始資訊
 - `{ISSUE_ID}.md`：使用開發筆記模板，自動填入問題描述
 
@@ -194,11 +196,11 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 將這份待辦事項同時：
 1. 顯示在終端給使用者看
-2. 寫入 `.claude/{ISSUE_ID}.md` 的對應 section
+2. 寫入 `{CLAUDE_DIR}/{ISSUE_ID}.md` 的對應 section
 
 ## 開發筆記模板
 
-當需要建立 `.claude/{ISSUE_ID}.md` 時，使用以下模板：
+當需要建立 `{CLAUDE_DIR}/{ISSUE_ID}.md` 時，使用以下模板：
 
 ```markdown
 # {ISSUE_ID}
@@ -228,11 +230,11 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 - **Branch 名稱無 issue ID**：提示使用者手動輸入 issue ID，或用 `/jira branch {ISSUE_ID}` 直接指定
 - **Jira API 錯誤**：顯示錯誤訊息，建議使用者檢查網路連線或 Atlassian MCP 設定
-- **`.claude/` 目錄不存在**：自動建立
+- **`{CLAUDE_DIR}` 目錄不存在**：自動建立
 
 ## 注意事項
 
 - `/jira fetch` 和 `/jira branch` 都使用 Atlassian MCP 工具抓取 issue，不依賴 jira CLI
-- 確保 `.claude/` 目錄存在（如不存在則建立）
+- 確保 `{CLAUDE_DIR}` 目錄存在（如不存在則建立）
 - branch 建立前會從 master 拉最新程式碼
 - 完成 fetch 或 branch 建立後，提示使用者：「是否使用 /linus-requirements-analysis 分析需求？」

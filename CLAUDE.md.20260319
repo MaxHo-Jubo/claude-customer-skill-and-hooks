@@ -96,6 +96,7 @@ CODE-STYLE:
   comment-accuracy: 程式邏輯與註解必須一致，不得有過時/錯誤註解；註解不得有錯字
   global-mutation: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
   anti-overengineering: 先寫最簡單能動版本→再考慮抽象 | 修改前 grep 全檔確認使用點 | 改完跑一次
+  skill-version: 編輯 SKILL.md 內容時須同步更新 version 欄位（semver：fix→patch, 功能→minor, 破壞性→major）
 
 </rules>
 
@@ -154,9 +155,13 @@ POST-COMMIT-REVIEW:
   mandatory: 三步驟全部執行，不可中斷，不可因前一步結果而跳過後續步驟
   action:
     1. 執行 /simplify skill → 有修改則 amend commit，無修改則繼續下一步
-    2. 執行 code review（git diff HEAD~1 + 平行 agent review）→ 自動修正 80+ issue，不 commit
+    2. 執行 /pr-review-toolkit:review-pr code comments errors tests types（不跑 simplify 面向，步驟 1 已處理）→ 自動修正 Critical/Important issue，不 commit
     3. 執行 osascript 發送 macOS 通知「commit 與 review 完成」
   on-complete: 三步驟全部完成後才算結束，回報結果給使用者
+  on-self-fix:
+    trigger: simplify/review 發現問題且該問題是自己這次寫出來的（不是既有程式碼）
+    action: 存 feedback memory（auto memory），記錄「我傾向犯這個錯」+ 正確做法 + why
+    skip: 問題來自既有程式碼的順手修正（不是自己的壞習慣）
 
 </rhythm>
 

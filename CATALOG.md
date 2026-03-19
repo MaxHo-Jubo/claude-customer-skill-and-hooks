@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-17（health skill 新增、commit-spec 移除、post-commit-review hook 恢復、hooks.md 新增 HOOK-OUTPUT、version 號批量加入）
+> 上次更新：2026-03-19（jira v1.1.0、skill-version-check hook 新增、POST-COMMIT-REVIEW 步驟 2 改用 pr-review-toolkit、AGENT_TEAMS env、pr-review-toolkit plugin 啟用）
 
 ---
 
@@ -9,7 +9,7 @@
 
 ### 開發流程類
 
-#### `/jira` — Jira Issue 管理（v1.0.0）
+#### `/jira` — Jira Issue 管理（v1.1.0）
 
 - **位置**：`~/.claude/skills/jira/SKILL.md`
 - **用法**：`/jira`、`/jira fetch`、`/jira branch {ISSUE_ID}`
@@ -233,7 +233,8 @@
 |---------|------|------|
 | `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
-| `Bash` | `post-commit-review.cjs` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（搭配 CLAUDE.md 規則使用） |
+| `Write\|Edit` | `skill-version-check.cjs` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
+| `Bash` | `post-commit-review.cjs` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -261,7 +262,8 @@
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
-| `post-commit-review.cjs` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（搭配 CLAUDE.md POST-COMMIT-REVIEW 規則） |
+| `skill-version-check.cjs` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
+| `post-commit-review.cjs` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
@@ -273,7 +275,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（13）
+### 啟用的 Plugins（14）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -290,6 +292,7 @@
 | document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
 | superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
 | claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
+| pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 
 ### 停用的 Plugins（3）
 
@@ -392,5 +395,8 @@ auto memory ──→ weekly-review（整理 + skill 錯誤分析）
 health（獨立稽核，無外部依賴）
 
 post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 Claude）
+  STEP 1: /simplify → amend commit（有修改時）
+  STEP 2: /pr-review-toolkit:review-pr（不含 simplify 面向）→ 自動修正 80+ issue
+  STEP 3: osascript macOS 通知
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
 ```

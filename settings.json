@@ -1,6 +1,7 @@
 {
   "env": {
-    "ENABLE_LSP_TOOL": "1"
+    "ENABLE_LSP_TOOL": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
     "allow": [
@@ -290,6 +291,12 @@
             "command": "node \"/Users/maxhero/.claude/scripts/inventory-drift-detector.cjs\"",
             "timeout": 5000,
             "statusMessage": "Checking inventory drift..."
+          },
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/scripts/skill-version-check.cjs\"",
+            "timeout": 3000,
+            "statusMessage": "Checking skill version..."
           }
         ]
       },
@@ -373,7 +380,8 @@
     "gopls-lsp@claude-plugins-official": true,
     "jdtls-lsp@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "claude-hud@claude-hud": true
+    "claude-hud@claude-hud": true,
+    "pr-review-toolkit@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -384,6 +392,6 @@
     }
   },
   "language": "繁體中文",
-  "skipDangerousModePermissionPrompt": true,
-  "effortLevel": "high"
+  "effortLevel": "medium",
+  "skipDangerousModePermissionPrompt": true
 }
