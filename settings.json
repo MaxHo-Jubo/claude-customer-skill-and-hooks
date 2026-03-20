@@ -306,7 +306,7 @@
           {
             "type": "command",
             "command": "node \"/Users/maxhero/.claude/scripts/post-commit-review.cjs\"",
-            "timeout": 5000,
+            "timeout": 60000,
             "statusMessage": "Checking post-commit review..."
           }
         ]

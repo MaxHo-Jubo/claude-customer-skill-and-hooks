@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-19（jira v1.1.0、skill-version-check hook 新增、POST-COMMIT-REVIEW 步驟 2 改用 pr-review-toolkit、AGENT_TEAMS env、pr-review-toolkit plugin 啟用）
+> 上次更新：2026-03-20（新增 Agents 區段、weekly-review v1.1.0、sync-my-claude-setting v1.1.0、pr-reviewer agent）
 
 ---
 
@@ -47,7 +47,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/weekly-review` — 每週工作回顧（v1.0.0）
+#### `/weekly-review` — 每週工作回顧（v1.1.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -63,7 +63,7 @@
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.0.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.1.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -271,6 +271,27 @@
 
 ---
 
+## Agents
+
+| Agent | 模型 | 版本 | 用途 |
+|-------|------|------|------|
+| pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告 |
+
+### pr-reviewer — Code Review Agent（v1.0.0）
+
+- **位置**：`~/.claude/agents/pr-reviewer.md`
+- **模型**：sonnet
+- **工具**：Read、Grep、Glob、Bash、Agent
+- **模式**：
+  - **Lite（預設）**：單 agent 逐條比對 CODE-REVIEW-RULE.md（17 條規則）+ Haiku 信心評分 → 分類（CRITICAL/MINOR/INFO）+ 品質評分（30 分制）
+  - **Full**：指定 PR 時啟用，5 個平行 Sonnet agent（規則合規 / Shallow Bug Scan / Git Blame 歷史 / PR Comments / Code Comments）+ Haiku 信心評分
+- **觸發方式**：POST-COMMIT-REVIEW 自動觸發（lite）或手動指定 PR（full）
+- **檔案過濾**：排除 `*.md`、`*.json`、`*.yml`、`*.yaml`
+- **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
+- **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent）
+
+---
+
 ## Plugins & MCP Servers
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
@@ -399,4 +420,8 @@ post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 C
   STEP 2: /pr-review-toolkit:review-pr（不含 simplify 面向）→ 自動修正 80+ issue
   STEP 3: osascript macOS 通知
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
+
+pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
+  lite: POST-COMMIT-REVIEW 自動觸發
+  full: 手動指定 PR → 5 平行 Sonnet agents + Haiku 信心評分
 ```

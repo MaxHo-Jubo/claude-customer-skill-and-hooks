@@ -152,12 +152,14 @@ AUTO-BUG-FIX:
 POST-COMMIT-REVIEW:
   trigger: 用 Bash tool 執行 git commit 且成功
   skip-when: commit 命令同時包含 push | 使用者說「commit and push」| 空 commit | commit 失敗
-  mandatory: 三步驟全部執行，不可中斷，不可因前一步結果而跳過後續步驟
+  mandatory: 五步驟全部執行，不可中斷，不可因前一步結果而跳過後續步驟
   action:
-    1. 執行 /simplify skill → 有修改則 amend commit，無修改則繼續下一步
-    2. 執行 /pr-review-toolkit:review-pr code comments errors tests types（不跑 simplify 面向，步驟 1 已處理）→ 自動修正 Critical/Important issue，不 commit
-    3. 執行 osascript 發送 macOS 通知「commit 與 review 完成」
-  on-complete: 三步驟全部完成後才算結束，回報結果給使用者
+    1. 對本次 commit 修改的檔案執行 npx eslint（使用專案 .eslintrc.json）→ 有錯誤則修正並 amend commit
+    2. 執行 /simplify skill → 有修改則 amend commit，無修改則繼續下一步
+    3. 執行 pr-reviewer agent（lite 模式）→ 逐條比對 CODE-REVIEW-RULE.md，產出 CRITICAL/MINOR/INFO + 品質評分 → 自動修正 CRITICAL issue，不 commit
+    4. 執行 /pr-review-toolkit:review-pr code comments errors tests types（不跑 simplify 面向，步驟 2 已處理）→ 自動修正 Critical/Important issue，不 commit
+    5. 執行 osascript 發送 macOS 通知「commit 與 review 完成」
+  on-complete: 五步驟全部完成後才算結束，回報結果給使用者
   on-self-fix:
     trigger: simplify/review 發現問題且該問題是自己這次寫出來的（不是既有程式碼）
     action: 存 feedback memory（auto memory），記錄「我傾向犯這個錯」+ 正確做法 + why

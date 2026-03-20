@@ -4,9 +4,8 @@
 /**
  * PostToolUse hook：git commit 後提醒使用者 Claude 應執行 review 流程。
  *
- * 注意：PostToolUse hook 的 stdout 不會注入 AI context，
- * 只能透過 JSON { systemMessage } 顯示給使用者。
- * AI 端的指令改由 feedback memory 驅動。
+ * 注意：PostToolUse hook 的 systemMessage 會在下一個 turn 注入 AI context。
+ * CLAUDE.md POST-COMMIT-REVIEW 規則為主要驅動層，hook 為安全網。
  *
  * 觸發條件：Bash 執行的命令包含 `git commit`
  * 例外：命令同時包含 `push`（commit and push 場景跳過）
@@ -53,9 +52,41 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 05: 透過 systemMessage 提醒使用者
+    // STEP 05: 取得本次 commit 修改的檔案
+    const { execSync } = require('child_process');
+    let changedFiles = [];
+    try {
+      /** 從最近一次 commit 取得修改的 JS/TS 檔案清單 */
+      const filesRaw = execSync('git diff --name-only HEAD~1 HEAD -- "*.js" "*.jsx" "*.ts" "*.tsx"', {
+        encoding: 'utf8',
+        timeout: 5000
+      }).trim();
+      changedFiles = filesRaw ? filesRaw.split('\n').filter(Boolean) : [];
+    } catch {
+      changedFiles = [];
+    }
+
+    // STEP 06: 對修改的檔案執行 eslint
+    let eslintResult = '';
+    if (changedFiles.length > 0) {
+      try {
+        execSync(`npx eslint ${changedFiles.join(' ')}`, {
+          encoding: 'utf8',
+          timeout: 30000
+        });
+        /** eslint 通過，無錯誤 */
+        eslintResult = '✅ eslint: 全部通過';
+      } catch (e) {
+        /** eslint 有錯誤，擷取輸出 */
+        eslintResult = '❌ eslint 發現問題:\n' + (e.stdout || e.message || '').slice(0, 2000);
+      }
+    } else {
+      eslintResult = '⏭️ eslint: 無 JS/TS 檔案變更，跳過';
+    }
+
+    // STEP 07: 透過 systemMessage 回傳 eslint 結果與 review 提醒
     console.log(JSON.stringify({
-      systemMessage: '📋 Post-commit review 觸發 — Claude 應自動執行 /simplify → /pr-review-toolkit:review-pr code comments errors tests types → 通知'
+      systemMessage: `📋 Post-commit review 觸發\n\n${eslintResult}\n\nClaude 應自動執行：eslint 錯誤修正（如有）→ /simplify → /pr-review-toolkit:review-pr code comments errors tests types → 通知`
     }));
   } catch {
     process.exit(0);
