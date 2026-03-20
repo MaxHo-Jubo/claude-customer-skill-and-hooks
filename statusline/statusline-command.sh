@@ -332,86 +332,120 @@ fi
 [ -n "$line2" ] && line2+="${sep}"
 line2+="${dim}${cfg_md}md ${cfg_rules}rules ${cfg_hooks}hooks${reset}"
 
-# ── OAuth token resolution ──────────────────────────────
-get_oauth_token() {
-    local token=""
-
-    if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-        echo "$CLAUDE_CODE_OAUTH_TOKEN"
-        return 0
-    fi
-
-    if command -v security >/dev/null 2>&1; then
-        local blob
-        blob=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-        if [ -n "$blob" ]; then
-            token=$(echo "$blob" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-            if [ -n "$token" ] && [ "$token" != "null" ]; then
-                echo "$token"
-                return 0
-            fi
-        fi
-    fi
-
-    local creds_file="${HOME}/.claude/.credentials.json"
-    if [ -f "$creds_file" ]; then
-        token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null)
-        if [ -n "$token" ] && [ "$token" != "null" ]; then
-            echo "$token"
-            return 0
-        fi
-    fi
-
-    echo ""
-}
-
-# ── Fetch usage data (cached) ──────────────────────────
+# ── Rate limit data（2.1.80+ 原生支援，從 stdin JSON 取得）──
+# STEP 01: 從原生 rate_limits 取得資料，轉換欄位名稱以相容既有 render 邏輯
+# 原生格式: used_percentage (int) + resets_at (epoch)
+# 既有格式: utilization (float) + resets_at (ISO 8601)
+usage_stale=false
 cache_file="/tmp/claude/statusline-usage-cache.json"
-cache_max_age=60
 mkdir -p /tmp/claude
 
-needs_refresh=true
-usage_data=""
-usage_stale=false
+usage_data=$(echo "$input" | jq -c '
+  .rate_limits // empty
+  | if . then
+      {
+        five_hour: {
+          utilization: (.five_hour.used_percentage // 0),
+          resets_at: ((.five_hour.resets_at // 0) | todate)
+        },
+        seven_day: {
+          utilization: (.seven_day.used_percentage // 0),
+          resets_at: ((.seven_day.resets_at // 0) | todate)
+        }
+      }
+    else empty end
+' 2>/dev/null)
 
-if [ -f "$cache_file" ]; then
-    cache_mtime=$(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null)
-    now=$(date +%s)
-    cache_age=$(( now - cache_mtime ))
-    if [ "$cache_age" -lt "$cache_max_age" ]; then
-        needs_refresh=false
-        usage_data=$(cat "$cache_file" 2>/dev/null)
-    fi
-fi
-
-if $needs_refresh; then
-    token=$(get_oauth_token)
-    if [ -n "$token" ] && [ "$token" != "null" ]; then
-        response=$(curl -s --max-time 5 \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $token" \
-            -H "anthropic-beta: oauth-2025-04-20" \
-            -H "User-Agent: claude-code/2.1.34" \
-            "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-        if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
-            usage_data="$response"
-            echo "$response" > "$cache_file"
-        fi
-    fi
-    # STEP 01: API 失敗時 fallback 到舊 cache（不管多舊），標記為 stale
-    if [ -z "$usage_data" ] && [ -f "$cache_file" ]; then
+# STEP 02: 有資料→寫入 cache；無資料→fallback 舊 cache 並標記 stale
+if [ -n "$usage_data" ]; then
+    echo "$usage_data" > "$cache_file"
+else
+    if [ -f "$cache_file" ]; then
         usage_data=$(cat "$cache_file" 2>/dev/null)
         usage_stale=true
     fi
 fi
+
+# ── [LEGACY] OAuth token resolution（2.1.80 前的 fallback）──
+# get_oauth_token() {
+#     local token=""
+#
+#     if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+#         echo "$CLAUDE_CODE_OAUTH_TOKEN"
+#         return 0
+#     fi
+#
+#     if command -v security >/dev/null 2>&1; then
+#         local blob
+#         blob=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+#         if [ -n "$blob" ]; then
+#             token=$(echo "$blob" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+#             if [ -n "$token" ] && [ "$token" != "null" ]; then
+#                 echo "$token"
+#                 return 0
+#             fi
+#         fi
+#     fi
+#
+#     local creds_file="${HOME}/.claude/.credentials.json"
+#     if [ -f "$creds_file" ]; then
+#         token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null)
+#         if [ -n "$token" ] && [ "$token" != "null" ]; then
+#             echo "$token"
+#             return 0
+#         fi
+#     fi
+
+#     echo ""
+# }
+#
+# # ── Fetch usage data (cached) ──────────────────────────
+# cache_file="/tmp/claude/statusline-usage-cache.json"
+# cache_max_age=60
+# mkdir -p /tmp/claude
+#
+# needs_refresh=true
+# usage_data=""
+# usage_stale=false
+#
+# if [ -f "$cache_file" ]; then
+#     cache_mtime=$(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null)
+#     now=$(date +%s)
+#     cache_age=$(( now - cache_mtime ))
+#     if [ "$cache_age" -lt "$cache_max_age" ]; then
+#         needs_refresh=false
+#         usage_data=$(cat "$cache_file" 2>/dev/null)
+#     fi
+# fi
+#
+# if $needs_refresh; then
+#     token=$(get_oauth_token)
+#     if [ -n "$token" ] && [ "$token" != "null" ]; then
+#         response=$(curl -s --max-time 5 \
+#             -H "Accept: application/json" \
+#             -H "Content-Type: application/json" \
+#             -H "Authorization: Bearer $token" \
+#             -H "anthropic-beta: oauth-2025-04-20" \
+#             -H "User-Agent: claude-code/2.1.34" \
+#             "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
+#         if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
+#             usage_data="$response"
+#             echo "$response" > "$cache_file"
+#         fi
+#     fi
+#     # STEP 01: API 失敗時 fallback 到舊 cache（不管多舊），標記為 stale
+#     if [ -z "$usage_data" ] && [ -f "$cache_file" ]; then
+#         usage_data=$(cat "$cache_file" 2>/dev/null)
+#         usage_stale=true
+#     fi
+# fi
 
 # ── Rate limit lines ────────────────────────────────────
 rate_lines=""
 
 if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     bar_width=10
-    # STEP 01: stale 標記（淺灰色）
+    # STEP 01: stale 標記（淺灰色）— 原生 rate_limits 為空時 fallback cache 顯示
     stale_tag=""
     if $usage_stale; then
         stale_tag=" ${dim}(stale)${reset}"

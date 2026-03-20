@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -172,6 +172,7 @@ rsync -avL --delete "$SOURCE/skills/" "$TARGET/skills/"
 rsync -avL --delete "$SOURCE/hooks/" "$TARGET/hooks/"
 rsync -avL --delete "$SOURCE/scripts/" "$TARGET/scripts/"
 rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
+rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
 ```
 
 ### STEP 03: Generate Docs — 自動產生 README.md 與 CATALOG.md
@@ -187,6 +188,7 @@ rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
 | Skills 清單 | `skills/*/SKILL.md` | 讀取每個 SKILL.md 的標題（`# ` 行）、第一段描述、用法區段 |
 | Hooks 清單 | `settings.json` → `hooks` 區段 | 解析 JSON，擷取每個 hook 的 type、matcher、command |
 | Scripts 清單 | `scripts/*.{sh,cjs}` | 讀取每個檔案的前 5 行註解 |
+| Agents 清單 | `agents/*.md` | 讀取每個 agent 的 frontmatter（name、description、model、version） |
 | Plugins 清單 | `settings.json` → `plugins` 區段 | 解析 JSON，擷取啟用/停用狀態 |
 | StatusLine | `statusline/statusline-command.sh` | 讀取檔頭註解 |
 | MCP Servers | `mcp-servers.json` | 解析 JSON，擷取每個 server 的 type、command、args |

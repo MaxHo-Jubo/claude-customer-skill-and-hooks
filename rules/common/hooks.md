@@ -8,9 +8,11 @@ HOOK-TYPES:
   Stop: session ends(final verification)
 
 HOOK-OUTPUT:
-  PostToolUse-stdout: 不注入 AI context，Claude 看不到
-  PostToolUse-systemMessage: JSON { systemMessage } 顯示給使用者，Claude 看不到
-  implication: hook 無法命令 Claude 做事；需靠 CLAUDE.md 規則驅動 Claude + hook systemMessage 作為使用者端安全網
+  stdout: 所有 hook 的 stdout 都不注入 AI context，Claude 看不到
+  PreToolUse-additionalContext: Claude 看得到（v2.1.9+），即時注入
+  PostToolUse-systemMessage: Claude 下一個 turn 看得到；使用者也看得到
+  PostToolUse-additionalContext: 有已知 bug（#24788），不可靠，避免依賴
+  implication: PostToolUse systemMessage 可同時作為使用者安全網與 Claude 自動觸發來源；CLAUDE.md 規則仍為主要驅動層
 
 AUTO-ACCEPT:
   enable: trusted, well-defined plans

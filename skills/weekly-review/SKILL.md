@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -124,6 +124,16 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 - **MCP Server**：共用的 API/服務名稱、哪些 skill 會用到、需要的持久化狀態、建議提供的 tools 清單
   - MCP 建議的判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式
   - 定位為「可能適合 MCP」的提示，附理由，由使用者最終決定
+```
+
+**週報歸檔：** 將週報寫入 Obsidian vault 歸檔，檔名格式 `{起始日}_{結束日}.md`，路徑為 `~/Documents/obsidian-claude-vault/weekly-reviews/`。加上 frontmatter：
+
+```yaml
+---
+tags: [weekly-review, {涉及的專案名稱}]
+date: {結束日}
+period: {起始日} ~ {結束日}
+---
 ```
 
 **輸出週報後，等待使用者確認再進入步驟 5。**
