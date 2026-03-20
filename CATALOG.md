@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-20（新增 Agents 區段、weekly-review v1.1.0、sync-my-claude-setting v1.1.0、pr-reviewer agent）
+> 上次更新：2026-03-20（weekly-review v1.1.1、新增 pr-watcher/review-pr 腳本、CLAUDE.md 規則補強）
 
 ---
 
@@ -47,7 +47,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/weekly-review` — 每週工作回顧（v1.1.0）
+#### `/weekly-review` — 每週工作回顧（v1.1.1）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -266,6 +266,8 @@
 | `post-commit-review.cjs` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
 | `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
+| `pr-watcher.sh` | 定期輪詢 GitHub PR，有新/更新的 PR 時發 macOS 通知，點擊觸發 review |
+| `review-pr.sh` | 本機手動觸發 PR review，結果貼到 PR comment |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
 | `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
 

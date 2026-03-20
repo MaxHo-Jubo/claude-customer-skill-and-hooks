@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -28,8 +28,8 @@ version: 1.1.0
 收集指定天數內所有專案的 commit 紀錄，按專案分組。
 
 ```bash
-# 對每個已知專案目錄執行
-git log --since="7 days ago" --oneline --no-merges
+# 對每個已知專案目錄執行，只抓使用者自己的 commit
+git log --since="7 days ago" --oneline --no-merges --author="$(git config user.name)"
 ```
 
 輸出格式：

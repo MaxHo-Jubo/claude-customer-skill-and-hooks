@@ -13,6 +13,7 @@ GATE-1 需求確認:
     5. 不要過度泛化：先解決眼前的具體案例，不做通用化
     6. 輸出：【核心判斷】值得做/不值得做→【關鍵洞察】→【方案】
   exception: 簡單明顯修正(單檔bug、typo) → 直接做
+  bugfix-scope: bugfix 優先最小化改動，不順便重構或擴大修改範圍到無法驗證的頁面
   not-triggered: 使用者只是問問題 | 閒聊 | 要求解釋
 
 GATE-2 Plan Mode:
@@ -131,6 +132,7 @@ SELF-IMPROVE:
 
 LEARNING:
   on-correction: 被使用者糾正時，立即存 feedback memory（auto memory），含 why + how to apply
+  fix-root-cause: 問題 root cause 在 skill/規則/設定時，修 skill 本身而非存 feedback memory 當 workaround
   on-preference: 發現使用者偏好/習慣時，存 user memory
   on-session-start: 讀取相關 feedback/user memories，避免重複犯錯
   on-compact: PreCompact hook 觸發時，檢查是否有未存的糾正/決策/偏好，壓縮前存到 auto memory
