@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-20（weekly-review v1.1.1、新增 pr-watcher/review-pr 腳本、CLAUDE.md 規則補強）
+> 上次更新：2026-03-23（test-module v2.0.0、新增 spec-to-e2e-test v1.2.0、MCP Servers 同步）
 
 ---
 
@@ -98,16 +98,33 @@
   - `--verify`：三級優先序對應 spec 與原始碼（路由映射表 > Spec 內部標註 > 檔名推斷），找出遺漏 API 並補完，支援批次驗證整個目錄
 - **輸出**：`spec/<module-name>/index.md` 或 `spec/<module-name>.md`
 
-#### `/test-module <path>` — 批量測試產生（v1.0.0）
+#### `/test-module <path>` — 批量測試產生（v2.0.0）
 
 - **位置**：`~/.claude/skills/test-module/SKILL.md`
-- **用法**：`/test-module <file-or-dir>`、`--plan-only`、`--phase <N>`
-- **功能**：
-  - Phase 0：偵察（偵測測試框架、分類函式）
-  - Phase 1：撰寫測試（每函式至少 3 個 case：正常/邊界/錯誤）
-  - Phase 2：覆蓋率驗證（目標 80%+ branch coverage）
-  - Phase 3：提交
-- **依賴**：jest / vitest / mocha（依專案而定）
+- **用法**：`/test-module <file-or-dir>`、`/test-module lib/services/session_service.dart`
+- **功能**（5 階段）：
+  - Phase 1：偵察與撰寫（偵測測試框架、分類函式、AAA pattern、Mock/斷言/邊界原則）
+  - Phase 2：平行 Review（4 個 subagent — 覆蓋率 / Mock 正確性 / 斷言精確度 / 邊界案例）
+  - Phase 3：迭代修正（🔴=0 且覆蓋率 ≥80% 才算通過）
+  - Phase 4：執行驗證（失敗分類：測試寫錯→改測試、程式碼 bug→獨立 commit）
+  - Phase 5：最終報告（`test/reports/<模組名>_report.md`）
+- **框架無關**：Jest、Vitest、Mocha、flutter_test、pytest、go test 等
+- **依賴**：依專案測試框架而定
+
+#### `/spec-to-e2e-test <spec>` — Spec 轉 E2E 測試（v1.2.0）
+
+- **位置**：`~/.claude/skills/spec-to-e2e-test/SKILL.md`
+- **用法**：`/spec-to-e2e-test <spec路徑或模組名>`、`--with <其他spec>`、`--scan`
+- **功能**（6 階段）：
+  - Phase -1：跨模組依賴掃描（首次或批次作業時必做，產出 `DEPENDENCY_MAP.md`）
+  - Phase 0：Spec 定位與偵察（讀取 spec、探索 UI 程式碼、產出 Widget/Element Finder 參考表）
+  - Phase 1：撰寫測試（CRUD 合併流程、Finder 優先序、斷言強度、穩定性原則）
+  - Phase 2：平行 Review（4 個 subagent — Spec 覆蓋率 / 語法正確性 / 測試品質 / 穩定性）
+  - Phase 3：迭代修正（🔴=0 才算通過）
+  - Phase 4：執行測試（失敗分類處理，spec 是 source of truth）
+  - Phase 5：最終報告（`integration_test/reports/<模組名>_report.md`）
+- **框架支援**：Flutter integration_test（完整）、React Testing Library / Playwright / Cypress（對照表）
+- **依賴**：依專案 E2E 框架而定
 
 #### `/explore-report <dir>` — 探索報告（v1.0.0）
 
@@ -327,7 +344,17 @@
 
 ### MCP Servers
 
-> 設定檔：[`mcp-servers.json`](mcp-servers.json)（目前為空物件 `{}`，MCP Servers 由啟用的 plugins 自行註冊管理）
+> 設定檔：[`mcp-servers.json`](mcp-servers.json)
+
+#### 獨立設定的 MCP Servers（3 個）
+
+| Server | 類型 | 用途 |
+|--------|------|------|
+| context7 | stdio | 即時查詢第三方套件文件（`@upstash/context7-mcp`） |
+| gitlab | http | GitLab MCP 整合（`gitlab.webotopia.work`） |
+| gitnexus | stdio | 程式碼知識圖譜 MCP（`gitnexus mcp`） |
+
+#### Plugins 自動註冊的 MCP Servers
 
 | Server | 來源 Plugin | 用途 |
 |--------|------------|------|
@@ -402,8 +429,9 @@ jira ←── jira-acceptance（取得需求資料）
   ├── linus-requirements-analysis（需求分析，可回寫 Jira comment）
   │
   └── spec-module（--commit flag）
-         ↑
-      explore-report（--to-spec flag）
+         ↑                ↓
+      explore-report    spec-to-e2e-test（從 spec 產出 E2E 測試）
+      （--to-spec flag）
 
 gitnexus-hook ──→ gitnexus-exploring
                   gitnexus-debugging

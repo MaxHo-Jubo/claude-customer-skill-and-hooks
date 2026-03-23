@@ -1,1 +1,24 @@
-{}
+{
+  "context7": {
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@upstash/context7-mcp",
+      "--api-key"
+    ]
+  },
+  "gitlab": {
+    "type": "http",
+    "url": "https://gitlab.webotopia.work/api/v4/mcp"
+  },
+  "gitnexus": {
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "gitnexus",
+      "mcp"
+    ]
+  }
+}
