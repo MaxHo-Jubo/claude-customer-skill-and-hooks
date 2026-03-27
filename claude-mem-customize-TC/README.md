@@ -1,6 +1,6 @@
 # claude-mem 繁體中文化客製
 
-> 適用版本：claude-mem 10.3.1（thedotmack/claude-mem plugin）
+> 適用版本：claude-mem 10.6.2（thedotmack/claude-mem plugin）
 
 ## 說明
 
