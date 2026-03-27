@@ -1,0 +1,20 @@
+[
+  {"query": "spec 寫好了，開始實作吧，路徑在 docs/superpowers/specs/2026-03-23-icloud-backup-design.md", "should_trigger": true},
+  {"query": "/plan-and-execute docs/superpowers/specs/session-reminder-design.md", "should_trigger": true},
+  {"query": "幫我從這個設計文件開工，寫 plan 然後分 wave 執行", "should_trigger": true},
+  {"query": "這個功能的 spec 通過 review 了，寫個實作計畫", "should_trigger": true},
+  {"query": "我要從 spec 開始 TDD 流程，先寫測試再實作", "should_trigger": true},
+  {"query": "上次的 plan 做到 Wave 3 就斷了，用 --resume 繼續", "should_trigger": true},
+  {"query": "執行計畫，按照 plan 的步驟逐一實作", "should_trigger": true},
+  {"query": "寫個 plan 把這個 spec 拆成可執行的 task", "should_trigger": true},
+  {"query": "我想設計一個新功能，幫我 brainstorm 一下", "should_trigger": false},
+  {"query": "幫我寫設計 spec，從需求開始探索", "should_trigger": false},
+  {"query": "這個 function 幫我重構一下", "should_trigger": false},
+  {"query": "幫這個模組寫單元測試", "should_trigger": false},
+  {"query": "從 spec 產出 E2E 測試", "should_trigger": false},
+  {"query": "跑 code review 看看這次 commit 品質如何", "should_trigger": false},
+  {"query": "看一下 Jira issue 的需求", "should_trigger": false},
+  {"query": "同步我的 claude 設定", "should_trigger": false},
+  {"query": "這個 bug 怎麼修", "should_trigger": false},
+  {"query": "讀一下這個模組的原始碼產出 spec", "should_trigger": false}
+]

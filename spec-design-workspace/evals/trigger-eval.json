@@ -1,0 +1,20 @@
+[
+  {"query": "我想做一個 iCloud 備份功能，幫我從頭開始設計", "should_trigger": true},
+  {"query": "幫我寫個 RFC，我們要把 session management 從 local storage 搬到 server-side", "should_trigger": true},
+  {"query": "brainstorm 一下這個新功能的架構，使用者要能在 app 內購買課程包", "should_trigger": true},
+  {"query": "我有個技術方案想討論，要在 Flutter app 加入離線模式", "should_trigger": true},
+  {"query": "這個模組需要重新設計，目前的 DB schema 撐不住新需求", "should_trigger": true},
+  {"query": "/spec-design 日照 App 的排班系統", "should_trigger": true},
+  {"query": "我想探索一下怎麼做推播通知的架構", "should_trigger": true},
+  {"query": "設計一個新的報表匯出功能，要支援 PDF 和 Excel", "should_trigger": true},
+  {"query": "幫我看看這個模組的原始碼，產出 spec 文件", "should_trigger": false},
+  {"query": "這個 function 太長了，幫我重構", "should_trigger": false},
+  {"query": "跑一下 /test-module 對 session_service.dart", "should_trigger": false},
+  {"query": "幫我寫 E2E 測試，根據 spec/client-management.md", "should_trigger": false},
+  {"query": "spec 寫好了，開始實作吧", "should_trigger": false},
+  {"query": "這個 bug 怎麼修，登入頁面會 crash", "should_trigger": false},
+  {"query": "幫我看一下這個 PR 的 code review", "should_trigger": false},
+  {"query": "把我的 claude 設定同步到 repo", "should_trigger": false},
+  {"query": "分析一下這個 Jira issue 的需求，看值不值得做", "should_trigger": false},
+  {"query": "寫個 commit message", "should_trigger": false}
+]
