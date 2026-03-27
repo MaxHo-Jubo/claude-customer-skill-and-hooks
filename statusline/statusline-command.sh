@@ -245,21 +245,51 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
             | wc -l | tr -d ' ')
         [ -z "$t_agents" ] && t_agents=0
 
-        # STEP 04: todo 進度（從最後一筆 TodoWrite 取）
-        t_todo=""
-        t_todo_json=$(tail -r "$transcript_path" 2>/dev/null \
-            | jq -c '.message?.content[]? | select(.type == "tool_use" and .name == "TodoWrite") | .input' 2>/dev/null \
-            | head -1)
-        if [ -n "$t_todo_json" ] && [ "$t_todo_json" != "null" ]; then
-            t_total=$(echo "$t_todo_json" | jq '.todos | length' 2>/dev/null)
-            t_done=$(echo "$t_todo_json" | jq '[.todos[] | select(.status == "completed")] | length' 2>/dev/null)
-            [ -n "$t_total" ] && [ "$t_total" != "0" ] && [ "$t_total" != "null" ] && t_todo="${t_done}/${t_total}"
+        # STEP 04: todo 進度（從 TodoWrite + TaskCreate + TaskUpdate 取）
+        t_todo="" t_todo_current=""
+        t_todo_state=$(jq -s '
+          [.[] | .message?.content[]? |
+           select(.type == "tool_use" and
+             (.name == "TodoWrite" or .name == "TaskCreate" or .name == "TaskUpdate")
+           ) | {name, input}] |
+          reduce .[] as $b ({todos:[]};
+            if $b.name == "TodoWrite" then
+              {todos: [($b.input.todos // [])[] |
+                {c: (.content // ""), s: (.status // "pending")}]}
+            elif $b.name == "TaskCreate" then
+              .todos += [{
+                c: ($b.input.description // $b.input.subject // ""),
+                s: ($b.input.status // "pending")
+              }]
+            elif $b.name == "TaskUpdate" then
+              ($b.input.id // $b.input.taskId // null) as $raw |
+              (if $raw == null then -1
+               elif ($raw | type) == "number" then $raw
+               else ($raw | tonumber? // -1) end) as $idx |
+              if $idx >= 0 and $idx < (.todos | length) then
+                .todos[$idx].s = ($b.input.status // .todos[$idx].s)
+              else . end
+            else . end
+          ) |
+          (.todos | length) as $total |
+          ([.todos[] | select(.s == "completed" or .s == "complete" or .s == "done")] | length) as $done |
+          ([.todos[] | select(.s == "in_progress" or .s == "running")] | first | .c // "") as $cur |
+          {total: $total, done: $done,
+           current: ($cur | if length > 50 then .[:50] + "…" else . end)}
+        ' "$transcript_path" 2>/dev/null)
+
+        if [ -n "$t_todo_state" ]; then
+            t_t=$(echo "$t_todo_state" | jq -r '.total // 0')
+            t_d=$(echo "$t_todo_state" | jq -r '.done // 0')
+            t_todo_current=$(echo "$t_todo_state" | jq -r '.current // ""')
+            [ "$t_t" -gt 0 ] 2>/dev/null && t_todo="${t_d}/${t_t}"
         fi
 
         # STEP 05: 寫入 cache
         jq -nc --arg name "$t_session_name" --arg tools "$t_tools" \
             --argjson agents "${t_agents:-0}" --arg todo "$t_todo" \
-            '{name:$name,tools:$tools,agents:$agents,todo:$todo}' > "$t_cache" 2>/dev/null
+            --arg todo_current "$t_todo_current" \
+            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current}' > "$t_cache" 2>/dev/null
     else
         # STEP 06: 讀取 cache
         t_data=$(cat "$t_cache" 2>/dev/null)
@@ -267,6 +297,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         t_tools=$(echo "$t_data" | jq -r '.tools // ""' 2>/dev/null)
         t_agents=$(echo "$t_data" | jq -r '.agents // 0' 2>/dev/null)
         t_todo=$(echo "$t_data" | jq -r '.todo // ""' 2>/dev/null)
+        t_todo_current=$(echo "$t_data" | jq -r '.todo_current // ""' 2>/dev/null)
     fi
 fi
 
@@ -486,9 +517,27 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     fi
 fi
 
+# ── Todo line ────────────────────────────────────────────
+todo_line=""
+if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
+    if [ -n "$t_todo_current" ] && [ "$t_todo_current" != "null" ]; then
+        todo_line="${yellow}▸${reset} ${white}${t_todo_current}${reset} ${dim}(${t_todo})${reset}"
+    else
+        # 全部完成或無 in_progress task
+        t_done_count="${t_todo%%/*}"
+        t_total_count="${t_todo##*/}"
+        if [ "$t_done_count" = "$t_total_count" ]; then
+            todo_line="${green}✓ All todos complete${reset} ${dim}(${t_todo})${reset}"
+        else
+            todo_line="${yellow}☑${reset} ${dim}(${t_todo})${reset}"
+        fi
+    fi
+fi
+
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
+[ -n "$todo_line" ] && printf "\n%b" "$todo_line"
 
 exit 0

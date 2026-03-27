@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-27（新增 spec-design v1.2.0、plan-and-execute v1.1.0）
+> 上次更新：2026-03-27（新增 plan-and-execute v1.1.0、spec-design v1.2.0、agent-browser，context-mode hooks，MCP Servers 更新）
 
 ---
 
@@ -227,6 +227,13 @@
 
 ---
 
+#### agent-browser — 瀏覽器自動化
+
+- **位置**：`~/.claude/skills/agent-browser/SKILL.md`
+- **功能**：瀏覽器自動化 CLI，支援網頁導航、表單填寫、按鈕點擊、截圖、資料擷取、測試 Web App
+
+---
+
 ### GitNexus 知識圖譜類
 
 > 這四個 skill 沒有 slash command，透過 GitNexus API 自動啟用。
@@ -265,6 +272,7 @@
 | 腳本 | 用途 |
 |------|------|
 | `detect-jira-issue.sh` | 從 git branch 名稱偵測 Jira issue 編號，注入 session context |
+| `context-mode/sessionstart.mjs` | context-mode 初始化 |
 
 ### UserPromptSubmit
 
@@ -277,6 +285,7 @@
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
 | `Grep\|Glob\|Bash` | `gitnexus-hook.cjs` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
+| `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 
 ### PostToolUse
 
@@ -380,13 +389,22 @@
 
 > 設定檔：[`mcp-servers.json`](mcp-servers.json)
 
-#### 獨立設定的 MCP Servers（3 個）
+#### 獨立設定的 MCP Servers（1 個）
 
 | Server | 類型 | 用途 |
 |--------|------|------|
-| context7 | stdio | 即時查詢第三方套件文件（`@upstash/context7-mcp`） |
-| gitlab | http | GitLab MCP 整合（`gitlab.webotopia.work`） |
-| gitnexus | stdio | 程式碼知識圖譜 MCP（`gitnexus mcp`） |
+| pr-watcher | stdio | PR 監控 MCP Server（`tsx pr-watcher-MCP/src/server.ts`） |
+
+> **已移除的 MCP Servers（2026-03-27）：**
+> 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
+>
+> | Server | 移除原因 | 本機現況 |
+> |--------|---------|---------|
+> | context7 | 改走 plugin 通道（`context7@claude-plugins-official`） | plugin 啟用中，不需獨立 MCP 設定 |
+> | gitlab | 不再使用 | — |
+> | gitnexus | 改走 PreToolUse hook（`gitnexus-hook.cjs`）呼叫 CLI | npm 全域安裝 `gitnexus@1.2.8`，hook + 4 個 skills 仍在運作 |
+>
+> 其他電腦同步時無需重新加入這些 MCP Server。
 
 #### Plugins 自動註冊的 MCP Servers
 
@@ -471,6 +489,8 @@ gitnexus-hook ──→ gitnexus-exploring
                   gitnexus-debugging
                   gitnexus-impact-analysis
                   gitnexus-refactoring
+
+spec-design ──→ plan-and-execute（設計 spec → 實作）
 
 auto memory ──→ weekly-review（整理 + skill 錯誤分析）
                Obsidian vault（瀏覽）
