@@ -1,7 +1,6 @@
 # MAXHERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
 
 
-
 <gates label="硬性閘門 | 優先序: GATE-1>GATE-2>GATE-3 | 缺一項=STOP">
 
 GATE-1 需求確認:

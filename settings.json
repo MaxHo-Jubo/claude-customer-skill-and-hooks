@@ -274,6 +274,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -357,6 +366,15 @@
             "statusMessage": "Enriching with GitNexus graph context..."
           }
         ]
+      },
+      {
+        "matcher": "Bash|WebFetch|Read|Grep|Agent|Task|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs\""
+          }
+        ]
       }
     ]
   },
@@ -373,7 +391,6 @@
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "github@claude-plugins-official": false,
-    "claude-mem@thedotmack": true,
     "context-mode@claude-context-mode": true,
     "everything-claude-code@everything-claude-code": false,
     "document-skills@anthropic-agent-skills": true,
@@ -381,7 +398,8 @@
     "jdtls-lsp@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
     "claude-hud@claude-hud": true,
-    "pr-review-toolkit@claude-plugins-official": true
+    "pr-review-toolkit@claude-plugins-official": true,
+    "claude-mem@thedotmack": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -392,6 +410,7 @@
     }
   },
   "language": "繁體中文",
-  "effortLevel": "medium",
+  "effortLevel": "high",
+  "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true
 }
