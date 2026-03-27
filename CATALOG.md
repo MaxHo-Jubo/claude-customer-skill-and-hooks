@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-23（test-module v2.0.0、新增 spec-to-e2e-test v1.2.0、MCP Servers 同步）
+> 上次更新：2026-03-27（新增 spec-design v1.2.0、plan-and-execute v1.1.0）
 
 ---
 
@@ -77,6 +77,40 @@
 - **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
 - **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
+
+#### `/spec-design` — 需求探索到設計 Spec（v1.2.0）
+
+- **位置**：`~/.claude/skills/spec-design/SKILL.md`
+- **用法**：
+  - `/spec-design` — 互動式需求探索（偵測環境後自動選路徑）
+  - `/spec-design <需求描述>` — 帶初始需求直接開始
+  - `/spec-design --native` — 強制走原生流程（即使有 superpowers）
+- **功能**：
+  - 從模糊需求出發，透過結構化對話釐清需求、比較方案、產出設計 spec
+  - 經 4 輪平行 review（4 個 subagent）迭代至零問題
+  - 有 superpowers 時自動 delegate 給 `superpowers:brainstorming`
+  - 無 superpowers 時走原生 Phase 1~8 流程
+- **輸出**：`docs/superpowers/specs/` 下的設計 spec
+- **依賴**：superpowers plugin（可選）
+- **不適用於**：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix
+
+#### `/plan-and-execute` — 從 Spec 到實作完成（v1.1.0）
+
+- **位置**：`~/.claude/skills/plan-and-execute/SKILL.md`
+- **用法**：
+  - `/plan-and-execute <spec路徑>` — 指定 spec 開始完整流程
+  - `/plan-and-execute` — 無參數時搜尋可用 spec
+  - `/plan-and-execute --plan-only` — 只產 plan 不執行
+  - `/plan-and-execute --resume <plan路徑>` — 從已有 plan 繼續
+- **功能**：
+  - 讀取設計 spec，產出細粒度 TDD 實作計畫
+  - 經 review 後分 Wave 執行：先寫測試（RED）→ 派 subagent 實作（GREEN）→ 驗證
+  - 有 superpowers 時 delegate 給 `writing-plans` + `subagent-driven-development`
+  - 無 superpowers 時走原生流程
+  - 最終調用 `test-module` 和 `spec-to-e2e-test` 做驗證
+- **輸出**：實作計畫 + 完成的程式碼 + 測試報告
+- **依賴**：superpowers plugin（可選）、test-module skill、spec-to-e2e-test skill
+- **不適用於**：簡單 bug fix 或單檔修改
 
 ---
 
@@ -442,6 +476,11 @@ auto memory ──→ weekly-review（整理 + skill 錯誤分析）
                Obsidian vault（瀏覽）
 
 ~/.claude/ ──→ sync-my-claude-setting（同步到 repo）
+
+spec-design ──→ plan-and-execute（spec-design 產出 spec，plan-and-execute 接手實作）
+  spec-design: superpowers:brainstorming（有 superpowers 時 delegate）
+  plan-and-execute: superpowers:writing-plans + subagent-driven-development（有 superpowers 時 delegate）
+  plan-and-execute ──→ test-module + spec-to-e2e-test（最終驗證）
 
 health（獨立稽核，無外部依賴）
 
