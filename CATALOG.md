@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-27（新增 plan-and-execute v1.1.0、spec-design v1.2.0、agent-browser，context-mode hooks，MCP Servers 更新）
+> 上次更新：2026-03-27（weekly-review v1.2.0、hook-error-wrapper、MCP Server 路徑修正）
 
 ---
 
@@ -47,7 +47,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/weekly-review` — 每週工作回顧（v1.1.1）
+#### `/weekly-review` — 每週工作回顧（v1.2.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -299,6 +299,8 @@
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
 
+> **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
+
 ### PreCompact
 
 | 腳本 | 用途 |
@@ -317,6 +319,7 @@
 
 | 腳本 | 用途 |
 |------|------|
+| `hook-error-wrapper.sh` | 包裝 hook 命令，失敗時記錄到 `ERRORS.jsonl`（所有 hook 的外層 wrapper） |
 | `detect-jira-issue.sh` | 從 git branch 解析 Jira issue key |
 | `generate-spec-mapping.cjs` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
 | `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
@@ -393,7 +396,7 @@
 
 | Server | 類型 | 用途 |
 |--------|------|------|
-| pr-watcher | stdio | PR 監控 MCP Server（`tsx pr-watcher-MCP/src/server.ts`） |
+| pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：

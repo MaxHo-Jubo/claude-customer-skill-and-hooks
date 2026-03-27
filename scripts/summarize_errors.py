@@ -65,15 +65,16 @@ def summarize(records: list[dict], min_count: int) -> None:
     print(f"  SKILL ERROR SUMMARY  ({total} errors total)")
     print(f"{'='*60}\n")
 
-    # --- By skill ---
-    by_skill: dict[str, list] = defaultdict(list)
+    # --- By context (向下相容：舊記錄用 "skill"，新記錄用 "context") ---
+    by_ctx: dict[str, list] = defaultdict(list)
     for r in records:
-        by_skill[r.get("skill", "unknown")].append(r)
+        ctx = r.get("context") or r.get("skill", "unknown")
+        by_ctx[ctx].append(r)
 
-    print("## Errors by skill\n")
-    for skill, recs in sorted(by_skill.items(), key=lambda x: -len(x[1])):
+    print("## Errors by context\n")
+    for ctx, recs in sorted(by_ctx.items(), key=lambda x: -len(x[1])):
         pct = len(recs) / total * 100
-        print(f"  {skill:<30} {len(recs):>4} errors  ({pct:.0f}%)")
+        print(f"  {ctx:<40} {len(recs):>4} errors  ({pct:.0f}%)")
 
     # --- By tool ---
     by_tool: dict[str, list] = defaultdict(list)
@@ -98,7 +99,7 @@ def summarize(records: list[dict], min_count: int) -> None:
         if len(recs) < min_count:
             continue
         found_any = True
-        skills_affected = sorted(set(r.get("skill", "?") for r in recs))
+        skills_affected = sorted(set(r.get("context") or r.get("skill", "?") for r in recs))
         print(f"  [{len(recs)}x]  {pattern}")
         print(f"         Skills: {', '.join(skills_affected)}")
         print()
@@ -109,7 +110,7 @@ def summarize(records: list[dict], min_count: int) -> None:
     print("## Last 5 errors\n")
     for r in records[-5:]:
         ts = r.get("ts", "")[:19].replace("T", " ")
-        skill = r.get("skill", "?")
+        skill = r.get("context") or r.get("skill", "?")
         tool = r.get("tool", "?")
         error = first_line(r.get("error", "(no message)"))
         print(f"  {ts}  [{skill}] {tool}: {error}")
