@@ -18,6 +18,7 @@ Input schema (from Claude Code):
 }
 """
 import json
+import re
 import sys
 import os
 from datetime import datetime, timezone
@@ -26,6 +27,45 @@ from pathlib import Path
 
 # Max characters to store from error output (keeps the log lean)
 ERROR_TRUNCATE = 500
+
+# skill 目錄路徑 pattern，用於從 tool_input 推斷 active skill
+SKILL_PATH_RE = re.compile(r"/skills/([^/]+)/")
+# hook/script 路徑 pattern
+HOOK_PATH_RE = re.compile(r"/(?:hooks|scripts)/([^/]+?)(?:\.\w+)?$")
+
+
+def infer_context(tool_input: dict, tool_name: str) -> str:
+    """
+    從 tool_input 推斷當前操作的 context（skill 名稱或檔案路徑）。
+    優先序：skill 目錄 > hook/script 名稱 > 檔案路徑摘要 > unknown
+    """
+    # STEP 01: 取得可分析的路徑字串
+    raw = (
+        tool_input.get("command")
+        or tool_input.get("file_path")
+        or tool_input.get("path")
+        or tool_input.get("url")
+        or ""
+    )
+
+    # STEP 02: 嘗試從路徑提取 skill 名稱
+    m = SKILL_PATH_RE.search(raw)
+    if m:
+        return f"skill:{m.group(1)}"
+
+    # STEP 03: 嘗試從 hook/script 路徑提取名稱
+    m = HOOK_PATH_RE.search(raw)
+    if m:
+        return f"hook:{m.group(1)}"
+
+    # STEP 04: 有檔案路徑但不在 skill/hook 目錄，取最後兩層作為 context
+    file_path = tool_input.get("file_path") or tool_input.get("path") or ""
+    if file_path:
+        parts = Path(file_path).parts
+        # 取最後兩層（如 "src/utils"）
+        return "/".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+
+    return "unknown"
 
 
 def main() -> None:
@@ -55,22 +95,23 @@ def main() -> None:
     if len(error_text) > ERROR_TRUNCATE:
         error_text = error_text[:ERROR_TRUNCATE] + "…"
 
+    tool_name = hook_input.get("tool_name", "unknown")
     tool_input = hook_input.get("tool_input", {})
 
     record = {
         "ts":        datetime.now(timezone.utc).isoformat(),
-        "skill":     os.environ.get("CLAUDE_SKILL_NAME", "unknown"),
-        "tool":      hook_input.get("tool_name", "unknown"),
+        "context":   infer_context(tool_input, tool_name),
+        "tool":      tool_name,
         "exit_code": exit_code,
         # Best-effort: grab the command or path from the tool input
         "cmd":       (
             tool_input.get("command")
+            or tool_input.get("file_path")
             or tool_input.get("path")
             or tool_input.get("url")
             or ""
         )[:300],
         "error":     error_text,
-        "task_hint": os.environ.get("CLAUDE_TASK_DESCRIPTION", ""),
     }
 
     try:

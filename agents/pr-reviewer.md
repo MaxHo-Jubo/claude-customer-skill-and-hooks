@@ -98,9 +98,13 @@ model: sonnet
 以下情況應給低分：
 - 既有問題（非本次 diff 引入）
 - Linter/typechecker/compiler 會抓的
-- 一般品質意見（除非規則文件明確要求）
 - 明顯有意為之的功能變更
 - 非修改行的問題
+
+以下情況必須給 75 分以上（不得降級）：
+- CODE-REVIEW-RULE.md 明文列出的規則被違反（包括 STEP 註解、magic number、變數註解、JSDoc 完整性等）
+- CLAUDE.md CODE-STYLE section 明文規定的規則被違反
+- 這些不是「一般品質意見」，是硬性規範，不可因「方法簡短」「CSS 慣例」「既有模式」等理由降分
 
 diff context:
 {相關 diff 片段}

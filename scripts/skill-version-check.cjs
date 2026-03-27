@@ -5,7 +5,7 @@
  * PostToolUse hook：SKILL.md 被編輯時，檢查 version 是否有更新。
  * 若內容有改動但 version 行沒變，提醒使用者進版。
  *
- * 觸發條件：Edit 或 Write tool 對 */skills/*/SKILL.md 檔案操作
+ * 觸發條件：Edit 或 Write tool 對 {root}/skills/{name}/SKILL.md 檔案操作
  */
 
 let input = '';

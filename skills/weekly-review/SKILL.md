@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.1.1
+version: 1.2.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -201,31 +201,36 @@ period: {起始日} ~ {結束日}
 輸出格式：
 
 ```
-## Skill 錯誤摘要（{起始日} ~ {結束日}）
+## 錯誤摘要（{起始日} ~ {結束日}）
 
-### 按 Skill 分佈
-| Skill | 錯誤數 | 佔比 |
-|-------|--------|------|
+### 按 Context 分佈
+| Context | 錯誤數 | 佔比 |
+|---------|--------|------|
+
+Context 格式：skill:{name} / hook:{name} / {file-path} / unknown
 
 ### 高頻 Pattern（≥3 次）
-| Pattern | 次數 | 影響 Skill | 分類 |
-|---------|------|-----------|------|
+| Pattern | 次數 | 影響 Context | 分類 |
+|---------|------|-------------|------|
 
 分類: missing-dependency / wrong-trigger / broken-instruction / environment-drift
 
 ### 最近 5 筆錯誤
-- {timestamp} [{skill}] {tool}: {error first line}
+- {timestamp} [{context}] {tool}: {error first line}
 ```
 
 ---
 
-### STEP 07: Skill 修補建議（依賴 STEP 06 結果）
+### STEP 07: 修補建議（依賴 STEP 06 結果）
 
-> 等 STEP 06 完成後執行。若有多個 skill 需修補，可對每個 skill 各開一個 subagent 平行產出建議。
+> 等 STEP 06 完成後執行。若有多個目標需修補，可對每個各開一個 subagent 平行產出建議。
 
-**對每個高頻失敗的 skill（≥3 次錯誤）：**
+**對每個高頻失敗的 context（≥3 次錯誤）：**
 
-1. 讀取該 skill 的 SKILL.md 完整內容
+1. 根據 context 類型讀取對應檔案：
+   - `skill:{name}` → 讀取 `~/.claude/skills/{name}/SKILL.md`
+   - `hook:{name}` → 讀取 `~/.claude/hooks/{name}.*` 或 `~/.claude/scripts/{name}.*`（hook 沒有 SKILL.md，直接讀腳本原始碼）
+   - 其他 → 讀取 context 路徑對應的檔案
 2. 結合 STEP 06 的錯誤 pattern 分析
 3. 判斷 root cause 分類：
    - **missing-dependency**: 缺少二進位工具或套件 → 加 prerequisite check

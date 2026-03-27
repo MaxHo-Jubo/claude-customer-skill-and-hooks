@@ -258,7 +258,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/maxhero/.claude/scripts/skill-activation-hook.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh UserPromptSubmit node /Users/maxhero/.claude/scripts/skill-activation-hook.cjs",
             "timeout": 3000,
             "statusMessage": "Checking skill activation..."
           }
@@ -270,7 +270,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/scripts/detect-jira-issue.sh",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart ~/.claude/scripts/detect-jira-issue.sh",
             "timeout": 10
           }
         ]
@@ -280,7 +280,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs\""
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs"
           }
         ]
       }
@@ -291,19 +291,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/spec-section-validator.cjs\"",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/spec-section-validator.cjs",
             "timeout": 3000,
             "statusMessage": "Validating spec sections..."
           },
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/inventory-drift-detector.cjs\"",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/inventory-drift-detector.cjs",
             "timeout": 5000,
             "statusMessage": "Checking inventory drift..."
           },
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/skill-version-check.cjs\"",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/skill-version-check.cjs",
             "timeout": 3000,
             "statusMessage": "Checking skill version..."
           }
@@ -314,7 +314,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/scripts/post-commit-review.cjs\"",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/post-commit-review.cjs",
             "timeout": 60000,
             "statusMessage": "Checking post-commit review..."
           }
@@ -336,7 +336,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/maxhero/.claude/scripts/pre-compact-snapshot.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact node /Users/maxhero/.claude/scripts/pre-compact-snapshot.cjs",
             "timeout": 3000,
             "statusMessage": "Saving pre-compact snapshot..."
           }
@@ -361,7 +361,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.cjs\"",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.cjs",
             "timeout": 8000,
             "statusMessage": "Enriching with GitNexus graph context..."
           }
@@ -372,7 +372,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs\""
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs"
           }
         ]
       }
@@ -410,7 +410,7 @@
     }
   },
   "language": "繁體中文",
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true
 }
