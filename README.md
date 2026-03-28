@@ -111,8 +111,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 14 | code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-mem、context-mode、document-skills、superpowers、claude-hud、pr-review-toolkit |
-| Plugins（停用） | 3 | code-simplifier、github、everything-claude-code |
+| Plugins（啟用） | 15 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-mem、context-mode、document-skills、superpowers、claude-hud、pr-review-toolkit |
+| Plugins（停用） | 2 | github、everything-claude-code |
 | MCP Servers | 1 | pr-watcher（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
