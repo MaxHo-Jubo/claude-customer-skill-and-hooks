@@ -78,38 +78,41 @@
 - **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
 
-#### `/spec-design` — 需求探索到設計 Spec（v1.2.0）
+#### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.1.0）
 
 - **位置**：`~/.claude/skills/spec-design/SKILL.md`
 - **用法**：
-  - `/spec-design` — 互動式需求探索（偵測環境後自動選路徑）
+  - `/spec-design` — 互動式需求探索
   - `/spec-design <需求描述>` — 帶初始需求直接開始
-  - `/spec-design --native` — 強制走原生流程（即使有 superpowers）
-- **功能**：
-  - 從模糊需求出發，透過結構化對話釐清需求、比較方案、產出設計 spec
-  - 經 4 輪平行 review（4 個 subagent）迭代至零問題
-  - 有 superpowers 時自動 delegate 給 `superpowers:brainstorming`
-  - 無 superpowers 時走原生 Phase 1~8 流程
-- **輸出**：`docs/superpowers/specs/` 下的設計 spec
-- **依賴**：superpowers plugin（可選）
+- **流程**：
+  - Phase 0: openspec explore 自由探索問題空間（可跳過）
+  - Phase 1-4: superpowers:brainstorming 結構化收斂
+  - Phase 5: openspec CLI 建立 change，動態取 template 填入 artifact（proposal + specs + design + tasks）
+  - Phase 6-7: 4-agent spec review + 迭代修正
+  - Phase 8: plan mode 互動式規劃，產出 plan.md
+  - Phase 9: 4-agent plan review + 迭代修正
+  - Phase 10: 使用者最終確認
+- **輸出**：`openspec/changes/<name>/`（含 proposal.md、specs/、design.md、tasks.md、plan.md）
+- **依賴**：superpowers plugin（必要）、`@fission-ai/openspec` CLI（必要）
 - **不適用於**：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix
 
-#### `/plan-and-execute` — 從 Spec 到實作完成（v1.1.0）
+#### `/plan-and-execute` — 自動執行 openspec plan（v2.0.0）
 
 - **位置**：`~/.claude/skills/plan-and-execute/SKILL.md`
 - **用法**：
-  - `/plan-and-execute <spec路徑>` — 指定 spec 開始完整流程
-  - `/plan-and-execute` — 無參數時搜尋可用 spec
-  - `/plan-and-execute --plan-only` — 只產 plan 不執行
-  - `/plan-and-execute --resume <plan路徑>` — 從已有 plan 繼續
+  - `/plan-and-execute <change-name>` — 指定 openspec change 自動執行
+  - `/plan-and-execute` — 無參數時列出有 plan.md 的 change
+  - `/plan-and-execute --resume <change-name>` — 從上次中斷處繼續
+  - `/plan-and-execute --wave <N> <change-name>` — 只執行指定 Wave
+  - `/loop 0 /plan-and-execute --resume <change-name>` — 全自動分批（推薦）
 - **功能**：
-  - 讀取設計 spec，產出細粒度 TDD 實作計畫
-  - 經 review 後分 Wave 執行：先寫測試（RED）→ 派 subagent 實作（GREEN）→ 驗證
-  - 有 superpowers 時 delegate 給 `writing-plans` + `subagent-driven-development`
-  - 無 superpowers 時走原生流程
+  - 純自動 executor，讀取 plan.md 逐 Wave 執行 TDD
+  - 先寫測試（RED）→ 派 subagent 實作（GREEN）→ review → commit
+  - 同步更新 openspec tasks.md checkbox
+  - context 不足時自動停止，用 `--resume` 跨 session 繼續
   - 最終調用 `test-module` 和 `spec-to-e2e-test` 做驗證
-- **輸出**：實作計畫 + 完成的程式碼 + 測試報告
-- **依賴**：superpowers plugin（可選）、test-module skill、spec-to-e2e-test skill
+- **輸出**：完成的程式碼 + `openspec/changes/<name>/report.md`
+- **依賴**：superpowers plugin（必要）、`@fission-ai/openspec` CLI（必要）、test-module skill、spec-to-e2e-test skill
 - **不適用於**：簡單 bug fix 或單檔修改
 
 ---
@@ -493,17 +496,22 @@ gitnexus-hook ──→ gitnexus-exploring
                   gitnexus-impact-analysis
                   gitnexus-refactoring
 
-spec-design ──→ plan-and-execute（設計 spec → 實作）
+spec-design ──→ plan-and-execute（openspec change + plan.md → 自動執行）
+  spec-design:
+    Phase 0: openspec explore（自由探索）
+    Phase 1-4: superpowers:brainstorming（結構化收斂）
+    Phase 5: openspec CLI → change artifacts（proposal + specs + design + tasks）
+    Phase 6-7: 4-agent spec review
+    Phase 8-9: plan mode → plan.md → 4-agent plan review
+  plan-and-execute:
+    讀取 plan.md → TDD 分 Wave 實作（subagent）
+    支援 --resume / --wave / /loop 分批執行
+    plan-and-execute ──→ test-module + spec-to-e2e-test（最終驗證）
 
 auto memory ──→ weekly-review（整理 + skill 錯誤分析）
                Obsidian vault（瀏覽）
 
 ~/.claude/ ──→ sync-my-claude-setting（同步到 repo）
-
-spec-design ──→ plan-and-execute（spec-design 產出 spec，plan-and-execute 接手實作）
-  spec-design: superpowers:brainstorming（有 superpowers 時 delegate）
-  plan-and-execute: superpowers:writing-plans + subagent-driven-development（有 superpowers 時 delegate）
-  plan-and-execute ──→ test-module + spec-to-e2e-test（最終驗證）
 
 health（獨立稽核，無外部依賴）
 
