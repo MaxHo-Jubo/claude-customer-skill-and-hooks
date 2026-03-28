@@ -255,6 +255,7 @@
   "hooks": {
     "UserPromptSubmit": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -267,6 +268,7 @@
     ],
     "SessionStart": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -280,7 +282,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs"
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs",
+            "timeout": 10000
           }
         ]
       }
@@ -333,6 +336,7 @@
     ],
     "PreCompact": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -372,7 +376,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs"
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs",
+            "timeout": 10000
           }
         ]
       }
@@ -383,7 +388,7 @@
     "command": "bash /Users/maxhero/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
-    "code-simplifier@claude-plugins-official": false,
+    "code-simplifier@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "atlassian@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
