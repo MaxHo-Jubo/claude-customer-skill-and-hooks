@@ -1,7 +1,7 @@
 ---
 name: spec-design
 description: "從需求到設計 spec 的結構化流程：brainstorming → openspec 撰寫 → 4-agent review → 迭代修正。當使用者提到 /spec-design、「設計新功能」、「寫設計 spec」、「brainstorm 新功能」、「需求探索」、「新功能架構設計」、「技術方案討論」、「寫 RFC」、想從零開始設計一個功能或系統時觸發。不適用於：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix。"
-version: 3.1.0
+version: 3.1.1
 ---
 
 # Spec Design — 需求探索到設計 spec + 實作計畫
@@ -137,12 +137,9 @@ openspec status --change "<change-name>" --json
 openspec validate --changes
 ```
 
-### 5.6 Commit
+### 5.6 進入 Spec Review
 
-寫完後詢問使用者是否要 commit：
-> openspec change 已寫入 `openspec/changes/<change-name>/`。要先 commit 嗎？（Y/N）
-
-使用者確認後才執行 `git add` + `git commit`。
+openspec artifacts 寫入完成後，**不 commit、不停頓**，直接進入 Phase 6 Spec Review。commit 時機在 Phase 7 spec review 通過後。
 
 ## Phase 6: Spec Review（4 個平行 Opus Subagent）
 
@@ -224,9 +221,13 @@ openspec validate --changes
 
 6. **驗證格式**：`npx @fission-ai/openspec validate --changes`
 
+7. **Commit spec review 結果**：詢問使用者是否 commit，確認後執行 `git add` + `git commit`
+
+**⚠️ MANDATORY GATE：Phase 7 完成後 MUST 立即進入 Phase 8。不可跳到 Phase 10，不可向使用者提供「下一步選項」，不可結束流程。spec review 通過 ≠ 流程完成。流程完成 = Phase 10。**
+
 ## Phase 8: Plan Mode 互動式規劃
 
-spec review 通過後，進入 plan mode 產出實作計畫。
+spec review 通過後，**立即**進入 plan mode 產出實作計畫。
 
 ### 8.1 進入 plan mode
 

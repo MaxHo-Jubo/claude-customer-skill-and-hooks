@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-27（weekly-review v1.2.0、hook-error-wrapper、MCP Server 路徑修正）
+> 上次更新：2026-03-29（spec-design v3.1.1、啟用 code-simplifier plugin）
 
 ---
 
@@ -78,7 +78,7 @@
 - **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
 
-#### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.1.0）
+#### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.1.1）
 
 - **位置**：`~/.claude/skills/spec-design/SKILL.md`
 - **用法**：
@@ -364,7 +364,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（14）
+### 啟用的 Plugins（15）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -383,11 +383,10 @@
 | claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 
-### 停用的 Plugins（3）
+### 停用的 Plugins（2）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
-| code-simplifier | claude-plugins-official | 極少使用 |
 | github | claude-plugins-official | 用 gh CLI 替代 |
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
 
