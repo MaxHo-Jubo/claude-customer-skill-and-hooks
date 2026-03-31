@@ -1,13 +1,11 @@
-#!/usr/bin/env node
-'use strict';
-
-const fs = require('fs');
-const path = require('path');
+#!/usr/bin/env bun
+import fs from 'fs';
+import path from 'path';
 
 /**
  * 從 spec/**\/*.md 提取檔案路徑，生成 spec/file-mapping.json。
  *
- * 用法: node generate-spec-mapping.cjs [project-root]
+ * 用法: bun generate-spec-mapping.ts [project-root]
  * 若未提供 project-root，使用目前工作目錄。
  *
  * 支援的路徑格式：
@@ -24,7 +22,9 @@ const path = require('path');
  * }
  */
 
+/** 專案根目錄 */
 const projectRoot = process.argv[2] || process.cwd();
+/** spec 目錄路徑 */
 const specDir = path.join(projectRoot, 'spec');
 
 if (!fs.existsSync(specDir)) {
@@ -36,15 +36,15 @@ if (!fs.existsSync(specDir)) {
  * 遞迴掃描目錄，回傳所有 .md 檔案的相對路徑（相對於 specDir）。
  * 排除 index.md。
  *
- * @param {string} dir - 要掃描的目錄
- * @param {string} [prefix=''] - 目前的路徑前綴（遞迴用）
- * @returns {string[]} 相對路徑陣列，如 ['config.md', 'models/base.md']
+ * @param dir - 要掃描的目錄
+ * @param prefix - 目前的路徑前綴（遞迴用）
+ * @returns 相對路徑陣列，如 ['config.md', 'models/base.md']
  */
-function scanSpecFiles(dir, prefix = '') {
+function scanSpecFiles(dir: string, prefix = ''): string[] {
   // STEP 01: 讀取目錄內容
   const entries = fs.readdirSync(dir, { withFileTypes: true });
-  /** @type {string[]} 收集到的 spec 檔案路徑 */
-  const results = [];
+  /** 收集到的 spec 檔案路徑 */
+  const results: string[] = [];
 
   for (const entry of entries) {
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -74,9 +74,9 @@ if (specFiles.length === 0) {
  * 前端專案：路徑以 app/ 開頭
  * 後端專案：路徑以 backend/ 開頭，映射時去掉 backend/ 前綴
  *
- * @returns {'frontend'|'backend'} 專案類型
+ * @returns 專案類型
  */
-function detectProjectType() {
+function detectProjectType(): 'frontend' | 'backend' {
   // STEP 01: 檢查目錄結構判斷專案類型
   if (fs.existsSync(path.join(projectRoot, 'app'))) {
     return 'frontend';
@@ -95,14 +95,13 @@ const projectType = detectProjectType();
  * - 前端：若缺少 app/ 前綴但檔案存在於 app/ 下，自動補上
  * - 後端：去掉 backend/ 前綴（因為 projectRoot 已經是 backend/）
  *
- * @param {string} filePath - 原始路徑
- * @returns {string} 正規化後的路徑
+ * @param filePath - 原始路徑
+ * @returns 正規化後的路徑
  */
-function normalizePath(filePath) {
+function normalizePath(filePath: string): string {
   if (projectType === 'backend') {
     // STEP 01: 後端路徑去掉 backend/ 前綴
-    const stripped = filePath.replace(/^backend\//, '');
-    return stripped;
+    return filePath.replace(/^backend\//, '');
   }
 
   // STEP 02: 前端路徑嘗試補 app/ 前綴
@@ -123,14 +122,14 @@ function normalizePath(filePath) {
  *   > 路徑：`backend/services/Account.js`
  *   > 掃描路徑：`backend/models/`
  *
- * @param {string[]} lines - 檔案各行
- * @returns {{ files: string[], dirs: string[] }} files: 檔案路徑, dirs: 目錄路徑
+ * @param lines - 檔案各行
+ * @returns files: 檔案路徑, dirs: 目錄路徑
  */
-function extractHeaderPaths(lines) {
-  /** @type {string[]} 從標頭提取的檔案路徑 */
-  const files = [];
-  /** @type {string[]} 從標頭提取的目錄路徑 */
-  const dirs = [];
+function extractHeaderPaths(lines: string[]): { files: string[]; dirs: string[] } {
+  /** 從標頭提取的檔案路徑 */
+  const files: string[] = [];
+  /** 從標頭提取的目錄路徑 */
+  const dirs: string[] = [];
 
   for (const line of lines) {
     // STEP 01: 只處理 blockquote 行
@@ -173,12 +172,12 @@ function extractHeaderPaths(lines) {
  * 2. 從「檔案」「總覽」section 的 table 提取
  * 3. Fallback：掃描全文 backtick 路徑
  *
- * @param {string} specFilePath - spec 檔案完整路徑
- * @returns {string[]} 提取到的源碼檔案路徑陣列（已正規化）
+ * @param specFilePath - spec 檔案完整路徑
+ * @returns 提取到的源碼檔案路徑與目錄
  */
-function extractFilePaths(specFilePath) {
+function extractFilePaths(specFilePath: string): { files: string[]; dirs: string[] } {
   const content = fs.readFileSync(specFilePath, 'utf8');
-  const paths = new Set();
+  const paths = new Set<string>();
   const lines = content.split('\n');
 
   // STEP 01: 從標頭 blockquote 提取
@@ -290,10 +289,10 @@ function extractFilePaths(specFilePath) {
 }
 
 // STEP 04: 建立 source file → spec files 的映射
-/** @type {Record<string, string[]>} 源碼路徑 → spec 路徑陣列 */
-const mapping = {};
-/** @type {Record<string, Set<string>>} 標頭目錄 → spec 集合（直接從標頭聲明建立） */
-const headerDirToSpecs = {};
+/** 源碼路徑 → spec 路徑陣列 */
+const mapping: Record<string, string[]> = {};
+/** 標頭目錄 → spec 集合（直接從標頭聲明建立） */
+const headerDirToSpecs: Record<string, Set<string>> = {};
 
 for (const specFile of specFiles) {
   const specPath = `spec/${specFile}`;
@@ -322,7 +321,8 @@ for (const specFile of specFiles) {
 }
 
 // STEP 05: 補充特殊 spec 的映射（table 格式不含完整路徑的）
-const SPECIAL_DIR_MAPPINGS = {
+/** 特殊目錄映射：spec 路徑 → 需掃描的目錄陣列 */
+const SPECIAL_DIR_MAPPINGS: Record<string, string[]> = {
   'spec/realm-schema.md': ['app/db/schema', 'app/db/manager'],
 };
 
@@ -350,8 +350,8 @@ for (const [specPath, dirs] of Object.entries(SPECIAL_DIR_MAPPINGS)) {
 }
 
 // STEP 06: 加入目錄層級映射
-/** @type {Record<string, Set<string>>} 目錄 → spec 集合 */
-const dirToSpecs = {};
+/** 目錄 → spec 集合 */
+const dirToSpecs: Record<string, Set<string>> = {};
 for (const [file, specs] of Object.entries(mapping)) {
   const dir = path.dirname(file);
   if (!dirToSpecs[dir]) {
@@ -380,12 +380,13 @@ for (const [dirKey, specs] of Object.entries(headerDirToSpecs)) {
 }
 
 // STEP 07: 排序 key 並輸出
-/** @type {Record<string, string[]>} 排序後的映射表 */
-const sortedMapping = {};
+/** 排序後的映射表 */
+const sortedMapping: Record<string, string[]> = {};
 for (const key of Object.keys(mapping).sort()) {
   sortedMapping[key] = mapping[key];
 }
 
+/** 輸出路徑 */
 const outputPath = path.join(specDir, 'file-mapping.json');
 fs.writeFileSync(outputPath, JSON.stringify(sortedMapping, null, 2) + '\n');
 

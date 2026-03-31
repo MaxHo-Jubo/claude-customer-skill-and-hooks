@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-'use strict';
+#!/usr/bin/env bun
 
 /**
  * PreCompact hook: context 壓縮前自動提醒 Claude 存重要資訊到 auto memory。

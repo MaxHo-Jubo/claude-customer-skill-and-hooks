@@ -259,7 +259,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh UserPromptSubmit node /Users/maxhero/.claude/scripts/skill-activation-hook.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh UserPromptSubmit bun /Users/maxhero/.claude/scripts/skill-activation-hook.ts",
             "timeout": 3000,
             "statusMessage": "Checking skill activation..."
           }
@@ -294,19 +294,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/spec-section-validator.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/spec-section-validator.ts",
             "timeout": 3000,
             "statusMessage": "Validating spec sections..."
           },
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/inventory-drift-detector.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/inventory-drift-detector.ts",
             "timeout": 5000,
             "statusMessage": "Checking inventory drift..."
           },
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/skill-version-check.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/skill-version-check.ts",
             "timeout": 3000,
             "statusMessage": "Checking skill version..."
           }
@@ -317,7 +317,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse node /Users/maxhero/.claude/scripts/post-commit-review.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/post-commit-review.ts",
             "timeout": 60000,
             "statusMessage": "Checking post-commit review..."
           }
@@ -340,7 +340,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact node /Users/maxhero/.claude/scripts/pre-compact-snapshot.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact bun /Users/maxhero/.claude/scripts/pre-compact-snapshot.ts",
             "timeout": 3000,
             "statusMessage": "Saving pre-compact snapshot..."
           }
@@ -365,7 +365,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.cjs",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.ts",
             "timeout": 8000,
             "statusMessage": "Enriching with GitNexus graph context..."
           }

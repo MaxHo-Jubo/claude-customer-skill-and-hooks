@@ -1,5 +1,5 @@
-#!/usr/bin/env node
-'use strict';
+#!/usr/bin/env bun
+import { execSync } from 'child_process';
 
 /**
  * PostToolUse hook：git commit 後提醒使用者 Claude 應執行 review 流程。
@@ -11,13 +11,14 @@
  * 例外：命令同時包含 `push`（commit and push 場景跳過）
  */
 
+/** hook 的 stdin JSON 資料 */
 let input = '';
 process.stdin.setEncoding('utf8');
 
 /** stdin 超時防呆：2 秒內未收到資料則靜默退出 */
 const stdinTimeout = setTimeout(() => { process.exit(0); }, 2000);
 
-process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('data', (chunk: string) => { input += chunk; });
 process.stdin.on('end', () => {
   clearTimeout(stdinTimeout);
   try {
@@ -28,7 +29,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    const command = data.tool_input?.command || '';
+    const command: string = data.tool_input?.command || '';
 
     // STEP 02: 確認是 git commit 命令
     if (!command.match(/git\s+commit/)) {
@@ -53,8 +54,7 @@ process.stdin.on('end', () => {
     }
 
     // STEP 05: 取得本次 commit 修改的檔案
-    const { execSync } = require('child_process');
-    let changedFiles = [];
+    let changedFiles: string[] = [];
     try {
       /** 從最近一次 commit 取得修改的 JS/TS 檔案清單 */
       const filesRaw = execSync('git diff --name-only HEAD~1 HEAD -- "*.js" "*.jsx" "*.ts" "*.tsx"', {
@@ -76,9 +76,10 @@ process.stdin.on('end', () => {
         });
         /** eslint 通過，無錯誤 */
         eslintResult = '✅ eslint: 全部通過';
-      } catch (e) {
+      } catch (e: unknown) {
         /** eslint 有錯誤，擷取輸出 */
-        eslintResult = '❌ eslint 發現問題:\n' + (e.stdout || e.message || '').slice(0, 2000);
+        const err = e as { stdout?: string; message?: string };
+        eslintResult = '❌ eslint 發現問題:\n' + (err.stdout || err.message || '').slice(0, 2000);
       }
     } else {
       eslintResult = '⏭️ eslint: 無 JS/TS 檔案變更，跳過';

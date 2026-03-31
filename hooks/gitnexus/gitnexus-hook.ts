@@ -1,4 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+
 /**
  * GitNexus Claude Code Hook
  *
@@ -9,14 +13,21 @@
  * Session context is injected via CLAUDE.md / skills instead.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
+/** hook 的 stdin JSON 輸入資料 */
+interface HookInput {
+  hook_event_name?: string;
+  cwd?: string;
+  tool_name?: string;
+  tool_input?: {
+    pattern?: string;
+    command?: string;
+  };
+}
 
 /**
  * Read JSON input from stdin synchronously.
  */
-function readInput() {
+function readInput(): HookInput {
   try {
     const data = fs.readFileSync(0, 'utf-8');
     return JSON.parse(data);
@@ -28,14 +39,16 @@ function readInput() {
 /**
  * Check if a directory (or ancestor) has a .gitnexus index.
  */
-function findGitNexusIndex(startDir) {
+function findGitNexusIndex(startDir: string): boolean {
   let dir = startDir || process.cwd();
   for (let i = 0; i < 5; i++) {
     if (fs.existsSync(path.join(dir, '.gitnexus'))) {
       return true;
     }
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
   return false;
@@ -44,7 +57,11 @@ function findGitNexusIndex(startDir) {
 /**
  * Extract search pattern from tool input.
  */
-function extractPattern(toolName, toolInput) {
+function extractPattern(toolName: string, toolInput: HookInput['tool_input']): string | null {
+  if (!toolInput) {
+    return null;
+  }
+
   if (toolName === 'Grep') {
     return toolInput.pattern || null;
   }
@@ -57,21 +74,28 @@ function extractPattern(toolName, toolInput) {
 
   if (toolName === 'Bash') {
     const cmd = toolInput.command || '';
-    if (!/\brg\b|\bgrep\b/.test(cmd)) return null;
+    if (!/\brg\b|\bgrep\b/.test(cmd)) {
+      return null;
+    }
 
     const tokens = cmd.split(/\s+/);
     let foundCmd = false;
     let skipNext = false;
+    /** 需要跳過下一個 token 的 flag 集合 */
     const flagsWithValues = new Set(['-e', '-f', '-m', '-A', '-B', '-C', '-g', '--glob', '-t', '--type', '--include', '--exclude']);
 
     for (const token of tokens) {
       if (skipNext) { skipNext = false; continue; }
       if (!foundCmd) {
-        if (/\brg$|\bgrep$/.test(token)) foundCmd = true;
+        if (/\brg$|\bgrep$/.test(token)) {
+          foundCmd = true;
+        }
         continue;
       }
       if (token.startsWith('-')) {
-        if (flagsWithValues.has(token)) skipNext = true;
+        if (flagsWithValues.has(token)) {
+          skipNext = true;
+        }
         continue;
       }
       const cleaned = token.replace(/['"]/g, '');
@@ -83,30 +107,37 @@ function extractPattern(toolName, toolInput) {
   return null;
 }
 
-function main() {
+function main(): void {
   try {
     const input = readInput();
     const hookEvent = input.hook_event_name || '';
 
-    if (hookEvent !== 'PreToolUse') return;
+    if (hookEvent !== 'PreToolUse') {
+      return;
+    }
 
     const cwd = input.cwd || process.cwd();
-    if (!findGitNexusIndex(cwd)) return;
+    if (!findGitNexusIndex(cwd)) {
+      return;
+    }
 
     const toolName = input.tool_name || '';
     const toolInput = input.tool_input || {};
 
-    if (toolName !== 'Grep' && toolName !== 'Glob' && toolName !== 'Bash') return;
+    if (toolName !== 'Grep' && toolName !== 'Glob' && toolName !== 'Bash') {
+      return;
+    }
 
     const pattern = extractPattern(toolName, toolInput);
-    if (!pattern || pattern.length < 3) return;
+    if (!pattern || pattern.length < 3) {
+      return;
+    }
 
     // Resolve CLI path from global npm installation (derive from node binary location)
     const cliPath = path.join(path.dirname(process.execPath), '..', 'lib', 'node_modules', 'gitnexus', 'dist', 'cli', 'index.js');
 
     // augment CLI writes result to stderr (KuzuDB's native module captures
     // stdout fd at OS level, making it unusable in subprocess contexts).
-    const { spawnSync } = require('child_process');
     let result = '';
     try {
       const child = spawnSync(
@@ -125,9 +156,10 @@ function main() {
         }
       }));
     }
-  } catch (err) {
+  } catch (err: unknown) {
     // Graceful failure — log to stderr for debugging
-    console.error('GitNexus hook error:', err.message);
+    const error = err as Error;
+    console.error('GitNexus hook error:', error.message);
   }
 }
 

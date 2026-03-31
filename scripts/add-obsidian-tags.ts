@@ -1,9 +1,7 @@
-#!/usr/bin/env node
-'use strict';
-
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+#!/usr/bin/env bun
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
 /**
  * 為 auto memory markdown 檔案補上 Obsidian tags。
@@ -13,8 +11,9 @@ const { execSync } = require('child_process');
  */
 
 // STEP 01: 專案路徑 → 專案標籤
-function getProjectTag(filePath) {
-  const map = {
+function getProjectTag(filePath: string): string {
+  /** 路徑片段到專案標籤的對應表 */
+  const map: Record<string, string> = {
     'HomeCareStaff-HomeCareStaffRN': '居服App',
     'luna-RN-HomeCareStaff': '居服App',
     'DayCareStaff-DayCareStaff': '日照App',
@@ -44,7 +43,7 @@ function getProjectTag(filePath) {
 }
 
 // STEP 02: 根據內容推斷 type
-function inferType(content, fileName) {
+function inferType(content: string, fileName: string): string {
   const lower = content.toLowerCase();
   if (fileName.includes('lesson') || lower.includes('教訓') || lower.includes('lessons learned')) {
     return 'feedback';
@@ -68,7 +67,7 @@ function inferType(content, fileName) {
 }
 
 // STEP 03: 根據 type 產生 tags
-function buildTags(type, projectTag, content) {
+function buildTags(type: string, projectTag: string, content: string): string[] {
   const tags = [type, projectTag];
 
   // 額外語意 tags
@@ -89,7 +88,7 @@ function buildTags(type, projectTag, content) {
 }
 
 // STEP 04: 處理所有檔案
-const projectsDir = path.join(process.env.HOME, '.claude/projects');
+const projectsDir = path.join(process.env.HOME!, '.claude/projects');
 const files = execSync(`find "${projectsDir}" -path "*/memory/*.md" -not -name "MEMORY.md" -type f`, { encoding: 'utf8' })
   .trim()
   .split('\n')
@@ -109,7 +108,7 @@ for (const filePath of files) {
     continue;
   }
 
-  let newContent;
+  let newContent: string;
 
   if (content.startsWith('---')) {
     // 有 frontmatter 但沒 tags，在第二個 --- 前插入 tags
