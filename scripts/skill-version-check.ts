@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-'use strict';
+#!/usr/bin/env bun
 
 /**
  * PostToolUse hook：SKILL.md 被編輯時，檢查 version 是否有更新。
@@ -8,13 +7,14 @@
  * 觸發條件：Edit 或 Write tool 對 {root}/skills/{name}/SKILL.md 檔案操作
  */
 
+/** hook 的 stdin JSON 資料 */
 let input = '';
 process.stdin.setEncoding('utf8');
 
 /** stdin 超時防呆 */
 const stdinTimeout = setTimeout(() => { process.exit(0); }, 2000);
 
-process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('data', (chunk: string) => { input += chunk; });
 process.stdin.on('end', () => {
   clearTimeout(stdinTimeout);
   try {
@@ -27,15 +27,15 @@ process.stdin.on('end', () => {
     }
 
     // STEP 02: 確認是 SKILL.md 檔案
-    const filePath = data.tool_input?.file_path || '';
+    const filePath: string = data.tool_input?.file_path || '';
     if (!filePath.match(/\/skills\/[^/]+\/SKILL\.md$/)) {
       process.exit(0);
     }
 
     // STEP 03: 檢查是否有更新 version 欄位
-    const oldStr = data.tool_input?.old_string || '';
-    const newStr = data.tool_input?.new_string || '';
-    const content = data.tool_input?.content || '';
+    const oldStr: string = data.tool_input?.old_string || '';
+    const newStr: string = data.tool_input?.new_string || '';
+    const content: string = data.tool_input?.content || '';
 
     /** 判斷 version 行是否在本次編輯中被改動 */
     const versionChanged = oldStr.includes('version:') ||

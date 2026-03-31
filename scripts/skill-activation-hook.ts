@@ -1,3 +1,7 @@
+#!/usr/bin/env bun
+import fs from 'fs';
+import path from 'path';
+
 /**
  * Skill Activation Hook
  *
@@ -12,8 +16,25 @@
  * - { "result": "approve" } 無匹配時直接放行
  */
 
-const fs = require('fs');
-const path = require('path');
+/** skill-rules.json 中每個 skill 的觸發設定 */
+interface SkillConfig {
+  promptTriggers: {
+    keywords?: string[];
+    intentPatterns?: string[];
+  };
+  priority?: 'critical' | 'high' | 'medium' | 'low';
+}
+
+/** skill-rules.json 的頂層結構 */
+interface SkillRules {
+  skills: Record<string, SkillConfig>;
+}
+
+/** 推薦紀錄，記錄每個 skill 被推薦的時間戳 */
+interface RecommendationLog {
+  recommended: Record<string, number>;
+  sessionStart: number | null;
+}
 
 // STEP 01: 讀取使用者 prompt
 const userPrompt = process.env.CLAUDE_USER_CONTENT || '';
@@ -23,20 +44,20 @@ if (!userPrompt.trim()) {
 }
 
 // STEP 02: 讀取 skill-rules.json
-const rulesPath = path.join(process.env.HOME, '.claude', 'skills', 'skill-rules.json');
-let rules;
+const rulesPath = path.join(process.env.HOME!, '.claude', 'skills', 'skill-rules.json');
+let rules: SkillRules;
 try {
   rules = JSON.parse(fs.readFileSync(rulesPath, 'utf-8'));
-} catch (err) {
+} catch {
   // 規則檔不存在或損壞，直接放行
   console.log(JSON.stringify({ result: 'approve' }));
   process.exit(0);
 }
 
 // STEP 03: 讀取 session 推薦紀錄，避免重複建議
-const logDir = path.join(process.env.HOME, '.claude', 'skills');
+const logDir = path.join(process.env.HOME!, '.claude', 'skills');
 const logPath = path.join(logDir, 'recommendation-log.json');
-let recommendationLog = { recommended: {}, sessionStart: null };
+let recommendationLog: RecommendationLog = { recommended: {}, sessionStart: null };
 try {
   recommendationLog = JSON.parse(fs.readFileSync(logPath, 'utf-8'));
   // STEP 03.01: 清除超過 7 天的紀錄
@@ -53,7 +74,7 @@ try {
 const normalizedPrompt = userPrompt.toLowerCase().replace(/\s+/g, ' ').trim();
 
 /** 匹配結果，按 priority 分組 */
-const matches = { critical: [], high: [], medium: [], low: [] };
+const matches: Record<string, string[]> = { critical: [], high: [], medium: [], low: [] };
 
 for (const [skillName, config] of Object.entries(rules.skills)) {
   // STEP 04.01: 跳過此 session 已推薦過的 skill

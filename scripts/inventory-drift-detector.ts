@@ -1,3 +1,7 @@
+#!/usr/bin/env bun
+import fs from 'fs';
+import path from 'path';
+
 /**
  * Inventory Drift Detector
  *
@@ -9,16 +13,13 @@
  * - ~/.claude/hooks/
  * - ~/.claude/plugins/
  * - ~/.claude/settings.json
- * - ~/.claude/scripts/*hook*.cjs
+ * - ~/.claude/scripts/*hook*.ts
  *
  * 環境變數：
  * - CLAUDE_TOOL_NAME: 工具名稱（Write / Edit）
  * - CLAUDE_FILE_PATHS: 被修改的檔案路徑
  * - CLAUDE_TOOL_INPUT: 工具的輸入參數（JSON）
  */
-
-const fs = require('fs');
-const path = require('path');
 
 const HOME = process.env.HOME || '';
 const CLAUDE_DIR = path.join(HOME, '.claude');
@@ -75,21 +76,19 @@ if (!isRelevant) {
 // STEP 03: 掃描目前的 skills
 /**
  * 遞迴搜尋目錄下的 SKILL.md 檔案
- * @param {string} dir - 搜尋目錄
- * @returns {string[]} SKILL.md 檔案路徑列表
+ * @param dir - 搜尋目錄
+ * @returns SKILL.md 檔案路徑列表
  */
-function findSkillFiles(dir) {
-  const results = [];
+function findSkillFiles(dir: string): string[] {
+  const results: string[] = [];
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         results.push(...findSkillFiles(fullPath));
-      } else if (entry.name === 'SKILL.md' || entry.name.endsWith('.md')) {
-        if (entry.name === 'SKILL.md') {
-          results.push(fullPath);
-        }
+      } else if (entry.name === 'SKILL.md') {
+        results.push(fullPath);
       }
     }
   } catch {
@@ -99,7 +98,7 @@ function findSkillFiles(dir) {
 }
 
 /** 從 SKILL.md 的父目錄名稱推導 skill 名稱 */
-function getSkillName(skillMdPath) {
+function getSkillName(skillMdPath: string): string {
   return path.basename(path.dirname(skillMdPath));
 }
 
@@ -118,7 +117,7 @@ try {
 
 // STEP 06: 讀取 skill-rules.json 中已有規則的 skills
 const rulesPath = path.join(CLAUDE_DIR, 'skills', 'skill-rules.json');
-let rulesContent = {};
+let rulesContent: { skills?: Record<string, unknown> } = {};
 try {
   rulesContent = JSON.parse(fs.readFileSync(rulesPath, 'utf-8'));
 } catch {
@@ -127,7 +126,7 @@ try {
 const ruledSkills = Object.keys(rulesContent.skills || {});
 
 // STEP 07: 比對差異
-const drifts = [];
+const drifts: string[] = [];
 
 // STEP 07.01: 檢查有沒有新的自訂 skill 未被 inventory 記錄
 for (const skill of currentUserSkills) {
@@ -140,7 +139,7 @@ for (const skill of currentUserSkills) {
 for (const skill of currentUserSkills) {
   // 跳過純目錄結構的 skill（如 gitnexus 系列會用完整名稱）
   const matchesRule = ruledSkills.some(r =>
-    r === skill || r.includes(skill) || skill.includes(r.split(':').pop())
+    r === skill || r.includes(skill) || skill.includes(r.split(':').pop()!)
   );
   if (!matchesRule) {
     drifts.push(`[缺少觸發規則] "${skill}" 沒有對應的 skill-rules.json 觸發規則`);
