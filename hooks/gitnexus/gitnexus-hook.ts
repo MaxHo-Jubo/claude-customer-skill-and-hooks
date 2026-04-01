@@ -133,16 +133,14 @@ function main(): void {
       return;
     }
 
-    // Resolve CLI path from global npm installation (derive from node binary location)
-    const cliPath = path.join(path.dirname(process.execPath), '..', 'lib', 'node_modules', 'gitnexus', 'dist', 'cli', 'index.js');
-
     // augment CLI writes result to stderr (KuzuDB's native module captures
     // stdout fd at OS level, making it unusable in subprocess contexts).
+    // 使用 npx gitnexus 執行，避免依賴特定 runtime 路徑
     let result = '';
     try {
       const child = spawnSync(
-        process.execPath,
-        [cliPath, 'augment', pattern],
+        'npx',
+        ['gitnexus', 'augment', pattern],
         { encoding: 'utf-8', timeout: 8000, cwd, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       result = child.stderr || '';
