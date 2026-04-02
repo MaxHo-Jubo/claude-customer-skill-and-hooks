@@ -247,6 +247,17 @@
   - 提供多帳號設定流程指引（CLAUDE_CONFIG_DIR + zshrc alias + statusline）
 - **依賴**：`scripts/check-quota.sh`、macOS Keychain 中的 Claude Code credentials
 
+#### save-progress — 手動存檔工作進度
+
+- **位置**：`~/.claude/skills/save-progress/SKILL.md`
+- **用法**：`/save-progress`
+- **功能**：
+  - 有 TaskList 時：dump 完整任務狀態（status、描述、blockers）到 `tasks/todo.md`
+  - 無 TaskList 時：回顧 session 對話，產出工作摘要 + 未完成事項到 `tasks/todo.md`
+  - 檢查並保存未存的 auto memory（feedback/project/reference）
+- **適用時機**：session 結束前、預感 rate limit、長時間離開前
+- **錯誤追蹤**：失敗時記錄到 `~/.claude/.learnings/ERRORS.jsonl`
+
 ---
 
 ### GitNexus 知識圖譜類
@@ -320,7 +331,7 @@
 
 | 腳本 | 用途 |
 |------|------|
-| `pre-compact-snapshot.ts` | Context 壓縮前提醒存重要決策/糾正到 auto memory |
+| `pre-compact-snapshot.ts` | Context 壓縮前提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
 
 ### Notification
 
@@ -342,7 +353,7 @@
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `post-commit-review.ts` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
-| `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 |
+| `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `pr-watcher.sh` | 定期輪詢 GitHub PR，有新/更新的 PR 時發 macOS 通知，點擊觸發 review |
 | `review-pr.sh` | 本機手動觸發 PR review，結果貼到 PR comment |
