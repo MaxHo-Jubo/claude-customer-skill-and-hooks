@@ -157,7 +157,7 @@ if [ -f "$settings_path" ]; then
     [ "$thinking_val" = "true" ] && thinking_on=true
 fi
 
-# ── LINE 1: Dir (branch*) │ Model │ ctx:N% │ Session │ Thinking ──
+# ── LINE 1: Dir (branch*) ──
 cwd=$(echo "$input" | jq -r '.cwd // .workspace.current_dir // ""')
 [ -z "$cwd" ] || [ "$cwd" = "null" ] && cwd=$(pwd)
 home_dir="$HOME"
@@ -205,20 +205,6 @@ line1="${yellow}${short_dir}${reset}"
 if [ -n "$git_branch" ]; then
     line1+=" ${green}(${git_branch}${red}${git_dirty}${green})${reset}"
 fi
-line1+="${sep}"
-line1+="${cyan}${model_name}${reset}"
-line1+="${sep}"
-line1+="${ctx_color}ctx:${pct_remaining}%${reset}"
-if [ -n "$session_duration" ]; then
-    line1+="${sep}"
-    line1+="${dim}⏱ ${reset}${white}${session_duration}${reset}"
-fi
-line1+="${sep}"
-if $thinking_on; then
-    line1+="${magenta}◐ thinking${reset}"
-else
-    line1+="${dim}◑ thinking${reset}"
-fi
 
 # ── Transcript data (cached 3s) ────────────────────────
 t_tools="" t_agents=0 t_todo="" t_session_name=""
@@ -264,8 +250,8 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
             elif $b.name == "TaskUpdate" then
               ($b.input.id // $b.input.taskId // null) as $raw |
               (if $raw == null then -1
-               elif ($raw | type) == "number" then $raw
-               else ($raw | tonumber? // -1) end) as $idx |
+               elif ($raw | type) == "number" then ($raw - 1)
+               else (($raw | tonumber? // -1) - 1) end) as $idx |
               if $idx >= 0 and $idx < (.todos | length) then
                 .todos[$idx].s = ($b.input.status // .todos[$idx].s)
               else . end
@@ -333,43 +319,74 @@ else
     cfg_hooks=$(echo "$cfg_data" | jq -r '.hooks // 0' 2>/dev/null)
 fi
 
-# ── LINE 2: Session │ Tools │ Agents │ Todos │ Config ──
+# ── LINE 2: Account │ Session name │ Model │ Context │ Session │ Thinking ──
 line2=""
+
+# 帳號名稱（依據 CLAUDE_CONFIG_DIR 判斷）
+account_name="max"
+if [ -n "$CLAUDE_CONFIG_DIR" ] && [ "$CLAUDE_CONFIG_DIR" != "$HOME/.claude" ]; then
+    # 從目錄名稱取帳號（如 ~/.claude-max-2 → max-2，再對應帳號名）
+    case "$CLAUDE_CONFIG_DIR" in
+        *claude-max-2*) account_name="jubo-team" ;;
+        *) account_name=$(basename "$CLAUDE_CONFIG_DIR") ;;
+    esac
+fi
+line2+="${orange}${account_name}${reset}"
 
 # session name
 if [ -n "$t_session_name" ] && [ "$t_session_name" != "null" ]; then
-    line2+="${magenta}${t_session_name}${reset}"
+    line2+="${sep}${magenta}${t_session_name}${reset}"
 fi
+
+# model
+line2+="${sep}${cyan}${model_name}${reset}"
+
+# context
+line2+="${sep}${ctx_color}ctx:${pct_remaining}%${reset}"
+
+# session duration
+if [ -n "$session_duration" ]; then
+    line2+="${sep}${dim}⏱ ${reset}${white}${session_duration}${reset}"
+fi
+
+# thinking
+if $thinking_on; then
+    line2+="${sep}${magenta}◐ thinking${reset}"
+else
+    line2+="${sep}${dim}◑ thinking${reset}"
+fi
+
+# ── LINE 3: Tools │ Agents │ Todos │ Config ──
+line3=""
 
 # 工具統計
 if [ -n "$t_tools" ]; then
-    [ -n "$line2" ] && line2+="${sep}"
-    line2+="${cyan}◐${reset} ${white}${t_tools}${reset}"
+    [ -n "$line3" ] && line3+="${sep}"
+    line3+="${cyan}◐${reset} ${white}${t_tools}${reset}"
 fi
 
 # agent 數量
 if [ "$t_agents" -gt 0 ] 2>/dev/null; then
-    [ -n "$line2" ] && line2+="${sep}"
-    line2+="${green}⚡${t_agents} agents${reset}"
+    [ -n "$line3" ] && line3+="${sep}"
+    line3+="${green}⚡${t_agents} agents${reset}"
 fi
 
 # todo 進度
 if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
-    [ -n "$line2" ] && line2+="${sep}"
-    line2+="${yellow}☑ ${t_todo}${reset}"
+    [ -n "$line3" ] && line3+="${sep}"
+    line3+="${yellow}☑ ${t_todo}${reset}"
 fi
 
 # config counts
-[ -n "$line2" ] && line2+="${sep}"
-line2+="${dim}${cfg_md}md ${cfg_rules}rules ${cfg_hooks}hooks${reset}"
+[ -n "$line3" ] && line3+="${sep}"
+line3+="${dim}${cfg_md}md ${cfg_rules}rules ${cfg_hooks}hooks${reset}"
 
 # ── Rate limit data（2.1.80+ 原生支援，從 stdin JSON 取得）──
 # STEP 01: 從原生 rate_limits 取得資料，轉換欄位名稱以相容既有 render 邏輯
 # 原生格式: used_percentage (int) + resets_at (epoch)
 # 既有格式: utilization (float) + resets_at (ISO 8601)
 usage_stale=false
-cache_file="/tmp/claude/statusline-usage-cache.json"
-mkdir -p /tmp/claude
+cache_file="$HOME/.claude/statusline-usage-cache.json"
 
 usage_data=$(echo "$input" | jq -c '
   .rate_limits // empty
@@ -537,6 +554,7 @@ fi
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
+[ -n "$line3" ] && printf "\n%b" "$line3"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
 [ -n "$todo_line" ] && printf "\n%b" "$todo_line"
 

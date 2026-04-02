@@ -237,6 +237,18 @@
 
 ---
 
+#### claude-max-quota — 多帳號額度管理
+
+- **位置**：`~/.claude/skills/claude-max-quota/SKILL.md`
+- **用法**：`/claude-max-quota`、`cq`、「額度」、「quota」、「換帳號」、「切帳號」
+- **功能**：
+  - 查詢所有 Claude Max 帳號的週額度與 5h 額度使用率
+  - 自動推薦使用率最低的帳號
+  - 提供多帳號設定流程指引（CLAUDE_CONFIG_DIR + zshrc alias + statusline）
+- **依賴**：`scripts/check-quota.sh`、macOS Keychain 中的 Claude Code credentials
+
+---
+
 ### GitNexus 知識圖譜類
 
 > 這四個 skill 沒有 slash command，透過 GitNexus API 自動啟用。
@@ -281,23 +293,23 @@
 
 | 腳本 | 用途 |
 |------|------|
-| `skill-activation-hook.cjs` | 分析使用者輸入，檢查是否觸發特定 skill |
+| `skill-activation-hook.ts` | 分析使用者輸入，檢查是否觸發特定 skill |
 
 ### PreToolUse
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Grep\|Glob\|Bash` | `gitnexus-hook.cjs` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
+| `Grep\|Glob\|Bash` | `gitnexus-hook.ts` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
 | `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 
 ### PostToolUse
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Write\|Edit` | `spec-section-validator.cjs` | 驗證寫入的 spec 文件區段格式是否正確 |
-| `Write\|Edit` | `inventory-drift-detector.cjs` | 偵測 inventory 索引是否需要更新 |
-| `Write\|Edit` | `skill-version-check.cjs` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
-| `Bash` | `post-commit-review.cjs` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
+| `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
+| `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
+| `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
+| `Bash` | `post-commit-review.ts` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -308,7 +320,7 @@
 
 | 腳本 | 用途 |
 |------|------|
-| `pre-compact-snapshot.cjs` | Context 壓縮前提醒存重要決策/糾正到 auto memory |
+| `pre-compact-snapshot.ts` | Context 壓縮前提醒存重要決策/糾正到 auto memory |
 
 ### Notification
 
@@ -324,18 +336,19 @@
 |------|------|
 | `hook-error-wrapper.sh` | 包裝 hook 命令，失敗時記錄到 `ERRORS.jsonl`（所有 hook 的外層 wrapper） |
 | `detect-jira-issue.sh` | 從 git branch 解析 Jira issue key |
-| `generate-spec-mapping.cjs` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
-| `spec-section-validator.cjs` | 驗證 spec 必要區段是否存在 |
-| `inventory-drift-detector.cjs` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
-| `skill-activation-hook.cjs` | 分析輸入文字判斷是否要啟動 skill |
-| `skill-version-check.cjs` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
-| `post-commit-review.cjs` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
-| `pre-compact-snapshot.cjs` | PreCompact hook — 壓縮前提醒存記憶 |
+| `generate-spec-mapping.ts` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
+| `spec-section-validator.ts` | 驗證 spec 必要區段是否存在 |
+| `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
+| `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
+| `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
+| `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `pr-watcher.sh` | 定期輪詢 GitHub PR，有新/更新的 PR 時發 macOS 通知，點擊觸發 review |
 | `review-pr.sh` | 本機手動觸發 PR review，結果貼到 PR comment |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |
-| `add-obsidian-tags.cjs` | 為 auto memory markdown 檔案補上 Obsidian tags |
+| `add-obsidian-tags.ts` | 為 auto memory markdown 檔案補上 Obsidian tags |
+| `check-quota.sh` | 多帳號額度查詢（Bash + Python），從 Keychain 讀 OAuth token 呼叫 Anthropic API，輸出彩色進度條與推薦帳號 |
 
 ---
 
@@ -407,7 +420,7 @@
 > |--------|---------|---------|
 > | context7 | 改走 plugin 通道（`context7@claude-plugins-official`） | plugin 啟用中，不需獨立 MCP 設定 |
 > | gitlab | 不再使用 | — |
-> | gitnexus | 改走 PreToolUse hook（`gitnexus-hook.cjs`）呼叫 CLI | npm 全域安裝 `gitnexus@1.2.8`，hook + 4 個 skills 仍在運作 |
+> | gitnexus | 改走 PreToolUse hook（`gitnexus-hook.ts`）呼叫 CLI | npm 全域安裝 `gitnexus@1.2.8`，hook + 4 個 skills 仍在運作 |
 >
 > 其他電腦同步時無需重新加入這些 MCP Server。
 

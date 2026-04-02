@@ -1,5 +1,4 @@
-# MAXHERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
-
+# MAX-HERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
 
 
 <gates label="硬性閘門 | 優先序: GATE-1>GATE-2>GATE-3 | 缺一項=STOP">
@@ -73,10 +72,12 @@ COMMIT-MSG:
   types: feat/fix/refactor/chore/docs/test
   desc-with-featurepath: 檔案有 FeaturePath 標註→說明以完整 FeaturePath 開頭再接描述
   desc-without-featurepath: XXApp-描述 或 系統名稱-描述
+  featurepath-rule: 寫 commit message 前先確認修改檔案的業務路徑；有 FeaturePath 註解直接用，無則從業務功能路徑推導
   examples:
     - "[LVB-7866] fix(App): 居服App-我的班表-班表-班表-修正忘簽退因請假班被擋住而失效"
     - "[ERPD-11696] feat(App): 日照App-移除code push設定與依賴"
     - "fix(App): 居服App-修正登入問題"
+    - "[ERPD-XXXX] fix(FE): 居服系統-個案-居服評鑑表單-居家服務個案照護計畫-修正欄位驗證邏輯"
 
 CODE-STYLE:
   tool: 編輯用 Edit，建檔用 Write
@@ -98,7 +99,6 @@ CODE-STYLE:
   comment-accuracy: 程式邏輯與註解必須一致，不得有過時/錯誤註解；註解不得有錯字
   global-mutation: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
   anti-overengineering: 先寫最簡單能動版本→再考慮抽象 | 修改前 grep 全檔確認使用點 | 改完跑一次
-  skill-version: 編輯 SKILL.md 內容時須同步更新 version 欄位（semver：fix→patch, 功能→minor, 破壞性→major）
 
 </rules>
 
@@ -152,34 +152,7 @@ AUTO-BUG-FIX:
   trigger: bug report / CI 失敗 / 錯誤 log
   action: 直接修，不等人帶路，不需使用者切 context
 
-POST-COMMIT-REVIEW:
-  trigger: 用 Bash tool 執行 git commit 且成功
-  skip-when: commit 命令同時包含 push | 使用者說「commit and push」| 空 commit | commit 失敗
-  mandatory: 五步驟全部執行，不可中斷，不可因前一步結果而跳過後續步驟
-  action:
-    1. 對本次 commit 修改的檔案執行 npx eslint（使用專案 .eslintrc.json）→ 有錯誤則修正並 amend commit
-    2. 執行 /simplify skill → 有修改則 amend commit，無修改則繼續下一步
-    3. 執行 pr-reviewer agent（lite 模式）→ 逐條比對 CODE-REVIEW-RULE.md，產出 CRITICAL/MINOR/INFO + 品質評分 → 自動修正 CRITICAL issue，不 commit
-    4. 執行 /pr-review-toolkit:review-pr code comments errors tests types（不跑 simplify 面向，步驟 2 已處理）→ 自動修正 Critical/Important issue，不 commit
-    5. 執行 osascript 發送 macOS 通知「commit 與 review 完成」
-  on-complete: 五步驟全部完成後才算結束，回報結果給使用者
-  on-self-fix:
-    trigger: simplify/review 發現問題且該問題是自己這次寫出來的（不是既有程式碼）
-    action: 存 feedback memory（auto memory），記錄「我傾向犯這個錯」+ 正確做法 + why
-    skip: 問題來自既有程式碼的順手修正（不是自己的壞習慣）
-
 </rhythm>
-
-<compact label="壓縮時保留優先序 | 高→低">
-
-PRESERVE:
-  1-must: 架構決策（完整保留，禁止摘要化）
-  2-keep: 已修改檔案及關鍵變更
-  3-keep: 當前驗證狀態（pass/fail）
-  4-keep: 未完成 TODO 與 rollback 備註
-  5-drop: 工具輸出（僅保留 pass/fail 結果）
-
-</compact>
 
 <ref label="on-demand — 已由 rules/ 自動載入，勿重複內容">
 
