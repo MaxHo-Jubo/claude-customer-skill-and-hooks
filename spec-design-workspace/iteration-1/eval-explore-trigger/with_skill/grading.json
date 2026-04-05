@@ -1,0 +1,21 @@
+{
+  "eval_name": "eval-explore-trigger",
+  "expectations": [
+    {
+      "text": "識別為模糊需求，選擇從 Phase 0 (explore) 開始",
+      "passed": true,
+      "evidence": "分析明確寫道：「應從 Phase 0: Explore 開始。」並解釋「使用者明確說『還沒想清楚』，代表需求處於模糊狀態，問題空間尚未定義。」"
+    },
+    {
+      "text": "提到 openspec explore 模式或自由探索",
+      "passed": true,
+      "evidence": "分析在 Phase 0 行為中提到「若專案已有 openspec change，讀取既有 artifact 作為探索上下文」，並在整體流程預期路徑中列出「Phase 0: Explore（預計 2-5 輪對話）— 釐清問題空間、痛點、現有流程」。Phase 0 的描述包含自由探索行為：問問題、挑戰假設、讀 codebase、畫 ASCII 圖、比較方案、發散思考。"
+    },
+    {
+      "text": "不直接跳到 brainstorming 或撰寫 spec",
+      "passed": true,
+      "evidence": "分析明確指出「Phase 1-4（brainstorming）需要有一定的問題理解基礎才能結構化收斂，直接跳進去會導致在錯誤的問題空間上收斂。」流程圖也顯示 Phase 0 → Phase 1-4 的順序，並強調 Phase 0 的價值是「防止過早收斂」。"
+    }
+  ],
+  "overall_pass": true
+}

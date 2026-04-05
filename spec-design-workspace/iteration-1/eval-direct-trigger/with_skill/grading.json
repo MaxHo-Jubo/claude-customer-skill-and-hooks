@@ -1,0 +1,21 @@
+{
+  "eval_name": "eval-direct-trigger",
+  "expectations": [
+    {
+      "text": "識別為明確需求，跳過 Phase 0",
+      "passed": true,
+      "evidence": "分析明確寫道：「從 Phase 1（Brainstorming）開始，跳過 Phase 0。」並引用 SKILL.md 的跳過條件：「使用者帶著明確需求直接來（如 /spec-design 新增使用者匯出功能），可跳過 Phase 0 直接進 Phase 1。」"
+    },
+    {
+      "text": "直接進入 Phase 1-4 (brainstorming)",
+      "passed": true,
+      "evidence": "分析在關鍵判斷摘要中明確列出「起始 Phase: Phase 1（Brainstorming）」，完整流程預覽表格中 Phase 0 被劃掉（~~0~~ ~~跳過~~），Phase 1-4 標記為「調用 superpowers:brainstorming，與使用者互動釐清需求」。"
+    },
+    {
+      "text": "提到調用 superpowers:brainstorming",
+      "passed": true,
+      "evidence": "分析明確寫道「第一個動作：調用 superpowers:brainstorming skill」，並詳細描述「使用 Skill tool 調用 superpowers:brainstorming，將使用者的需求描述『新增使用者匯出 CSV 功能』作為初始上下文傳入。」"
+    }
+  ],
+  "overall_pass": true
+}

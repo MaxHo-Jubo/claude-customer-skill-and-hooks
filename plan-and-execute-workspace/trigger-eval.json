@@ -1,0 +1,82 @@
+[
+  {
+    "query": "/plan-and-execute my-feature",
+    "should_trigger": true
+  },
+  {
+    "query": "openspec 的 plan 寫好了，spec-design review 也過了，開始執行實作吧",
+    "should_trigger": true
+  },
+  {
+    "query": "從 spec 開工吧，change 名稱是 schedule-auto-assign",
+    "should_trigger": true
+  },
+  {
+    "query": "從 spec 開始實作 user-export 這個 change，plan.md 已經準備好了",
+    "should_trigger": true
+  },
+  {
+    "query": "執行計畫，change 是 notification-system，plan.md 在 openspec/changes/ 下面",
+    "should_trigger": true
+  },
+  {
+    "query": "開始做吧，plan.md 已經 review 過了，所有 Wave 都確認沒問題",
+    "should_trigger": true
+  },
+  {
+    "query": "/plan-and-execute --resume notification-system",
+    "should_trigger": true
+  },
+  {
+    "query": "上次跑到 Wave 3 context window 不夠停了，繼續跑 plan-and-execute，change 是 billing-refactor",
+    "should_trigger": true
+  },
+  {
+    "query": "我想設計一個新的排班自動分配功能，還沒想清楚要怎麼做，先來 brainstorm 一下",
+    "should_trigger": false
+  },
+  {
+    "query": "幫我看一下 src/services/scheduleService.ts 這個模組的架構，產出一份 spec 文件",
+    "should_trigger": false
+  },
+  {
+    "query": "這個 calculateOvertime 函式有 bug，跑出來的加班時數不對，幫我修",
+    "should_trigger": false
+  },
+  {
+    "query": "看一下 ERPD-12345 這個 Jira issue 的內容，幫我建一個 branch",
+    "should_trigger": false
+  },
+  {
+    "query": "把 luna 前端的 UserTable component 從 class component 改成 functional component + hooks",
+    "should_trigger": false
+  },
+  {
+    "query": "跑一下 weekly review，整理這週的記憶",
+    "should_trigger": false
+  },
+  {
+    "query": "幫我同步一下 Claude 的設定到 repo",
+    "should_trigger": false
+  },
+  {
+    "query": "幫 src/utils/dateHelper.ts 裡面的所有 function 寫單元測試",
+    "should_trigger": false
+  },
+  {
+    "query": "我還沒有 plan，這個功能要怎麼做我不確定，先幫我規劃一下架構和步驟",
+    "should_trigger": false
+  },
+  {
+    "query": "分析一下這個需求值不值得做：客戶要求我們支援同時登入多個裝置",
+    "should_trigger": false
+  },
+  {
+    "query": "CI 掛了，jest 跑到 ScheduleService.test.ts 就 timeout，error log 在這裡，幫我看看",
+    "should_trigger": false
+  },
+  {
+    "query": "幫我 review 一下這個 PR，看有沒有什麼問題",
+    "should_trigger": false
+  }
+]
