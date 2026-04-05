@@ -150,11 +150,12 @@ pct_remaining=$(( 100 - pct_used ))
 # transcript 路徑（用於取得工具/agent/todo 資料）
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 
-thinking_on=false
+# thinking 系統預設開啟，只有明確設為 false 才關閉
+thinking_on=true
 settings_path="$HOME/.claude/settings.json"
 if [ -f "$settings_path" ]; then
-    thinking_val=$(jq -r '.alwaysThinkingEnabled // false' "$settings_path" 2>/dev/null)
-    [ "$thinking_val" = "true" ] && thinking_on=true
+    thinking_val=$(jq -r '.alwaysThinkingEnabled // "unset"' "$settings_path" 2>/dev/null)
+    [ "$thinking_val" = "false" ] && thinking_on=false
 fi
 
 # ── LINE 1: Dir (branch*) ──
@@ -351,9 +352,9 @@ fi
 
 # thinking
 if $thinking_on; then
-    line2+="${sep}${magenta}◐ thinking${reset}"
+    line2+="${sep}${magenta}◐ thinking${reset}${dim}(on by default, meta+t to switch current thinking mode)${reset}"
 else
-    line2+="${sep}${dim}◑ thinking${reset}"
+    line2+="${sep}${dim}◑ thinking(off by default, meta+t to switch current thinking mode)${reset}"
 fi
 
 # ── LINE 3: Tools │ Agents │ Todos │ Config ──
