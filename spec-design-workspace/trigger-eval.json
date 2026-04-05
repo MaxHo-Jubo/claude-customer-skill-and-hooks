@@ -1,0 +1,82 @@
+[
+  {
+    "query": "我們的居服 App 需要加一個新的排班自動分配功能，護理主管希望系統能根據照服員的證照、距離、偏好自動排班。目前是手動用 Excel 排的，每週要花 3-4 小時。我還沒想清楚要怎麼做，先來討論一下",
+    "should_trigger": true
+  },
+  {
+    "query": "/spec-design 新增使用者匯出 CSV 功能",
+    "should_trigger": true
+  },
+  {
+    "query": "我想在 luna 後端加一個新的 API endpoint，讓家屬 App 可以查詢照顧計畫的歷史紀錄。需要先設計一下資料結構和 API 介面，你覺得怎麼做比較好",
+    "should_trigger": true
+  },
+  {
+    "query": "公司想做一個內部的 OKR 追蹤系統，目前完全沒有任何東西，想從零開始設計。你能幫我 brainstorm 一下嗎",
+    "should_trigger": true
+  },
+  {
+    "query": "我們討論一下要不要把日照 App 的打卡功能從 GPS 改成 NFC，這是一個蠻大的架構變動，需要先寫個 RFC",
+    "should_trigger": true
+  },
+  {
+    "query": "幫我設計一個新功能：讓照服員在 App 上直接回報個案的體溫、血壓等生理量測數據，需要跟後端 API 對接",
+    "should_trigger": true
+  },
+  {
+    "query": "我想探索一下在我們的系統裡導入 AI 輔助排班的可能性，目前只是一個想法，還沒有具體方案",
+    "should_trigger": true
+  },
+  {
+    "query": "需要在 v3 前端加一個新的報表頁面，顯示每月的服務時數統計和個案滿意度趨勢圖。想先做個技術方案討論",
+    "should_trigger": true
+  },
+  {
+    "query": "這個 calculateOvertime 函式已經 200 行了，裡面一堆巢狀 if-else，幫我重構一下",
+    "should_trigger": false
+  },
+  {
+    "query": "幫我看一下 src/services/scheduleService.ts 這個模組的架構，產出一份 spec 文件",
+    "should_trigger": false
+  },
+  {
+    "query": "CI 掛了，jest 跑到 ScheduleService.test.ts 就 timeout，error log 在這裡，幫我看看",
+    "should_trigger": false
+  },
+  {
+    "query": "幫 src/utils/dateHelper.ts 裡面的所有 function 寫單元測試",
+    "should_trigger": false
+  },
+  {
+    "query": "我已經有一份設計 spec 了在 docs/specs/schedule-auto-assign.md，現在要開始實作，幫我擬定 plan 然後開工",
+    "should_trigger": false
+  },
+  {
+    "query": "把 luna 前端的 UserTable component 從 class component 改成 functional component + hooks",
+    "should_trigger": false
+  },
+  {
+    "query": "看一下 ERPD-12345 這個 Jira issue 的內容，幫我建一個 branch",
+    "should_trigger": false
+  },
+  {
+    "query": "ERPD-7890 做完了，幫我比對 diff 跟 issue 需求，看有沒有漏掉的",
+    "should_trigger": false
+  },
+  {
+    "query": "幫我同步一下 Claude 的設定到 repo",
+    "should_trigger": false
+  },
+  {
+    "query": "我想在既有的登入流程裡面加一個 remember me 的 checkbox，就是一個小改動，不用大費周章",
+    "should_trigger": false
+  },
+  {
+    "query": "跑一下 weekly review，整理這週的記憶",
+    "should_trigger": false
+  },
+  {
+    "query": "分析一下這個需求值不值得做：客戶要求我們支援同時登入多個裝置",
+    "should_trigger": false
+  }
+]

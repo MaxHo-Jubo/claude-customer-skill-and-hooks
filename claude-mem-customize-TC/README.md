@@ -1,6 +1,6 @@
 # claude-mem 繁體中文化客製
 
-> 適用版本：claude-mem 10.6.2（thedotmack/claude-mem plugin）
+> 適用版本：claude-mem 11.0.0（thedotmack/claude-mem plugin）
 
 ## 說明
 
@@ -71,3 +71,11 @@ cp files/code--zh-tw.json "$CACHE_DIR/modes/"
 | `worker-service.cjs` | `~/.claude/plugins/cache/thedotmack/claude-mem/<VERSION>/scripts/` |
 | `code--zh-tw.json` | `~/.claude/plugins/cache/thedotmack/claude-mem/<VERSION>/modes/` |
 | `code--zh.json`（原版簡體） | `~/.claude/plugins/marketplaces/thedotmack/plugin/modes/` |
+
+## 版本差異記錄
+
+### v10.6.2 → v11.0.0
+
+- Terminal 輸出函式名稱改變：`bp("X")` / `_p("X")` → `mf("X")` / `ff("X")`
+- `**Investigated:**` Markdown 標籤已移除（僅保留 mf/ff 格式）
+- 其餘 UI 字串無變化

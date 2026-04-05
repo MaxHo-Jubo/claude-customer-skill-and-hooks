@@ -1,0 +1,19 @@
+{
+  "eval_id": 2,
+  "eval_name": "no-trigger",
+  "prompt": "這個 function 太長了，幫我重構",
+  "assertions": [
+    {
+      "text": "判斷 spec-design 不適用於此請求",
+      "type": "behavioral"
+    },
+    {
+      "text": "指出重構不在 spec-design 的適用範圍",
+      "type": "behavioral"
+    },
+    {
+      "text": "建議使用 method-refactor 或其他更合適的 skill",
+      "type": "behavioral"
+    }
+  ]
+}

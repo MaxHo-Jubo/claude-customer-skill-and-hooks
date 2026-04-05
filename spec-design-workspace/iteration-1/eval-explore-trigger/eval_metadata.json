@@ -1,0 +1,19 @@
+{
+  "eval_id": 0,
+  "eval_name": "explore-trigger",
+  "prompt": "我想設計一個新的排班自動分配功能，目前還沒想清楚要怎麼做",
+  "assertions": [
+    {
+      "text": "識別為模糊需求，選擇從 Phase 0 (explore) 開始",
+      "type": "behavioral"
+    },
+    {
+      "text": "提到 openspec explore 模式或自由探索",
+      "type": "behavioral"
+    },
+    {
+      "text": "不直接跳到 brainstorming 或撰寫 spec",
+      "type": "behavioral"
+    }
+  ]
+}

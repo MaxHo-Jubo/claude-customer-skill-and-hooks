@@ -1,0 +1,21 @@
+{
+  "eval_name": "eval-no-trigger",
+  "expectations": [
+    {
+      "text": "判斷 spec-design 不適用於此請求",
+      "passed": true,
+      "evidence": "分析開頭明確寫道：「不應該觸發。」並解釋「使用者的請求是『重構既有程式碼』，屬於對現有 function 的結構改善，不是從零設計新功能。」"
+    },
+    {
+      "text": "指出重構不在 spec-design 的適用範圍",
+      "passed": true,
+      "evidence": "分析直接引用 SKILL.md：「不適用於：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix。」並指出「『重構既有程式碼』被明確列為不適用場景，與使用者請求完全吻合。」"
+    },
+    {
+      "text": "建議使用 method-refactor 或其他更合適的 skill",
+      "passed": true,
+      "evidence": "分析明確推薦「method-refactor（/method-refactor）」，並引用該 skill 的描述與觸發條件，指出使用者的請求「完全符合 method-refactor 的觸發條件」，匹配信心 10/10。"
+    }
+  ],
+  "overall_pass": true
+}

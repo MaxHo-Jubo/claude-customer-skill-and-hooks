@@ -1,5 +1,5 @@
---- /Users/maxhero/.claude/plugins/marketplaces/thedotmack/plugin/modes/code--zh.json	2026-02-23 10:20:08
-+++ /Users/maxhero/.claude/plugins/cache/thedotmack/claude-mem/10.3.1/modes/code--zh-tw.json	2026-03-04 14:24:34
+--- /tmp/claude-mem-patch-work/original/code--zh.json	2026-04-05 14:29:13
++++ /tmp/claude-mem-patch-work/translated/code--zh-tw.json	2026-04-05 14:27:07
 @@ -1,24 +1,24 @@
  {
 -  "name": "Code Development (Chinese)",
@@ -29,10 +29,10 @@
 -    "xml_summary_notes_placeholder": "[关于当前进度的其他见解或观察]",
 +    "xml_summary_request_placeholder": "[捕捉使用者請求和討論/完成內容實質的簡短標題]",
 +    "xml_summary_investigated_placeholder": "[到目前為止探索了什麼？檢查了什麼？]",
-+    "xml_summary_learned_placeholder": "[了解到了什麼運作原理？]",
++    "xml_summary_learned_placeholder": "[你了解到了什麼運作原理？]",
 +    "xml_summary_completed_placeholder": "[到目前為止完成了什麼工作？發布或更改了什麼？]",
-+    "xml_summary_next_steps_placeholder": "[在此工作階段中，正在積極處理或計畫接下來處理什麼？]",
-+    "xml_summary_notes_placeholder": "[關於目前進度的其他見解或觀察]",
++    "xml_summary_next_steps_placeholder": "[在此工作階段中，你正在積極處理或計劃接下來處理什麼？]",
++    "xml_summary_notes_placeholder": "[關於當前進度的其他見解或觀察]",
  
 -    "continuation_instruction": "IMPORTANT: Continue generating observations from tool use messages using the XML structure below.\n\nLANGUAGE REQUIREMENTS: Please write the observation data in 中文",
 +    "continuation_instruction": "IMPORTANT: Continue generating observations from tool use messages using the XML structure below.\n\nLANGUAGE REQUIREMENTS: Please write the observation data in 繁體中文",

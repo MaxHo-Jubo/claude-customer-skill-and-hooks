@@ -1,0 +1,23 @@
+{
+  "skill_name": "spec-design",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "我想設計一個新的排班自動分配功能，目前還沒想清楚要怎麼做",
+      "expected_output": "進入 Phase 0 explore 模式（自由探索），不直接跳到 brainstorming",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "/spec-design 新增使用者匯出 CSV 功能",
+      "expected_output": "跳過 Phase 0，直接調用 superpowers:brainstorming",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "這個 function 太長了，幫我重構",
+      "expected_output": "不觸發 spec-design，應觸發 method-refactor 或其他 skill",
+      "files": []
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "eval_id": 1,
+  "eval_name": "direct-trigger",
+  "prompt": "/spec-design 新增使用者匯出 CSV 功能",
+  "assertions": [
+    {
+      "text": "識別為明確需求，跳過 Phase 0",
+      "type": "behavioral"
+    },
+    {
+      "text": "直接進入 Phase 1-4 (brainstorming)",
+      "type": "behavioral"
+    },
+    {
+      "text": "提到調用 superpowers:brainstorming",
+      "type": "behavioral"
+    }
+  ]
+}
