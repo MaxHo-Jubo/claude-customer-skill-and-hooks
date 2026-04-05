@@ -1,7 +1,8 @@
 {
   "env": {
     "ENABLE_LSP_TOOL": "1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_NO_FLICKER": "1"
   },
   "permissions": {
     "allow": [
@@ -377,7 +378,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/pretooluse.mjs",
+            "command": "node /Users/maxhero/.claude/plugins/cache/claude-context-mode/context-mode/1.0.53/hooks/pretooluse.mjs",
             "timeout": 10000
           }
         ]
