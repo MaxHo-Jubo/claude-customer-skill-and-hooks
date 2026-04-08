@@ -272,19 +272,24 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
             [ "$t_t" -gt 0 ] 2>/dev/null && t_todo="${t_d}/${t_t}"
         fi
 
-        # STEP 05: 寫入 cache
+        # STEP 05: 最後 assistant 回應時間（ISO 8601）
+        t_last_reply=$(jq -s -r '[.[] | select(.type == "assistant") | .timestamp // empty] | last // ""' "$transcript_path" 2>/dev/null)
+
+        # STEP 06: 寫入 cache
         jq -nc --arg name "$t_session_name" --arg tools "$t_tools" \
             --argjson agents "${t_agents:-0}" --arg todo "$t_todo" \
             --arg todo_current "$t_todo_current" \
-            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current}' > "$t_cache" 2>/dev/null
+            --arg last_reply "$t_last_reply" \
+            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current,last_reply:$last_reply}' > "$t_cache" 2>/dev/null
     else
-        # STEP 06: 讀取 cache
+        # STEP 07: 讀取 cache
         t_data=$(cat "$t_cache" 2>/dev/null)
         t_session_name=$(echo "$t_data" | jq -r '.name // ""' 2>/dev/null)
         t_tools=$(echo "$t_data" | jq -r '.tools // ""' 2>/dev/null)
         t_agents=$(echo "$t_data" | jq -r '.agents // 0' 2>/dev/null)
         t_todo=$(echo "$t_data" | jq -r '.todo // ""' 2>/dev/null)
         t_todo_current=$(echo "$t_data" | jq -r '.todo_current // ""' 2>/dev/null)
+        t_last_reply=$(echo "$t_data" | jq -r '.last_reply // ""' 2>/dev/null)
     fi
 fi
 
@@ -402,6 +407,9 @@ usage_data=$(echo "$input" | jq -c '
           resets_at: ((.seven_day.resets_at // 0) | todate)
         }
       }
+      + if .extra_usage then
+          { extra_usage: .extra_usage }
+        else {} end
     else empty end
 ' 2>/dev/null)
 
@@ -535,6 +543,23 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     fi
 fi
 
+# ── Last reply line ─────────────────────────────────────
+# 最後 assistant 回應時間，超過 55 分鐘顯示 TTL expired 警告
+last_reply_line=""
+TTL_SECONDS=3300  # 55 分鐘
+if [ -n "$t_last_reply" ] && [ "$t_last_reply" != "null" ] && [ "$t_last_reply" != "" ]; then
+    reply_epoch=$(iso_to_epoch "$t_last_reply")
+    if [ -n "$reply_epoch" ]; then
+        reply_fmt=$(format_reset_time "$t_last_reply" "datetime")
+        last_reply_line="${dim}last reply${reset} ${white}${reply_fmt}${reset}"
+        now_epoch=$(date +%s)
+        elapsed=$(( now_epoch - reply_epoch ))
+        if [ "$elapsed" -ge "$TTL_SECONDS" ]; then
+            last_reply_line+=" ${red}TTL expired${reset}"
+        fi
+    fi
+fi
+
 # ── Todo line ────────────────────────────────────────────
 todo_line=""
 if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
@@ -557,6 +582,7 @@ printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
 [ -n "$line3" ] && printf "\n%b" "$line3"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
+[ -n "$last_reply_line" ] && printf "\n%b" "$last_reply_line"
 [ -n "$todo_line" ] && printf "\n%b" "$todo_line"
 
 exit 0
