@@ -51,7 +51,7 @@
 
 ---
 
-## Skills 一覽（25 個，含 plugin 提供）
+## Skills 一覽（27 個，含 plugin 提供）
 
 ### 自訂 Skills（有 slash command）
 
@@ -74,6 +74,7 @@
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
+| r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
 
 ### 無 slash command 的 Skills
 
@@ -124,7 +125,7 @@
 |------|------|------|
 | Plugins（啟用） | 15 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、document-skills、superpowers、claude-hud、pr-review-toolkit、claude-mem |
 | Plugins（停用） | 2 | github、everything-claude-code |
-| MCP Servers | 1 | pr-watcher（獨立於 plugins 的 MCP Server 設定） |
+| MCP Servers | 2 | pr-watcher、gitnexus（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
 
@@ -133,6 +134,7 @@
 | Server | 類型 | 用途 |
 |--------|------|------|
 | pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
+| gitnexus | stdio | 程式碼知識圖譜 MCP Server（`gitnexus mcp`） |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
@@ -141,7 +143,6 @@
 > |--------|---------|---------|
 > | context7 | 改走 plugin 通道（`context7@claude-plugins-official`） | plugin 啟用中，不需獨立 MCP 設定 |
 > | gitlab | 不再使用 | — |
-> | gitnexus | 改走 PreToolUse hook（`gitnexus-hook.cjs`）呼叫 CLI | npm 全域安裝 `gitnexus@1.2.8`，hook + 4 個 skills 仍在運作 |
 >
 > 其他電腦同步時無需重新加入這些 MCP Server。
 
@@ -188,7 +189,7 @@
 
 - **安裝**：`npm install -g gitnexus`
 - **建立索引**：在專案目錄執行 `npx gitnexus analyze`，產生 `.gitnexus/` 索引
-- **整合方式**：透過 PreToolUse hook（`gitnexus-hook.cjs`）在 Grep/Glob/Bash 執行前自動注入圖譜上下文
+- **整合方式**：MCP Server（`gitnexus mcp`）+ PreToolUse hook（`gitnexus-hook.ts`）在 Grep/Glob/Bash 執行前自動注入圖譜上下文
 - **搭配的 Skills**：
 
 | Skill | 用途 |
@@ -227,10 +228,18 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 | Hook 腳本 | `~/.claude/hooks/`（含 `hook-error-wrapper.sh`、`gitnexus/gitnexus-hook.ts`） |
 | 輔助 Scripts | `~/.claude/scripts/`（`.ts`，由 Bun 執行） |
 | StatusLine | `~/.claude/statusline-command.sh` |
-| MCP Servers 設定 | `~/.claude/mcp-servers.json`（1 個獨立 server） |
+| MCP Servers 設定 | `~/.claude/mcp-servers.json`（2 個獨立 server） |
 | 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
 
 ## 變更紀錄
+
+### 2026-04-10: 新增 r15-r18-verify skill、gitnexus MCP Server 回歸、settings 更新
+
+- 新增 `r15-r18-verify` skill（R15→R18 頁面遷移功能等價性驗證）
+- gitnexus 重新加入 `mcp-servers.json` 作為 MCP Server（`gitnexus mcp`）
+- `weekly-review` skill 更新
+- settings.json 移除 `model` 欄位、新增 `alwaysThinkingEnabled: false`
+- CLAUDE.md 更新：tone 詳述、POST-COMMIT-REVIEW 區段、compact 區段
 
 ### 2026-04-05: claude-mem 11.0.0 繁中化、Stop hook 效能記錄
 

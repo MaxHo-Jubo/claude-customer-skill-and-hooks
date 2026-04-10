@@ -5,5 +5,12 @@
       "tsx",
       "/Users/maxhero/Documents/projects/pr-watcher-MCP/src/server.ts"
     ]
+  },
+  "gitnexus": {
+    "type": "stdio",
+    "command": "/Users/maxhero/.nvm/versions/node/v20.20.0/bin/gitnexus",
+    "args": [
+      "mcp"
+    ]
   }
 }
