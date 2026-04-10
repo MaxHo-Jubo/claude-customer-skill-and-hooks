@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-03-29（spec-design v3.1.1、啟用 code-simplifier plugin）
+> 上次更新：2026-04-10（新增 r15-r18-verify、gitnexus MCP 回歸）
 
 ---
 
@@ -258,6 +258,16 @@
 - **適用時機**：session 結束前、預感 rate limit、長時間離開前
 - **錯誤追蹤**：失敗時記錄到 `~/.claude/.learnings/ERRORS.jsonl`
 
+#### `/r15-r18-verify` — R15→R18 遷移驗證（v1.0.0）
+
+- **位置**：`~/.claude/skills/r15-r18-verify/SKILL.md`
+- **用法**：`/r15-r18-verify`、「驗證 r18」、「比對 r15 r18」、「遷移驗證」
+- **功能**：
+  - R15 到 R18 頁面遷移的功能等價性驗證
+  - 逐層比對 Redux、元件行為、錯誤處理等
+  - 產出結構化報告並修復發現的 bug
+- **依賴**：git repository
+
 ---
 
 ### GitNexus 知識圖譜類
@@ -418,11 +428,12 @@
 
 > 設定檔：[`mcp-servers.json`](mcp-servers.json)
 
-#### 獨立設定的 MCP Servers（1 個）
+#### 獨立設定的 MCP Servers（2 個）
 
 | Server | 類型 | 用途 |
 |--------|------|------|
 | pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
+| gitnexus | stdio | 程式碼知識圖譜 MCP Server（`gitnexus mcp`） |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
@@ -431,7 +442,6 @@
 > |--------|---------|---------|
 > | context7 | 改走 plugin 通道（`context7@claude-plugins-official`） | plugin 啟用中，不需獨立 MCP 設定 |
 > | gitlab | 不再使用 | — |
-> | gitnexus | 改走 PreToolUse hook（`gitnexus-hook.ts`）呼叫 CLI | npm 全域安裝 `gitnexus@1.2.8`，hook + 4 個 skills 仍在運作 |
 >
 > 其他電腦同步時無需重新加入這些 MCP Server。
 

@@ -253,7 +253,6 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "opus[1m]",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -417,6 +416,7 @@
     }
   },
   "language": "繁體中文",
+  "alwaysThinkingEnabled": false,
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true
 }
