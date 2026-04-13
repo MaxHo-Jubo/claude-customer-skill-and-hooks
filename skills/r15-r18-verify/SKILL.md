@@ -1,7 +1,8 @@
 ---
 name: r15-r18-verify
 description: "R15 到 R18 頁面遷移的功能等價性驗證。逐層比對 Redux、元件行為、錯誤處理等，產出結構化報告並修復發現的 bug。當使用者提到 /r15-r18-verify、「驗證 r18」、「比對 r15 r18」、「遷移驗證」時觸發。"
-version: 1.3.0
+version: 1.4.0
+context: fork
 ---
 
 # R15→R18 功能等價性驗證
