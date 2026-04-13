@@ -1,7 +1,8 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.3.0
+version: 1.4.0
+context: fork
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -135,6 +136,12 @@ tags: [weekly-review, {涉及的專案名稱}]
 date: {結束日}
 period: {起始日} ~ {結束日}
 ---
+```
+
+**同步記憶檔到 Obsidian vault：**
+
+```bash
+bash ~/.claude/scripts/sync-memories-to-obsidian.sh
 ```
 
 **輸出週報後，等待使用者確認再進入步驟 5。**

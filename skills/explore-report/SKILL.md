@@ -1,7 +1,9 @@
 ---
 name: explore-report
 description: "探索指定目錄並產出結構化報告。當使用者提到 /explore-report、「看看這個資料夾」、「這個模組的架構」、想了解目錄結構時觸發。"
-version: 1.0.0
+version: 1.1.0
+context: fork
+agent: Explore
 ---
 
 # Explore Report 探索報告
