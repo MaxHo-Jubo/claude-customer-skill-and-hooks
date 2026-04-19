@@ -232,6 +232,22 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 | MCP Servers 設定 | `~/.claude/mcp-servers.json`（2 個獨立 server） |
 | 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
 
+## Opus 4.7 遷移文件
+
+社群流傳「Opus 4.7 RLHF 已內建紀律，4.6 時代的 CLAUDE.md 規則可以砍」— 經查證部分屬實、部分需保留。三份文件記錄完整驗證與調整建議：
+
+| 文件 | 用途 |
+|------|------|
+| [docs/opus-4.7-claude-md-migration-verification.md](docs/opus-4.7-claude-md-migration-verification.md) | v1 驗證報告（初步判斷：🔴 不要全信） |
+| [docs/opus-4.7-claude-md-migration-verification-v2.md](docs/opus-4.7-claude-md-migration-verification-v2.md) | v2 驗證報告（更深入比對 Anthropic 官方文件，信心 8/10） |
+| [docs/opus-4.7-claude-md-adjustments.md](docs/opus-4.7-claude-md-adjustments.md) | 基於 v2 的逐項增/減/留建議（信心 7/10，建議實驗性逐項調整） |
+
+**已套用調整**（記錄於 CLAUDE.md）：
+- 移除 `no-sycophancy` 規則（4.7 已 RLHF 內建）
+- 精簡 `GATE-1` 為 5 步（移除自問環節）
+- tone 改為「直接/犀利/零廢話」（移除字數上限）
+- 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
+
 ## 變更紀錄
 
 ### 2026-04-19: 新增 token-analyze skill、statusline 加入 token 雙排顯示
@@ -244,6 +260,7 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
   - cost 顏色分級（綠 <$1 / 黃 $1-3 / 紅 >$3，Opus 4.x 定價）
 - 新增 `scripts/sync-memories-to-obsidian.sh`：批次同步多專案 auto memory 到 Obsidian vault
 - settings.json：新增 `effortLevel: "xhigh"`
+- 新增 `docs/opus-4.7-claude-md-*` 三份遷移驗證/建議文件（v1 報告、v2 報告、調整建議）
 
 ### 2026-04-10: 新增 r15-r18-verify skill、gitnexus MCP Server 回歸、settings 更新
 
