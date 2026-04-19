@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-04-19（新增 token-analyze、statusline 加 token 雙排）
+> 上次更新：2026-04-19（新增 r15-syntax-guard PreToolUse hook、token-analyze、statusline 加 token 雙排）
 
 ---
 
@@ -334,6 +334,7 @@
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
 | `Grep\|Glob\|Bash` | `gitnexus-hook.ts` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
+| `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
 | `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 
 ### PostToolUse

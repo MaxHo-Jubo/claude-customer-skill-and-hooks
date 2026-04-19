@@ -96,6 +96,7 @@
 | SessionStart | 啟動 session | —（空 matcher） | `context-mode/sessionstart.mjs` | context-mode 初始化 |
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.ts` | 用 GitNexus 圖譜豐富搜尋上下文 |
+| PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
@@ -249,6 +250,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-04-19 (晚): 新增 r15-syntax-guard PreToolUse hook
+
+- 新增 `hooks/r15-syntax-guard.ts`：擋下 luna_web `react_15/` 目錄下 `.js/.jsx/.ts/.tsx` 含 `?.` 或 `??` 的寫入（babel 6 + preset-es2015/stage-0 不支援 ES2020 語法，build 會炸）
+- settings.json `PreToolUse` 加入 `Write|Edit|MultiEdit` matcher 註冊此 hook
+- 將既有 `feedback_r15_no_optional_chaining.md` 從被動 memory 升級為強制 hook，避免再次寫到 review 階段才被攔截
+- 偵測會先剝除字串/註解避免誤判；違規時回傳 `permissionDecision: deny` 並附正確寫法範例
 
 ### 2026-04-19: 新增 token-analyze skill、statusline 加入 token 雙排顯示
 
