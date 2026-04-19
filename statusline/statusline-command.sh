@@ -230,12 +230,13 @@ pct_remaining=$(( 100 - pct_used ))
 # transcript 路徑（用於取得工具/agent/todo 資料）
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 
-# thinking 系統預設開啟，只有明確設為 false 才關閉
-thinking_on=true
+# effort 等級：從 settings.json 的 effortLevel 取得（無設定則 unset）
+# statusline 無法取得 thinking 即時狀態，改顯示 effort 等級
+effort_level="unset"
 settings_path="$HOME/.claude/settings.json"
 if [ -f "$settings_path" ]; then
-    thinking_val=$(jq -r '.alwaysThinkingEnabled // "unset"' "$settings_path" 2>/dev/null)
-    [ "$thinking_val" = "false" ] && thinking_on=false
+    effort_val=$(jq -r '.effortLevel // empty' "$settings_path" 2>/dev/null)
+    [ -n "$effort_val" ] && effort_level="$effort_val"
 fi
 
 # ── LINE 1: Dir (branch*) ──
@@ -559,14 +560,32 @@ if [ -n "$session_duration" ]; then
     line2+="${sep}${dim}⏱ ${reset}${white}${session_duration}${reset}"
 fi
 
-# thinking
-if $thinking_on; then
-    line2+="${sep}${magenta}◐ thinking${reset}${dim}(on by default, meta+t to switch current thinking mode)${reset}"
-else
-    line2+="${sep}${dim}◑ thinking(off by default, meta+t to switch current thinking mode)${reset}"
-fi
+# effort 等級（取代舊 thinking 欄位；statusline 拿不到 thinking 即時狀態）
+case "$effort_level" in
+    xhigh|max)
+        effort_color="$magenta"
+        effort_icon="◉"
+        ;;
+    high)
+        effort_color="$yellow"
+        effort_icon="◎"
+        ;;
+    medium)
+        effort_color="$cyan"
+        effort_icon="◐"
+        ;;
+    low)
+        effort_color="$dim"
+        effort_icon="◯"
+        ;;
+    *)
+        effort_color="$dim"
+        effort_icon="◯"
+        ;;
+esac
+line2+="${sep}${effort_color}${effort_icon} effort:${effort_level}${reset}"
 
-# ── LINE 3: Tools │ Agents │ Todos │ Config ──
+# ── LINE 3: Tools │ Agents │ Config ──（Todos 已移至最後一行）
 line3=""
 
 # 工具統計
@@ -581,11 +600,7 @@ if [ "$t_agents" -gt 0 ] 2>/dev/null; then
     line3+="${green}⚡${t_agents} agents${reset}"
 fi
 
-# todo 進度
-if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
-    [ -n "$line3" ] && line3+="${sep}"
-    line3+="${yellow}☑ ${t_todo}${reset}"
-fi
+# todo 進度已移至最後一行（Todo line），此處不重複顯示
 
 # config counts
 [ -n "$line3" ] && line3+="${sep}"
@@ -725,7 +740,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
     seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
 
-    rate_lines+="\n${white}weekly${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset} ${dim}⟳${reset} ${white}${seven_day_reset}${reset}${stale_tag}"
+    rate_lines+="\n${white}weekly${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset} ${dim}⟳${reset} ${white}${seven_day_reset}${reset}"
 
 fi
 
