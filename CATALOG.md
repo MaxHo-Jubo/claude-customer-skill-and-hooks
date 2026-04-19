@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-04-10（新增 r15-r18-verify、gitnexus MCP 回歸）
+> 上次更新：2026-04-19（新增 token-analyze、statusline 加 token 雙排）
 
 ---
 
@@ -267,6 +267,19 @@
   - 逐層比對 Redux、元件行為、錯誤處理等
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
+
+#### `/token-analyze` — Session Token 使用量分析（v1.0.0）
+
+- **位置**：`~/.claude/skills/token-analyze/SKILL.md`
+- **用法**：`/token-analyze [filename] [uuid]`、「分析 token」、「這個 session 花了多少」、「token 報表」
+- **功能**：
+  - 從 transcript JSONL 重建每個 assistant turn 的 token usage、工具呼叫、檔案存取
+  - 自動歸納 session 工作摘要（用 cc 跳幅、工具序列、檔案主題切段，3-8 段）
+  - 產出純 markdown 報表：Summary（含 Opus 4.x 成本）、Top 5 燒錢 turn、Per-turn 明細
+  - 支援自訂檔名與跨 session 分析（指定 uuid）
+- **bundled scripts**：`scripts/build-report.sh`（jq + awk 拼表，留 `__SUMMARY_PLACEHOLDER__` 給 Claude 填）
+- **evals**：`evals/evals.json` 5 案例（slash 觸發、自然語、自訂檔名、負面、跨 session）
+- **依賴**：jq、awk、本機 transcript JSONL（`~/.claude/projects/<escaped-cwd>/<uuid>.jsonl`）
 
 ---
 

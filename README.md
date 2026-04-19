@@ -75,6 +75,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
 | r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
+| token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 
 ### 無 slash command 的 Skills
 
@@ -232,6 +233,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 | 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
 
 ## 變更紀錄
+
+### 2026-04-19: 新增 token-analyze skill、statusline 加入 token 雙排顯示
+
+- 新增 `token-analyze` skill（v1.0.0）：分析 session token 使用量、自動歸納工作摘要、Top 5 燒錢 turn
+  - 包含 `scripts/build-report.sh` bundled helper、`evals/evals.json` 5 項測試案例
+  - 經 3 組 with-skill agent eval 驗證（標準執行 / 自訂檔名 / 自然語觸發）
+- `statusline-command.sh`：新增 `turn` 與 `total` 雙排 token 顯示（in / cache_create / cache_read / 累計成本 $）
+  - 利用既有 3s TTL cache 機制避免每次重算
+  - cost 顏色分級（綠 <$1 / 黃 $1-3 / 紅 >$3，Opus 4.x 定價）
+- 新增 `scripts/sync-memories-to-obsidian.sh`：批次同步多專案 auto memory 到 Obsidian vault
+- settings.json：新增 `effortLevel: "xhigh"`
 
 ### 2026-04-10: 新增 r15-r18-verify skill、gitnexus MCP Server 回歸、settings 更新
 

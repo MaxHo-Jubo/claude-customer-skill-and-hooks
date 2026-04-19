@@ -223,8 +223,10 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         t_session_name=$(head -1 "$transcript_path" | jq -r '.slug // .customTitle // ""' 2>/dev/null)
 
         # STEP 02: 工具統計（streaming jq，逐行處理不載入全檔）
+        # STEP 02.01: 砍掉 mcp__<plugin>__<server>__ 前綴，只留工具名；取 top 3
         t_tools=$(jq -r '.message?.content[]? | select(.type == "tool_use") | .name' "$transcript_path" 2>/dev/null \
-            | sort | uniq -c | sort -rn | head -5 \
+            | sed 's|^mcp__[^_]*__[^_]*__||' \
+            | sort | uniq -c | sort -rn | head -3 \
             | awk '{printf "%s×%s ", $2, $1}' | sed 's/ $//')
 
         # STEP 03: agent 數量
@@ -275,14 +277,28 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         # STEP 05: 最後 assistant 回應時間（ISO 8601）
         t_last_reply=$(jq -s -r '[.[] | select(.type == "assistant") | .timestamp // empty] | last // ""' "$transcript_path" 2>/dev/null)
 
-        # STEP 06: 寫入 cache
+        # STEP 06: token 加總（session 累計，所有 assistant turn 的 usage 加起來）
+        # 來源：transcript 每個 assistant message 都有 message.usage 四欄
+        t_usage_sum=$(jq -s '[.[] | select(.type == "assistant") | .message.usage // {}] |
+            {tin: (map(.input_tokens // 0) | add // 0),
+             tcc: (map(.cache_creation_input_tokens // 0) | add // 0),
+             tcr: (map(.cache_read_input_tokens // 0) | add // 0),
+             tout: (map(.output_tokens // 0) | add // 0)}' "$transcript_path" 2>/dev/null)
+        t_tok_in=$(echo "$t_usage_sum" | jq -r '.tin // 0' 2>/dev/null)
+        t_tok_cc=$(echo "$t_usage_sum" | jq -r '.tcc // 0' 2>/dev/null)
+        t_tok_cr=$(echo "$t_usage_sum" | jq -r '.tcr // 0' 2>/dev/null)
+        t_tok_out=$(echo "$t_usage_sum" | jq -r '.tout // 0' 2>/dev/null)
+
+        # STEP 07: 寫入 cache
         jq -nc --arg name "$t_session_name" --arg tools "$t_tools" \
             --argjson agents "${t_agents:-0}" --arg todo "$t_todo" \
             --arg todo_current "$t_todo_current" \
             --arg last_reply "$t_last_reply" \
-            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current,last_reply:$last_reply}' > "$t_cache" 2>/dev/null
+            --argjson tin "${t_tok_in:-0}" --argjson tcc "${t_tok_cc:-0}" \
+            --argjson tcr "${t_tok_cr:-0}" --argjson tout "${t_tok_out:-0}" \
+            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current,last_reply:$last_reply,tok_in:$tin,tok_cc:$tcc,tok_cr:$tcr,tok_out:$tout}' > "$t_cache" 2>/dev/null
     else
-        # STEP 07: 讀取 cache
+        # STEP 08: 讀取 cache
         t_data=$(cat "$t_cache" 2>/dev/null)
         t_session_name=$(echo "$t_data" | jq -r '.name // ""' 2>/dev/null)
         t_tools=$(echo "$t_data" | jq -r '.tools // ""' 2>/dev/null)
@@ -290,6 +306,10 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         t_todo=$(echo "$t_data" | jq -r '.todo // ""' 2>/dev/null)
         t_todo_current=$(echo "$t_data" | jq -r '.todo_current // ""' 2>/dev/null)
         t_last_reply=$(echo "$t_data" | jq -r '.last_reply // ""' 2>/dev/null)
+        t_tok_in=$(echo "$t_data" | jq -r '.tok_in // 0' 2>/dev/null)
+        t_tok_cc=$(echo "$t_data" | jq -r '.tok_cc // 0' 2>/dev/null)
+        t_tok_cr=$(echo "$t_data" | jq -r '.tok_cr // 0' 2>/dev/null)
+        t_tok_out=$(echo "$t_data" | jq -r '.tok_out // 0' 2>/dev/null)
     fi
 fi
 
@@ -559,6 +579,57 @@ if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
     fi
 fi
 
+# ── Token usage lines（turn 與 session 累計）────────────
+# Opus 4.x 定價（USD per 1M tokens）
+#   in: $15、cc: $18.75（in×1.25）、cr: $1.50（in×0.10）、out: $75
+# 來源：Anthropic 官方 pricing；變動時改下方 awk 公式
+calc_cost() {
+    local in=$1 cc=$2 cr=$3 out=$4
+    awk -v i="$in" -v c="$cc" -v r="$cr" -v o="$out" \
+        'BEGIN { printf "%.2f", (i*15 + c*18.75 + r*1.5 + o*75) / 1000000 }'
+}
+
+# 顏色：成本分級（綠/黃/紅）
+color_for_cost() {
+    awk -v c="$1" 'BEGIN {
+        if (c+0 < 1) print "g"
+        else if (c+0 < 3) print "y"
+        else print "r"
+    }'
+}
+
+# 渲染一排 token 行：label in cc cr ≈$cost
+render_tok_line() {
+    local label=$1 in=$2 cc=$3 cr=$4 out=$5
+    local cost cost_color color_code
+    cost=$(calc_cost "$in" "$cc" "$cr" "$out")
+    cost_color=$(color_for_cost "$cost")
+    case "$cost_color" in
+        g) color_code="$green" ;;
+        y) color_code="$yellow" ;;
+        r) color_code="$red" ;;
+    esac
+    local in_fmt cc_fmt cr_fmt
+    in_fmt=$(format_tokens "$in")
+    cc_fmt=$(format_tokens "$cc")
+    cr_fmt=$(format_tokens "$cr")
+    printf "${dim}%-5s${reset} in=${white}%-7s${reset} cc=${white}%-7s${reset} cr=${white}%-7s${reset} ${dim}≈${reset}${color_code}\$%s${reset}" \
+        "$label" "$in_fmt" "$cc_fmt" "$cr_fmt" "$cost"
+}
+
+# 本 turn 數字（既有 line 138-141 提取的 current_usage）
+turn_tok_line=""
+if [ "$input_tokens" -gt 0 ] || [ "$cache_create" -gt 0 ] || [ "$cache_read" -gt 0 ] 2>/dev/null; then
+    # turn 沒有 output_tokens（statusline JSON 不含），先當 0
+    turn_tok_line=$(render_tok_line "turn" "$input_tokens" "$cache_create" "$cache_read" 0)
+fi
+
+# Session 累計（從 transcript 加總）
+total_tok_line=""
+if [ -n "$t_tok_in" ] && { [ "$t_tok_in" -gt 0 ] || [ "$t_tok_cc" -gt 0 ] || [ "$t_tok_cr" -gt 0 ]; } 2>/dev/null; then
+    total_tok_line=$(render_tok_line "total" "$t_tok_in" "$t_tok_cc" "$t_tok_cr" "$t_tok_out")
+fi
+
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
@@ -566,5 +637,7 @@ printf "%b" "$line1"
 [ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
 [ -n "$last_reply_line" ] && printf "\n%b" "$last_reply_line"
 [ -n "$todo_line" ] && printf "\n%b" "$todo_line"
+[ -n "$turn_tok_line" ] && printf "\n%b" "$turn_tok_line"
+[ -n "$total_tok_line" ] && printf "\n%b" "$total_tok_line"
 
 exit 0
