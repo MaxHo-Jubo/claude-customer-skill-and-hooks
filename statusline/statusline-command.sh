@@ -231,7 +231,6 @@ pct_remaining=$(( 100 - pct_used ))
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 
 # effort 等級：從 settings.json 的 effortLevel 取得（無設定則 unset）
-# statusline 無法取得 thinking 即時狀態，改顯示 effort 等級
 effort_level="unset"
 settings_path="$HOME/.claude/settings.json"
 if [ -f "$settings_path" ]; then
@@ -560,32 +559,16 @@ if [ -n "$session_duration" ]; then
     line2+="${sep}${dim}⏱ ${reset}${white}${session_duration}${reset}"
 fi
 
-# effort 等級（取代舊 thinking 欄位；statusline 拿不到 thinking 即時狀態）
+# effort 等級
 case "$effort_level" in
-    xhigh|max)
-        effort_color="$magenta"
-        effort_icon="◉"
-        ;;
-    high)
-        effort_color="$yellow"
-        effort_icon="◎"
-        ;;
-    medium)
-        effort_color="$cyan"
-        effort_icon="◐"
-        ;;
-    low)
-        effort_color="$dim"
-        effort_icon="◯"
-        ;;
-    *)
-        effort_color="$dim"
-        effort_icon="◯"
-        ;;
+    xhigh|max) effort_color="$magenta"; effort_icon="◉" ;;
+    high)      effort_color="$yellow";  effort_icon="◎" ;;
+    medium)    effort_color="$cyan";    effort_icon="◐" ;;
+    *)         effort_color="$dim";     effort_icon="◯" ;;
 esac
 line2+="${sep}${effort_color}${effort_icon} effort:${effort_level}${reset}"
 
-# ── LINE 3: Tools │ Agents │ Config ──（Todos 已移至最後一行）
+# ── LINE 3: Tools │ Agents │ Config ──
 line3=""
 
 # 工具統計
@@ -599,8 +582,6 @@ if [ "$t_agents" -gt 0 ] 2>/dev/null; then
     [ -n "$line3" ] && line3+="${sep}"
     line3+="${green}⚡${t_agents} agents${reset}"
 fi
-
-# todo 進度已移至最後一行（Todo line），此處不重複顯示
 
 # config counts
 [ -n "$line3" ] && line3+="${sep}"
