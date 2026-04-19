@@ -75,6 +75,85 @@ build_bar() {
     printf "${bar_color}${filled_str}${dim}${empty_str}${reset}"
 }
 
+# 去除 ANSI 顏色碼
+strip_ansi() {
+    printf "%b" "$1" | sed $'s/\x1b\\[[0-9;]*m//g'
+}
+
+# 計算字串顯示寬度（去 ANSI 後）
+# - ASCII 1 格
+# - 2-byte UTF-8 → 1 格（⟳≈▸▸等 Latin Extended / General Punctuation）
+# - 3-byte UTF-8 → 視 codepoint 分類：
+#     Geometric Shapes (U+25A0~25FF，含 ●○◐◑◯◉) → 2 格（Ghostty/iTerm 實測）
+#     CJK / 全形 (U+4E00~9FFF, U+3000~30FF, U+FF00~FFEF) → 2 格
+#     其他箭頭/符號（U+2190~24FF, U+2600~26FF） → 1 格
+# - 4-byte UTF-8 → 2 格（emoji）
+visible_width() {
+    strip_ansi "$1" | awk '{
+        s=$0; w=0; i=1; n=length(s);
+        while(i<=n){
+            c=substr(s,i,1); b=0;
+            for(k=0;k<256;k++){ if(sprintf("%c",k)==c){b=k;break} }
+            if(b<128){ w+=1; i+=1 }
+            else if(b<224){ w+=1; i+=2 }
+            else if(b<240){
+                # 取 3-byte 字元的 codepoint
+                c2=substr(s,i+1,1); c3=substr(s,i+2,1);
+                b2=0; b3=0;
+                for(k=0;k<256;k++){ if(sprintf("%c",k)==c2){b2=k;break} }
+                for(k=0;k<256;k++){ if(sprintf("%c",k)==c3){b3=k;break} }
+                cp = ((b-224)*4096) + ((b2-128)*64) + (b3-128);
+                # Geometric Shapes (●○等) U+25A0..25FF = 9632..9727 → 1 格
+                if(cp >= 9632 && cp <= 9727) w+=1;
+                # Arrows / Misc Technical / Symbols U+2190..24FF = 8592..9471 → 1 格
+                else if(cp >= 8592 && cp <= 9471) w+=1;
+                # Misc Symbols U+2600..26FF = 9728..9983 → 1 格
+                else if(cp >= 9728 && cp <= 9983) w+=1;
+                # CJK / 全形 U+3000+ = 12288+ → 2 格
+                else if(cp >= 12288) w+=2;
+                else w+=1;
+                i+=3;
+            }
+            else { w+=2; i+=4 }
+        }
+        print w
+    }'
+}
+
+# 截斷純文字到 max_width（字元寬，中文 2 格）；尾端補「…」
+truncate_visible() {
+    local str="$1" max="$2"
+    awk -v s="$str" -v m="$max" '
+    BEGIN{
+        w=0; out=""; n=length(s); i=1;
+        while(i<=n && w<m){
+            c=substr(s,i,1); b=0;
+            for(k=0;k<256;k++){ if(sprintf("%c",k)==c){b=k;break} }
+            if(b<128){ cw=1; step=1 }
+            else if(b<224){ cw=1; step=2 }
+            else if(b<240){
+                c2=substr(s,i+1,1); c3=substr(s,i+2,1);
+                b2=0; b3=0;
+                for(k=0;k<256;k++){ if(sprintf("%c",k)==c2){b2=k;break} }
+                for(k=0;k<256;k++){ if(sprintf("%c",k)==c3){b3=k;break} }
+                cp = ((b-224)*4096) + ((b2-128)*64) + (b3-128);
+                if(cp >= 9632 && cp <= 9727) cw=1;
+                else if(cp >= 8592 && cp <= 9471) cw=1;
+                else if(cp >= 9728 && cp <= 9983) cw=1;
+                else if(cp >= 12288) cw=2;
+                else cw=1;
+                step=3;
+            }
+            else { cw=2; step=4 }
+            if(w+cw>m) break;
+            out = out substr(s,i,step);
+            w += cw; i += step;
+        }
+        if(i<=n) out = out "…";
+        print out
+    }'
+}
+
 iso_to_epoch() {
     local iso_str="$1"
 
@@ -113,18 +192,19 @@ format_reset_time() {
     epoch=$(iso_to_epoch "$iso_str")
     [ -z "$epoch" ] && return
 
+    # 強制 C locale → am/pm 為英文（避免 zh_TW 變成「上午/下午」）
     case "$style" in
         time)
-            date -j -r "$epoch" +"%l:%M%p" 2>/dev/null | sed 's/^ //; s/\.//g' | tr '[:upper:]' '[:lower:]' || \
-            date -d "@$epoch" +"%l:%M%P" 2>/dev/null | sed 's/^ //; s/\.//g'
+            LC_TIME=C date -j -r "$epoch" +"%l:%M%p" 2>/dev/null | sed 's/^ //; s/\.//g' | tr '[:upper:]' '[:lower:]' || \
+            LC_TIME=C date -d "@$epoch" +"%l:%M%P" 2>/dev/null | sed 's/^ //; s/\.//g'
             ;;
         datetime)
-            date -j -r "$epoch" +"%b %-d, %l:%M%p" 2>/dev/null | sed 's/  / /g; s/^ //; s/\.//g' | tr '[:upper:]' '[:lower:]' || \
-            date -d "@$epoch" +"%b %-d, %l:%M%P" 2>/dev/null | sed 's/  / /g; s/^ //; s/\.//g'
+            LC_TIME=C date -j -r "$epoch" +"%b %-d, %l:%M%p" 2>/dev/null | sed 's/  / /g; s/^ //; s/\.//g' | tr '[:upper:]' '[:lower:]' || \
+            LC_TIME=C date -d "@$epoch" +"%b %-d, %l:%M%P" 2>/dev/null | sed 's/  / /g; s/^ //; s/\.//g'
             ;;
         *)
-            date -j -r "$epoch" +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]' || \
-            date -d "@$epoch" +"%b %-d" 2>/dev/null
+            LC_TIME=C date -j -r "$epoch" +"%b %-d" 2>/dev/null | tr '[:upper:]' '[:lower:]' || \
+            LC_TIME=C date -d "@$epoch" +"%b %-d" 2>/dev/null
             ;;
     esac
 }
@@ -311,6 +391,110 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         t_tok_cr=$(echo "$t_data" | jq -r '.tok_cr // 0' 2>/dev/null)
         t_tok_out=$(echo "$t_data" | jq -r '.tok_out // 0' 2>/dev/null)
     fi
+fi
+
+# ── Lifetime 5h aggregation (cached 30s) ──────────────
+# 聚合最近 5h 內有活動的所有 session 的 usage，對齊 5h quota window
+l5_tok_in=0 l5_tok_cc=0 l5_tok_cr=0 l5_tok_out=0
+l5_cache="/tmp/claude/statusline-lifetime-5h.json"
+
+l5_refresh=true
+if [ -f "$l5_cache" ]; then
+    l5_age=$(( $(date +%s) - $(stat -f %m "$l5_cache" 2>/dev/null || echo 0) ))
+    [ "$l5_age" -lt 30 ] && l5_refresh=false
+fi
+
+if $l5_refresh; then
+    now_ts=$(date +%s)
+    cutoff_ts=$(( now_ts - 5*3600 ))
+    # STEP 01: 先用 find -mmin 快速過濾 5h 內有改動的 transcript，避免掃 2000+ 檔
+    l5_files=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -mmin -300 2>/dev/null)
+
+    if [ -n "$l5_files" ]; then
+        # STEP 02: 把符合的檔案丟給 jq 聚合，只算 timestamp 在 cutoff 之後的 assistant turn
+        l5_sum=$(echo "$l5_files" | while IFS= read -r f; do
+            [ -f "$f" ] && printf "%s\0" "$f"
+        done | xargs -0 jq -s --argjson cutoff "$cutoff_ts" '
+            [.[]
+             | select(type == "object")
+             | select(.type == "assistant")
+             | select(
+                 (.timestamp // "")
+                 | split(".")[0] + "Z"
+                 | fromdateiso8601? // 0
+                 | . >= $cutoff
+               )
+             | .message.usage // {}] |
+            {tin: (map(.input_tokens // 0) | add // 0),
+             tcc: (map(.cache_creation_input_tokens // 0) | add // 0),
+             tcr: (map(.cache_read_input_tokens // 0) | add // 0),
+             tout: (map(.output_tokens // 0) | add // 0)}
+        ' 2>/dev/null)
+
+        if [ -n "$l5_sum" ]; then
+            l5_tok_in=$(echo "$l5_sum" | jq -r '.tin // 0')
+            l5_tok_cc=$(echo "$l5_sum" | jq -r '.tcc // 0')
+            l5_tok_cr=$(echo "$l5_sum" | jq -r '.tcr // 0')
+            l5_tok_out=$(echo "$l5_sum" | jq -r '.tout // 0')
+        fi
+    fi
+
+    jq -nc --argjson tin "${l5_tok_in:-0}" --argjson tcc "${l5_tok_cc:-0}" \
+        --argjson tcr "${l5_tok_cr:-0}" --argjson tout "${l5_tok_out:-0}" \
+        '{tok_in:$tin,tok_cc:$tcc,tok_cr:$tcr,tok_out:$tout}' > "$l5_cache" 2>/dev/null
+else
+    l5_data=$(cat "$l5_cache" 2>/dev/null)
+    l5_tok_in=$(echo "$l5_data" | jq -r '.tok_in // 0')
+    l5_tok_cc=$(echo "$l5_data" | jq -r '.tok_cc // 0')
+    l5_tok_cr=$(echo "$l5_data" | jq -r '.tok_cr // 0')
+    l5_tok_out=$(echo "$l5_data" | jq -r '.tok_out // 0')
+fi
+
+# ── Compact count（讀 PreCompact hook 寫入的檔案）────────
+compact_count=0
+session_id_raw=$(echo "$input" | jq -r '.session_id // .sessionId // empty' 2>/dev/null)
+if [ -n "$session_id_raw" ]; then
+    cc_file="$HOME/.claude/compact-counts/${session_id_raw}.count"
+    if [ -f "$cc_file" ]; then
+        compact_count=$(cat "$cc_file" 2>/dev/null || echo 0)
+        [ -z "$compact_count" ] && compact_count=0
+    fi
+fi
+
+# ── Message history（transcript 尾段，取最後 N 筆 user/assistant 純文字）──
+# 只在下方 render 時使用，這裡先抽出到變數
+history_lines=""
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    # STEP 01: 抽出 user/assistant 純文字（排除 tool_result / system-reminder / caveat）
+    # STEP 02: 只保留最後 N 筆 user + 每筆 user 後方的第一句 assistant 回應
+    history_lines=$(jq -s -r '
+      [.[]
+       | select(type == "object")
+       | select(.type == "user" or .type == "assistant")
+       | if .type == "user" then
+           (if (.message.content | type) == "string" then .message.content
+            elif (.message.content | type) == "array" then
+              ((.message.content // []) | map(select(.type == "text" or (has("text") and (.type == null)))) | .[0].text // "")
+            else "" end) as $t
+           | if ($t | length) == 0 then empty
+             elif ($t | startswith("<") or startswith("[{") or startswith("Caveat:")) then empty
+             else {t: "u", x: ($t | gsub("\n"; " "))}
+             end
+         else
+           (((.message.content // []) | map(select(.type == "text")) | .[0].text // "")) as $t
+           | if ($t | length) == 0 then empty else {t: "a", x: ($t | gsub("\n"; " "))} end
+         end
+      ]
+      # 對於連續 assistant，只保留第一筆（最靠近前一個 user）
+      | reduce .[] as $m ([];
+          if ($m.t == "a" and (length > 0) and (.[length-1].t == "a")) then .
+          else . + [$m] end
+        )
+      # 取最後 8 筆（對應 box 的 8 行）
+      | .[-8:]
+      | .[]
+      | "\(.t)|\(.x)"
+    ' "$transcript_path" 2>/dev/null)
 fi
 
 # ── Config counts (cached 120s) ────────────────────────
@@ -630,14 +814,194 @@ if [ -n "$t_tok_in" ] && { [ "$t_tok_in" -gt 0 ] || [ "$t_tok_cc" -gt 0 ] || [ "
     total_tok_line=$(render_tok_line "total" "$t_tok_in" "$t_tok_cc" "$t_tok_cr" "$t_tok_out")
 fi
 
+# 5h lifetime 累計（跨 session）
+life_tok_line=""
+if { [ "$l5_tok_cc" -gt 0 ] || [ "$l5_tok_cr" -gt 0 ]; } 2>/dev/null; then
+    life_tok_line=$(render_tok_line "5h" "$l5_tok_in" "$l5_tok_cc" "$l5_tok_cr" "$l5_tok_out")
+fi
+
+# ── Build box content lines ─────────────────────────────
+# 區塊順序（自上而下）：rate limits → last reply → tokens
+# 每一行放進 box_rows 陣列，之後用 box drawing 包起來並配右側 history
+box_rows=()
+
+if [ -n "$rate_lines" ]; then
+    # rate_lines 是兩行（5h + weekly）用 \n 串起
+    while IFS= read -r r; do
+        [ -n "$r" ] && box_rows+=("$r")
+    done < <(printf "%b\n" "$rate_lines")
+fi
+
+# compact count
+if [ "$compact_count" -gt 0 ] 2>/dev/null; then
+    if [ "$compact_count" -eq 1 ]; then
+        box_rows+=("${dim}compact${reset} ${white}1 time${reset}")
+    else
+        box_rows+=("${dim}compact${reset} ${white}${compact_count} times${reset}")
+    fi
+fi
+
+# STEP 01: rate limits 與 token 統計間插入分隔線（sentinel: "__SEP__"）
+if [ -n "$turn_tok_line" ] || [ -n "$total_tok_line" ] || [ -n "$life_tok_line" ]; then
+    [ ${#box_rows[@]} -gt 0 ] && box_rows+=("__SEP__")
+fi
+
+[ -n "$turn_tok_line" ] && box_rows+=("$turn_tok_line")
+[ -n "$total_tok_line" ] && box_rows+=("$total_tok_line")
+[ -n "$life_tok_line" ] && box_rows+=("$life_tok_line")
+
+# ── History lines（右側）──────────────────────────────
+history_rows=()
+if [ -n "$history_lines" ]; then
+    while IFS= read -r hl; do
+        [ -z "$hl" ] && continue
+        tag="${hl%%|*}"
+        text="${hl#*|}"
+        case "$tag" in
+            u) history_rows+=("u|$text") ;;
+            a) history_rows+=("a|$text") ;;
+        esac
+    done <<< "$history_lines"
+fi
+
+# ── 計算 box 與 history 寬度 ─────────────────────────────
+# 計算基準：weekly 行（含中文日期 + ●○ 序列）在 Ghostty Monaspace Neon 下
+# 是最寬的內容行。我們取所有 box_rows 最大 visible_width，再加固定補正值，
+# 確保右邊框位置落在 terminal 實際 render 的最寬內容之後。
+#
+# 補正原理：Monaspace Neon 對 ●○ 等 Geometric Shapes 實測為 2 格，但由於
+# visible_width 內部計算與 terminal 實際 render 的 cell advance 有微小差異
+# （特別是帶色彩跟全形混合時），加 3 格緩衝確保右邊框不被內容擠掉。
+# 框線寬度強制以 limit rate（weekly 行）為基準
+# token 區塊維持不 pad 收合，由使用者稍後微調
+left_content_width=0
+if [ -n "$rate_lines" ]; then
+    while IFS= read -r r; do
+        [ -z "$r" ] && continue
+        w=$(visible_width "$r")
+        [ "$w" -gt "$left_content_width" ] && left_content_width=$w
+    done < <(printf "%b\n" "$rate_lines")
+fi
+# fallback: 沒 rate 資料時用所有 box_rows 最大寬
+if [ "$left_content_width" -eq 0 ]; then
+    for r in "${box_rows[@]}"; do
+        [ "$r" = "__SEP__" ] && continue
+        w=$(visible_width "$r")
+        [ "$w" -gt "$left_content_width" ] && left_content_width=$w
+    done
+fi
+
+# 邊框：│ + space + content + space + │ = content + 4
+box_outer_width=$(( left_content_width + 4 ))
+
+# 終端寬度（statusline 非 TTY 下執行，tput 不可靠）
+# 優先序：CC_STATUSLINE_WIDTH > COLUMNS > tput cols > fallback 200
+term_cols=${CC_STATUSLINE_WIDTH:-0}
+[ "$term_cols" -eq 0 ] 2>/dev/null && term_cols=${COLUMNS:-0}
+if [ "$term_cols" -eq 0 ] 2>/dev/null; then
+    term_cols=$(tput cols 2>/dev/null || echo 0)
+fi
+# tput 回 80 視為測不到 → 套 fallback 140
+[ "$term_cols" -le 80 ] 2>/dev/null && term_cols=140
+
+# 右側 history 可用寬度（扣掉 box 外框與雙空格間隔）
+history_width=$(( term_cols - box_outer_width - 2 ))
+[ "$history_width" -lt 20 ] && history_width=0
+
+# ── Box drawing 字元（Unicode single-line）────────────
+BOX_TL="┌" BOX_TR="┐" BOX_BL="└" BOX_BR="┘" BOX_H="─" BOX_V="│"
+BOX_SEP_L="├" BOX_SEP_R="┤"
+
+# 畫一條橫線（中間可帶 label）
+# $1 = 總寬（content_width），$2 = label（可空），$3 = 左角，$4 = 右角
+draw_border() {
+    local w=$1 label=$2 lc=$3 rc=$4
+    local inner
+    if [ -n "$label" ]; then
+        local lw=${#label}
+        local remain=$(( w - lw - 2 ))
+        local half=$(( remain / 2 ))
+        local rest=$(( remain - half ))
+        local left_dash="" right_dash=""
+        for ((i=0;i<half;i++)); do left_dash+="$BOX_H"; done
+        for ((i=0;i<rest;i++)); do right_dash+="$BOX_H"; done
+        inner="${left_dash} ${label} ${right_dash}"
+    else
+        for ((i=0;i<w;i++)); do inner+="$BOX_H"; done
+    fi
+    printf "${dim}%s%s%s${reset}" "$lc" "$inner" "$rc"
+}
+
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
 [ -n "$line3" ] && printf "\n%b" "$line3"
-[ -n "$rate_lines" ] && printf "\n\n%b" "$rate_lines"
+
+# ── 印一行 history（無 box 內容，右側對齊 history column）──
+print_history_for_row() {
+    local idx=$1
+    if [ "$history_width" -gt 0 ] && [ "$idx" -lt "${#history_rows[@]}" ]; then
+        local hl="${history_rows[$idx]}"
+        local tag="${hl%%|*}"
+        local text="${hl#*|}"
+        local marker txt_color trunc
+        if [ "$tag" = "u" ]; then
+            marker="${cyan}▶${reset}"
+            txt_color="${white}"
+        else
+            marker="${magenta}◀${reset}"
+            txt_color="${dim}"
+        fi
+        trunc=$(truncate_visible "$text" $(( history_width - 3 )))
+        printf "  %b %b%s${reset}" "$marker" "$txt_color" "$trunc"
+    fi
+}
+
+# Box block + 右側 history（並排，含框線行也顯示 history）
+if [ ${#box_rows[@]} -gt 0 ]; then
+    printf "\n"
+    h_idx=0
+
+    # 頂邊 + 第 1 筆 history
+    printf "%b" "$(draw_border $(( left_content_width + 2 )) "" "$BOX_TL" "$BOX_TR")"
+    print_history_for_row "$h_idx"
+    h_idx=$(( h_idx + 1 ))
+    printf "\n"
+
+    total_rows=${#box_rows[@]}
+    for ((i=0; i<total_rows; i++)); do
+        row="${box_rows[$i]}"
+
+        # sentinel 行 → 畫分隔線 ├────┤，同時並排 history
+        if [ "$row" = "__SEP__" ]; then
+            sep_inner=""
+            for ((j=0;j<left_content_width+2;j++)); do sep_inner+="$BOX_H"; done
+            printf "${dim}${BOX_SEP_L}%s${BOX_SEP_R}${reset}" "$sep_inner"
+            print_history_for_row "$h_idx"
+            h_idx=$(( h_idx + 1 ))
+            printf "\n"
+            continue
+        fi
+
+        row_w=$(visible_width "$row")
+        pad=$(( left_content_width - row_w ))
+        pad_str=""
+        for ((j=0;j<pad;j++)); do pad_str+=" "; done
+
+        # 左側 box 行
+        printf "${BOX_V} %b%s ${BOX_V}" "$row" "$pad_str"
+        print_history_for_row "$h_idx"
+        h_idx=$(( h_idx + 1 ))
+        printf "\n"
+    done
+
+    # 底邊 + 最後一筆 history
+    printf "%b" "$(draw_border $(( left_content_width + 2 )) "" "$BOX_BL" "$BOX_BR")"
+    print_history_for_row "$h_idx"
+fi
+
+# ── Box 外：last reply / todo（不受框線包圍）────────────
 [ -n "$last_reply_line" ] && printf "\n%b" "$last_reply_line"
 [ -n "$todo_line" ] && printf "\n%b" "$todo_line"
-[ -n "$turn_tok_line" ] && printf "\n%b" "$turn_tok_line"
-[ -n "$total_tok_line" ] && printf "\n%b" "$total_tok_line"
 
 exit 0
