@@ -344,6 +344,11 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact bun /Users/maxhero/.claude/scripts/pre-compact-snapshot.ts",
             "timeout": 3000,
             "statusMessage": "Saving pre-compact snapshot..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/compact-counter.sh",
+            "timeout": 1000
           }
         ]
       }
@@ -427,8 +432,8 @@
     }
   },
   "language": "繁體中文",
-  "alwaysThinkingEnabled": false,
+  "effortLevel": "xhigh",
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "effortLevel": "xhigh"
+  "skipAutoPermissionPrompt": true
 }
