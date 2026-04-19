@@ -1,0 +1,41 @@
+{
+  "skill_name": "token-analyze",
+  "description": "Eval cases for /token-analyze skill — verify trigger description + execution correctness.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "explicit-slash-command",
+      "prompt": "/token-analyze",
+      "expected_output": "skill 觸發；產出 markdown 報表（含 Session 工作摘要、Summary、Top 5、Per-turn）寫到 tasks/，回報絕對路徑與一行 summary",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "natural-language-trigger",
+      "prompt": "我想看一下這個 session 花了多少 token，幫我整理一份報表",
+      "expected_output": "skill 應被觸發；產出與 #1 同樣結構的報表",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "with-custom-filename",
+      "prompt": "/token-analyze my-debug-session.md",
+      "expected_output": "報表寫到 tasks/my-debug-session.md（自訂檔名生效）",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "near-miss-should-not-trigger",
+      "prompt": "幫我看一下這個 turn 花了幾秒",
+      "expected_output": "skill 不該觸發（問的是時間不是 token），用一般工具回答即可",
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "specific-session-uuid",
+      "prompt": "/token-analyze aa73e55f-e3da-4ebb-bee1-ec4eee62140e",
+      "expected_output": "skill 觸發；分析指定 session 的 transcript（不是當前 session），找不到時清楚報錯",
+      "files": []
+    }
+  ]
+}

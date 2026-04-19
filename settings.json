@@ -418,5 +418,6 @@
   "language": "繁體中文",
   "alwaysThinkingEnabled": false,
   "autoDreamEnabled": true,
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "effortLevel": "xhigh"
 }
