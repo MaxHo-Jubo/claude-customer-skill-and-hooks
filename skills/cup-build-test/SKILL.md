@@ -1,7 +1,7 @@
 ---
 name: cup-build-test
 description: >
-  CUP 項目從 commit 反推測試項目 → 產雙用途 spec → 產 Playwright 腳本
+  CUP 項目從 commit 反推測試項目 → 產雙用途測試計劃 → 產 Playwright 腳本
   → 正式環境半自動驗證 → 修正並重產腳本。當使用者提到 /cup-build-test、
   「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」、想為 CUP
   項目建立完整測試流程時觸發。不適用於：單一 issue 跑既有測試（用
@@ -21,13 +21,13 @@ CUP 項目是日照系統 R15→R18 升級的單元工作。每個 CUP 都需要
 4. 跑完發現測試項目本身有錯（描述不符、selector 找不到、預期錯）→ 修正
 5. 修正後的腳本給 local / staging / R18 用
 
-之前 CUP-80 是手工建檔（spec + cjs），可重用但無流程固化。本 skill 把這一整套變成可重複呼叫的工具。
+之前 CUP-80 是手工建檔（test-plan + cjs），可重用但無流程固化。本 skill 把這一整套變成可重複呼叫的工具。
 
 ## 關鍵概念
 
 ### 雙用途文件
 
-`.claude/{ISSUE_KEY}-spec.md` 同時被人讀（手動驗收）與被 skill/腳本參考（產 cjs）。
+`.claude/{ISSUE_KEY}-test-plan.md` 同時被人讀（手動驗收）與被 skill/腳本參考（產 cjs）。
 規則：
 - 每個 case 用 `[read-only]` 或 `[mutation]` 標記類型
 - 操作步驟用 markdown checkbox（人能勾、AI 能 parse）
@@ -44,10 +44,10 @@ CUP 項目是日照系統 R15→R18 升級的單元工作。每個 CUP 都需要
 
 skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用者 review：
 - 階段 1 → coverage.json review（漏什麼補什麼）
-- 階段 2 → spec.md review
+- 階段 2 → test-plan.md review
 - 階段 3 → cjs 語法檢查 + 可選 review
 - 階段 4 → dry-run 計畫表 + 跑完 summary
-- 階段 5 → spec 修正 diff
+- 階段 5 → test-plan 修正 diff
 - 階段 6 → 印用法
 
 ### 產物 git 政策
@@ -55,7 +55,7 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
 **所有產物不入 repo**。skill 會自動檢查 frontend/.gitignore 是否包含以下規則，缺則 append：
 
 ```
-.claude/CUP-*-spec.md
+.claude/CUP-*-test-plan.md
 .claude/CUP-*-test.cjs
 .claude/CUP-*-temp/
 .claude/CUP-*-coverage.json
@@ -83,7 +83,7 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
 | `--from-stage N` | 從第 N 階段開始（1-6），跳過前面 |
 | `--issue CUP-XX` | 手動指定 issue（branch 名解析失敗時） |
 | `--with-gitnexus` | 階段 1 加碼用 GitNexus 分析間接依賴 |
-| `--focus auto\|equivalence` | 階段 2 spec 產出 focus；預設 `auto`（全功能列舉），`equivalence` 專注 R15/R18 行為差異（從 commit 訊息抽取「修正/修復 R18 升級」類字眼） |
+| `--focus auto\|equivalence` | 階段 2 test-plan 產出 focus；預設 `auto`（全功能列舉），`equivalence` 專注 R15/R18 行為差異（從 commit 訊息抽取「修正/修復 R18 升級」類字眼） |
 | `--only A1` | 階段 4 只跑特定 prefix |
 
 ---
@@ -180,10 +180,10 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
 
 ---
 
-## 階段 2：產出 spec 文件
+## 階段 2：產出測試計劃
 
 **輸入**：`coverage.json` + 使用者補充
-**輸出**：`.claude/{ISSUE_KEY}-spec.md`
+**輸出**：`.claude/{ISSUE_KEY}-test-plan.md`
 
 ### 機械步驟
 
@@ -205,9 +205,9 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
    | `{{LARGE_FEATURE_A_TITLE}}` 等 | 從 inferredFeatures 拆組分配 |
    | `{{SUB_FEATURE_A1_TITLE}}` 等 | 同上，下一層細分 |
 
-3. **依 `--focus` 旗標決定 spec 範圍**：
+3. **依 `--focus` 旗標決定 test-plan 範圍**：
    - `auto`（預設）：依 inferredFeatures 拆大功能段（A、B、C），列舉全功能
-   - `equivalence`：只圈出 commit 訊息中含「修正/修復/解決 R18」類字眼的範圍。例：`fix(FE): ...修正 R18 升級後 modal 不會自動關閉` → spec 大功能段聚焦「modal 自動關閉」這一點，其他功能放「附錄：未列入測試（已驗證等價）」
+   - `equivalence`：只圈出 commit 訊息中含「修正/修復/解決 R18」類字眼的範圍。例：`fix(FE): ...修正 R18 升級後 modal 不會自動關閉` → test-plan 大功能段聚焦「modal 自動關閉」這一點，其他功能放「附錄：未列入測試（已驗證等價）」
 4. **TEMPLATE-CASE-BLOCK 處理（核心步驟，不可跳過）**：
    - template 中所有被 `<!-- TEMPLATE-CASE-BLOCK ... -->` 與 `<!-- /TEMPLATE-CASE-BLOCK -->` 包夾的區塊，**整段重寫**，不是替換 placeholder
    - 重寫時依 coverage 推導實際操作步驟，例：
@@ -225,26 +225,26 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
    - 純 UI 互動（開 modal 不送出）→ `[read-only]`
 7. 同步「執行紀錄表」的「類型」欄位（與 case heading 標記必須一致）
 8. 填「附錄：API 覆蓋率追蹤」表
-9. 寫 `.claude/{ISSUE_KEY}-spec.md`
+9. 寫 `.claude/{ISSUE_KEY}-test-plan.md`
 10. **驗證**（兩項都要過）：
-    - `grep -n '{{[^}]*}}' .claude/{ISSUE_KEY}-spec.md` 應回 0 行（無未替換 placeholder；template 註解中的 `‹...›` 不會匹配）
-    - `grep -n 'TEMPLATE-CASE-BLOCK' .claude/{ISSUE_KEY}-spec.md` 應回 0 行（所有教學區塊已被重寫並移除標記）
+    - `grep -n '{{[^}]*}}' .claude/{ISSUE_KEY}-test-plan.md` 應回 0 行（無未替換 placeholder；template 註解中的 `‹...›` 不會匹配）
+    - `grep -n 'TEMPLATE-CASE-BLOCK' .claude/{ISSUE_KEY}-test-plan.md` 應回 0 行（所有教學區塊已被重寫並移除標記）
     - 任何剩餘都要回頭補才視為階段 2 完成
 
 ### Checkpoint 2
 
-提示使用者讀 spec.md，可手動補/刪 case 後再進階段 3。
+提示使用者讀 test-plan.md，可手動補/刪 case 後再進階段 3。
 
 ### 收尾
 
 - 階段 2 結束**刪除 coverage.json**
-- 確認 `.claude/CUP-XX-spec.md` 已被 git ignore：`cd frontend && git check-ignore -v .claude/CUP-XX-spec.md`，回 0 略過；非 0 才 append `.claude/CUP-*-spec.md` 到 frontend/.gitignore
+- 確認 `.claude/CUP-XX-test-plan.md` 已被 git ignore：`cd frontend && git check-ignore -v .claude/CUP-XX-test-plan.md`，回 0 略過；非 0 才 append `.claude/CUP-*-test-plan.md` 到 frontend/.gitignore
 
 ---
 
 ## 階段 3：產出 Playwright 腳本
 
-**輸入**：spec.md
+**輸入**：test-plan.md
 **輸出**：`.claude/{ISSUE_KEY}-test.cjs`
 
 ### 機械步驟
@@ -253,10 +253,10 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
 2. 替換 placeholder：
    - `{{ISSUE_KEY}}`
    - `{{FEATURE_TITLE}}`
-   - `{{ENTRY_PATH}}` ← 從 spec 推（看主流程第一個導航步驟）
-3. 把 spec 中每個 case 的「操作步驟」轉成 step 函式呼叫：
+   - `{{ENTRY_PATH}}` ← 從 test-plan 推（看主流程第一個導航步驟）
+3. 把 test-plan 中每個 case 的「操作步驟」轉成 step 函式呼叫：
    - 移除 `// === 測試步驟區塊 ...` 之間（含 `void step; void waitStable;`）的範例與佔位行
-   - 對每個 spec case，按操作步驟順序產 `await step(page, 'A1.1', 'descriptive-name', async (p) => { ... });`
+   - 對每個 test-plan case，按操作步驟順序產 `await step(page, 'A1.1', 'descriptive-name', async (p) => { ... });`
    - selector 優先序：`data-testid` > `getByRole` > 文字 > class
    - 不確定的 selector 用註解標 `// TODO: 階段 4 跑完後補正`
 4. 寫 `.claude/{ISSUE_KEY}-test.cjs`
@@ -275,14 +275,14 @@ skill 共 6 階段（外加階段 0），每階段結束會 checkpoint 讓使用
 
 ## 階段 4：正式環境半自動驗證
 
-**輸入**：spec.md + test.cjs
+**輸入**：test-plan.md + test.cjs
 **輸出**：`.claude/{ISSUE_KEY}-temp/r15/_results.json` + 截圖
 
 ### 4a. Dry-run（無瀏覽器）
 
-1. parse spec.md，列出所有 case 與類型
+1. parse test-plan.md，列出所有 case 與類型
 2. **偵測 ENTRY_PATH 動態參數**（CUP-180 實戰新增）：
-   - 從 spec 環境資訊表抓 `Entry path` 欄位
+   - 從 test-plan 環境資訊表抓 `Entry path` 欄位
    - regex `/{[^}]+}/` 找模板變數（例 `{caseId}`、`{orderId}`）
    - 若有，**列出必填 env vars 並中止**直到使用者提供：
      ```
@@ -310,13 +310,13 @@ A. 新增單次活動排程
 ```
 
 3. **問使用者執行模式**（三選一）：
-   - **一次跑完**（spec 穩定、case 少 < 10、mutation 不互相污染）
+   - **一次跑完**（test-plan 穩定、case 少 < 10、mutation 不互相污染）
    - **分輪跑**（按大功能 A→B→C，每輪結束 checkpoint，適合第一次跑）
    - **自訂 ONLY**（指定 prefix 例如 `A1`）
 4. **R15 baseline 自動排除 mutation**（CUP-180 實戰新增 — 正式環境跑 mutation 會污染資料）：
    - `VARIANT=r15` + `BASE_URL=https://luna.compal-health.com` 模式跑時，自動把 `[mutation]` case 標 `🚫 N/A (R15-baseline)` 並排除
    - mutation case 移到 R18 staging / local 跑（VARIANT=r18）
-   - cjs 內 `step()` 包一層：`if (VARIANT === 'r15' && /mutation/i.test(spec)) return;`（spec 標記寫進 step 第三參數時觸發）
+   - cjs 內 `step()` 包一層：`if (VARIANT === 'r15' && /mutation/i.test(caseTag)) return;`（test-plan 的 case 標記寫進 step 第三參數時觸發）
 5. 等使用者確認
 
 ### 4b. 取得登入態
@@ -368,7 +368,7 @@ ctx_execute({
 - 主 context 只保留：`summary`（pass / fail / total / consoleErrors 數量）+ fail 的 caseId、name、error 訊息
 - 完整 `_results.json` 留在磁碟，需要時再 `ctx_execute` 跑 `jq` 提特定欄位
 - **不要 `Read` 整個 _results.json**（>200 行常見）
-- 讀截圖用 subagent 隔離 token：spawn 一個 Explore agent 讀截圖檔，回報「畫面看到什麼、跟 spec 預期差在哪」（< 200 字 / fail），主 context 只保留結論
+- 讀截圖用 subagent 隔離 token：spawn 一個 Explore agent 讀截圖檔，回報「畫面看到什麼、跟 test-plan 預期差在哪」（< 200 字 / fail），主 context 只保留結論
 
 ### Console errors 分類（CUP-180 實戰新增）
 
@@ -388,20 +388,20 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 
 ---
 
-## 階段 5：根據結果修正 spec
+## 階段 5：根據結果修正 test-plan
 
 **輸入**：`_results.json` + fail case 截圖摘要
-**輸出**：更新後的 `.claude/{ISSUE_KEY}-spec.md`
+**輸出**：更新後的 `.claude/{ISSUE_KEY}-test-plan.md`
 
 ### 機械步驟
 
 對每個 fail，判斷**五類原因之一**（CUP-180 實戰擴增第 4、5 類，純三類覆蓋不夠）：
 
-1. **測試項目錯**（spec 描述不符正式環境）→ 改 spec 操作描述/預期結果
-2. **selector 錯**（spec 對但 cjs 寫錯）→ 階段 6 改 cjs，本階段不改 spec
-3. **真的是 R15 bug**（正式環境就有問題）→ spec 加註 `<!-- KNOWN-R15-BUG: ... -->`，**不改 spec 主體**，並回報使用者
-4. **環境前置不足**（進頁面後彈出公告 modal、引導 tooltip、權限 onboarding 攔截 pointer events，多 step 同時 fail 且 error 訊息類似 "click intercepted" / "element not visible"）→ 階段 6 改 cjs 補強 dismiss block（cjs template STEP 05.02 已是基礎），**不改 spec**。識別線索：≥3 step 同時 fail 且時序集中
-5. **assertion 太鬆假 PASS**（cjs 有寫 step 但 selector 太通用，沒抓到實際失敗。例：點刪除後 spec 預期「row 從 N 變 N-1」但 cjs 只 `await waitForSelector('.table')`，永遠 PASS）→ **改 spec**：操作步驟補「記下變化前 N → 操作後應 < N → 清空後應 = 0」這類前後比對，再進階段 6 重產 cjs 帶 assertion
+1. **測試項目錯**（test-plan 描述不符正式環境）→ 改 test-plan 操作描述/預期結果
+2. **selector 錯**（test-plan 對但 cjs 寫錯）→ 階段 6 改 cjs，本階段不改 test-plan
+3. **真的是 R15 bug**（正式環境就有問題）→ test-plan 加註 `<!-- KNOWN-R15-BUG: ... -->`，**不改 test-plan 主體**，並回報使用者
+4. **環境前置不足**（進頁面後彈出公告 modal、引導 tooltip、權限 onboarding 攔截 pointer events，多 step 同時 fail 且 error 訊息類似 "click intercepted" / "element not visible"）→ 階段 6 改 cjs 補強 dismiss block（cjs template STEP 05.02 已是基礎），**不改 test-plan**。識別線索：≥3 step 同時 fail 且時序集中
+5. **assertion 太鬆假 PASS**（cjs 有寫 step 但 selector 太通用，沒抓到實際失敗。例：點刪除後 test-plan 預期「row 從 N 變 N-1」但 cjs 只 `await waitForSelector('.table')`，永遠 PASS）→ **改 test-plan**：操作步驟補「記下變化前 N → 操作後應 < N → 清空後應 = 0」這類前後比對，再進階段 6 重產 cjs 帶 assertion
 
 **選擇規則**：
 - 多 step 集體 fail → 先疑第 4 類
@@ -423,13 +423,13 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 
 ### Checkpoint 5
 
-讀 spec.md 改前/改後內容，產出簡短 diff 摘要給使用者確認。
+讀 test-plan.md 改前/改後內容，產出簡短 diff 摘要給使用者確認。
 
 ---
 
 ## 階段 6：重新產出 Playwright 腳本
 
-**輸入**：修正後 spec.md
+**輸入**：修正後 test-plan.md
 **輸出**：覆蓋 `.claude/{ISSUE_KEY}-test.cjs`
 
 ### 機械步驟
@@ -439,20 +439,20 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 1. 讀現有 `.claude/{ISSUE_KEY}-test.cjs`（階段 3 產出，階段 4c 已驗證部分為可用）
 2. 對應階段 5 的 `_results.json`，分類每個 step：
    - `PASS` 的 step → **不動**
-   - `FAIL` 但屬「測試項目錯」 → spec 已改，按新 spec 重產對應 step（換 selector / 換 step name）
+   - `FAIL` 但屬「測試項目錯」 → test-plan 已改，按新 test-plan 重產對應 step（換 selector / 換 step name）
    - `FAIL` 但屬「selector 錯」 → 按階段 5 學到的 selector 改寫該 step
    - `FAIL` 但屬「R15 bug」 → 該 step 加 `// KNOWN-R15-BUG: ...` 註解；保留原寫法供 R18 驗證
 3. **保留 cjs 中所有 PASS step 的原始寫法**（避免「重產」誤改可用的 selector）
 4. 移除階段 3 留下的 `// TODO: 階段 4 跑完後補正` 註解（已 PASS 的）
 5. 移除測試步驟區塊上方的 `void step; void waitStable;`（此時已有實際 step 呼叫，不需佔位）
 6. 寫回 `.claude/{ISSUE_KEY}-test.cjs`，跑 `node --check` 驗證
-7. **重跑驗證**（CUP-180 實戰新增 — 不重跑會把 iter 1 的修錯帶進 iter 2 spec）：
+7. **重跑驗證**（CUP-180 實戰新增 — 不重跑會把 iter 1 的修錯帶進 iter 2 test-plan）：
    - 對 R15 baseline 重跑修正版 cjs（同階段 4c 命令）
    - 比對前後：原 fail 是否變 PASS？有沒有新 fail？
 8. **依重跑結果決定是否回階段 5**：
    - 全 PASS → 進步驟 9 印用法
    - 新 fail 為「環境前置不足」殘留 → 改 cjs dismiss block，留階段 6 不回階段 5
-   - 新 fail 是嚴 assertion 暴露的真問題（第 5 類「assertion 太鬆」之前漏抓）→ **回階段 5 重新分類**，改 spec 加前後比對描述，再重跑 6→7
+   - 新 fail 是嚴 assertion 暴露的真問題（第 5 類「assertion 太鬆」之前漏抓）→ **回階段 5 重新分類**，改 test-plan 加前後比對描述，再重跑 6→7
    - 新 fail 為時間有限 / 偶發 → 列 backlog，**不回階段 5**，繼續步驟 9 印用法但提醒使用者
    - 連續兩次 6→5 循環無減少 fail → 中止並回報，避免無限循環
 9. 印用法給使用者：
@@ -487,7 +487,7 @@ R15 重跑驗證：
 | `git diff main...HEAD` 為空 | 中止，提示先 commit |
 | auth.json 過期（cjs exit 3） | 自動回階段 4b 重登 |
 | auth.json 缺（cjs exit 2） | 自動回階段 4b 互動登入 |
-| spec 已存在 | 問使用者：覆蓋 / 合併 / 中止 |
+| test-plan 已存在 | 問使用者：覆蓋 / 合併 / 中止 |
 | cjs 已存在 | 同上 |
 | `node --check` 失敗 | 印錯誤，回階段 3 修，不前進 |
 | mutation case 跑完造成資料污染 | 階段 4 結束時提醒「請手動清理：刪除 N 筆測試活動」（具體清單由 mutation case 對應的 ID 推） |
@@ -501,16 +501,16 @@ R15 重跑驗證：
 
 | Skill | 範圍 | 與本 skill 區隔 |
 |---|---|---|
-| `/jira-test-report` | 對單一 issue 跑既有測試 + 上 Jira | 預設用既有 spec；本 skill 是**從零產 spec**，產出可被 jira-test-report 消費 |
+| `/jira-test-report` | 對單一 issue 跑既有測試 + 上 Jira | 預設用既有 test-plan；本 skill 是**從零產 test-plan**，產出可被 jira-test-report 消費 |
 | `/r15-r18-verify` | 程式碼層比對 R15→R18 等價性 | 純程式碼分析，不跑瀏覽器；本 skill 是行為驗證，互補 |
-| `/jira` | Jira issue 管理（建 branch、抓詳情） | 上游：本 skill 可呼叫此 skill 抓 Jira 描述補充 spec 前言 |
+| `/jira` | Jira issue 管理（建 branch、抓詳情） | 上游：本 skill 可呼叫此 skill 抓 Jira 描述補充 test-plan 前言 |
 
 ### 命名慣例
 
 | 檔案 | 用途 | 入 git？ |
 |---|---|---|
 | `.claude/CUP-XX-coverage.json` | 階段 1 中繼檔 | 否（階段 2 後刪） |
-| `.claude/CUP-XX-spec.md` | 雙用途測試文件 | 否 |
+| `.claude/CUP-XX-test-plan.md` | 雙用途測試文件 | 否 |
 | `.claude/CUP-XX-test.cjs` | Playwright 腳本 | 否 |
 | `.claude/CUP-XX-temp/<variant>/_results.json` | 跑測試結果 | 否 |
 | `.claude/CUP-XX-temp/<variant>/NN-*.png` | 步驟截圖 | 否 |

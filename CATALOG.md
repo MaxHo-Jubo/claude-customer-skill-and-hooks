@@ -291,14 +291,14 @@
 - **功能**（6 階段）：
   - **階段 0**：開場提醒 GitNexus 可選增強（`--with-gitnexus` 旗標 + index 新鮮度提示）
   - **階段 1**：從當前 branch 抓 `CUP-\d+` → `git diff main...HEAD` → 平行 3 subagent 反推 API/UI/Redux → 產 `coverage.json`
-  - **階段 2**：依 coverage 產出雙用途 spec `.claude/CUP-XX-spec.md`（人 + Playwright 共讀），完成後刪除 coverage.json
+  - **階段 2**：依 coverage 產出雙用途測試計劃 `.claude/CUP-XX-test-plan.md`（人 + Playwright 共讀），完成後刪除 coverage.json
   - **階段 3**：產 Playwright 腳本 `.claude/CUP-XX-test.cjs`，`node --check` 語法驗證
   - **階段 4**：正式環境半自動驗證 — dry-run 列計畫 → 三選一執行模式（一次跑 / 分輪跑 / 自訂 ONLY）→ `npx --yes -p playwright@latest node` 跑 R15 baseline
-  - **階段 5**：根據 fail 結果分類修正 spec（測試項目錯 / selector 錯 / R15 bug），不自動 commit
+  - **階段 5**：根據 fail 結果分類修正 test-plan（測試項目錯 / selector 錯 / R15 bug），不自動 commit
   - **階段 6**：重產 cjs 腳本給 local/staging/R18 用
-- **產物管理**：所有 `.claude/CUP-*-spec.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
+- **產物管理**：所有 `.claude/CUP-*-test-plan.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
 - **不依賴 package.json**：執行時 `npx --yes -p playwright@latest node ...` 動態取得 Playwright，不污染專案依賴
-- **與既有 skill 區隔**：`/jira-test-report` 對既有 spec 跑測試並上 Jira；本 skill 是**從零產 spec + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
+- **與既有 skill 區隔**：`/jira-test-report` 對既有 test-plan 跑測試並上 Jira；本 skill 是**從零產 test-plan + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
 - **依賴**：git repository、cwd 在 luna_web/frontend（或結構相同 R15→R18 repo）、Playwright MCP（互動登入用）
 
 #### `/token-analyze` — Session Token 使用量分析（v1.0.0）
