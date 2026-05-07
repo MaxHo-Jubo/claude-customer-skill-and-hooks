@@ -63,20 +63,36 @@
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.1.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.2.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
 - **功能**：
   1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開）
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
-  3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`
+  3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`；**STEP 03.0 載入 `skills-sources.json`**（read-only），在重新產生時自動為登錄的外部 skill 補上「來源」欄位
   4. Commit & Push — 根據差異報告產生 commit message 並推送
+- **source 標註機制（v1.2.0 新增）**：repo 根目錄 `skills-sources.json` 記錄外部 skill 出處（schema：`{"<skill>": {"source": URL, "installed": "YYYY-MM-DD", "note": ...}}`）。**由使用者手動維護，sync skill 永遠 read-only**（不寫入、不增刪、不修改）。3.4 一致性檢查只提示 sources.json 含已不存在 skill，不自動清理。
 - **同步清單**：`settings.json`、`mcp-servers.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
 - **MCP Server 同步**：支援 MCP Server 設定同步（過濾 env 敏感資料），新增 restore 反向同步模式（從 repo 還原到本機）
 - **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
 - **依賴**：git、rsync、sed
 - **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
+
+#### `/neat-freak` — 跨平台知識庫整理（潔癖級）
+
+- **位置**：`~/.claude/skills/neat-freak/SKILL.md`（含 `references/agent-paths.md`、`references/sync-matrix.md`）
+- **來源**：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/)（neat-freak 子目錄，2026-04-30 安裝）
+- **用法**：`/sync`、`/neat`、「整理一下」、「同步一下」、「整理文檔」、「更新記憶」、「收尾」、「這個階段做完了」
+- **功能**：會話結束後三層知識同步（agent memory + 專案根 CLAUDE.md/AGENTS.md + docs/）對齊程式碼，避免文件腐爛
+  1. 盤點現狀（強制機械式 ls + Read，不能跳過）
+  2. 用「變更影響矩陣」識別波及哪些文件層級（跨項目影響檢查）
+  3. 用 Edit/Write 實際修改（先 docs/ → 再 agent 文件 → 最後記憶）
+  4. 自檢清單（含相對時間 `今天|最近|recently` 清零）
+  5. 變更摘要（按項目分組列改動檔案）
+- **跨平台**：Claude Code（`~/.claude/`）、Codex（`AGENTS.md`）、OpenCode（`.opencode/`）、OpenClaw（`~/.openclaw/`）
+- **與既有 skills 區隔**：偏向 docs/ 三層整理（給下游、人類同事看）；weekly-review 偏個人記憶 hygiene；sync-my-claude-setting 是把 `.claude/` 推到 repo
+- **依賴**：無外部依賴（純文件編輯）
 
 #### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.1.1）
 
@@ -267,6 +283,23 @@
   - 逐層比對 Redux、元件行為、錯誤處理等
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
+
+#### `/cup-build-test` — CUP 項目測試建立（v1.0.0）
+
+- **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
+- **用法**：`/cup-build-test`、「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」
+- **功能**（6 階段）：
+  - **階段 0**：開場提醒 GitNexus 可選增強（`--with-gitnexus` 旗標 + index 新鮮度提示）
+  - **階段 1**：從當前 branch 抓 `CUP-\d+` → `git diff main...HEAD` → 平行 3 subagent 反推 API/UI/Redux → 產 `coverage.json`
+  - **階段 2**：依 coverage 產出雙用途 spec `.claude/CUP-XX-spec.md`（人 + Playwright 共讀），完成後刪除 coverage.json
+  - **階段 3**：產 Playwright 腳本 `.claude/CUP-XX-test.cjs`，`node --check` 語法驗證
+  - **階段 4**：正式環境半自動驗證 — dry-run 列計畫 → 三選一執行模式（一次跑 / 分輪跑 / 自訂 ONLY）→ `npx --yes -p playwright@latest node` 跑 R15 baseline
+  - **階段 5**：根據 fail 結果分類修正 spec（測試項目錯 / selector 錯 / R15 bug），不自動 commit
+  - **階段 6**：重產 cjs 腳本給 local/staging/R18 用
+- **產物管理**：所有 `.claude/CUP-*-spec.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
+- **不依賴 package.json**：執行時 `npx --yes -p playwright@latest node ...` 動態取得 Playwright，不污染專案依賴
+- **與既有 skill 區隔**：`/jira-test-report` 對既有 spec 跑測試並上 Jira；本 skill 是**從零產 spec + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
+- **依賴**：git repository、cwd 在 luna_web/frontend（或結構相同 R15→R18 repo）、Playwright MCP（互動登入用）
 
 #### `/token-analyze` — Session Token 使用量分析（v1.0.0）
 
