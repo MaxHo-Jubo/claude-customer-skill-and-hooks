@@ -186,7 +186,7 @@ async function waitStable(page, ms = 500) {
     });
     await waitStable(page, 200);
 
-    // === 測試步驟區塊（由 skill 階段 3 依 spec.md 填入）===
+    // === 測試步驟區塊（由 skill 階段 3 依 test-plan.md 填入）===
     //
     // selector 優先序：data-testid > getByRole > 文字 > class
     //
