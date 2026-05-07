@@ -51,7 +51,7 @@
 
 ---
 
-## Skills 一覽（27 個，含 plugin 提供）
+## Skills 一覽（29 個，含 plugin 提供）
 
 ### 自訂 Skills（有 slash command）
 
@@ -66,7 +66,8 @@
 | explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.2.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步） |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.1.0 | 同步本機 Claude 設定到 Repo |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
+| neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然 |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
 | spec-design | `/spec-design` | 3.1.1 | 從需求到設計 spec + 實作計畫：openspec explore → brainstorming → openspec artifacts → 4-agent review → plan mode → 4-agent plan review |
@@ -75,6 +76,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
 | r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
+| cup-build-test | `/cup-build-test` | 1.0.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 
 ### 無 slash command 的 Skills
