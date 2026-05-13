@@ -1,6 +1,6 @@
 # claude-mem 繁體中文化翻譯對照表
 
-> 適用版本：claude-mem 11.0.0（thedotmack）
+> 適用版本：claude-mem 13.2.0（thedotmack）
 > 插件更新後 cache 及 marketplaces 都會被覆蓋，需重新套用。依此對照表搜尋替換即可。
 >
 > **重要：插件有兩個副本，兩邊都要 patch：**
@@ -31,18 +31,20 @@
 
 ### worker-service.cjs 專用 — Session 摘要模板
 
-#### 彩色/無色 Terminal 輸出（v11.0.0 改用 mf/ff）
+#### 彩色/無色 Terminal 輸出（v13.2.0 改用 BA/zA）
 
 | 英文原文 | 繁體中文 | 備註 |
 |---------|---------|------|
-| `mf("Investigated"` | `mf("已調查"` | 彩色 Terminal 標籤 |
-| `mf("Completed"` | `mf("已完成"` | 彩色 Terminal 標籤 |
-| `mf("Learned"` | `mf("已學習"` | 彩色 Terminal 標籤 |
-| `mf("Next Steps"` | `mf("後續步驟"` | 彩色 Terminal 標籤 |
-| `ff("Investigated"` | `ff("已調查"` | 無色 Terminal 標籤 |
-| `ff("Completed"` | `ff("已完成"` | 無色 Terminal 標籤 |
-| `ff("Learned"` | `ff("已學習"` | 無色 Terminal 標籤 |
-| `ff("Next Steps"` | `ff("後續步驟"` | 無色 Terminal 標籤 |
+| `BA("Investigated"` | `BA("已調查"` | 彩色 Terminal 標籤 |
+| `BA("Completed"` | `BA("已完成"` | 彩色 Terminal 標籤 |
+| `BA("Learned"` | `BA("已學習"` | 彩色 Terminal 標籤 |
+| `BA("Next Steps"` | `BA("後續步驟"` | 彩色 Terminal 標籤 |
+| `zA("Investigated"` | `zA("已調查"` | 無色 Terminal 標籤 |
+| `zA("Completed"` | `zA("已完成"` | 無色 Terminal 標籤 |
+| `zA("Learned"` | `zA("已學習"` | 無色 Terminal 標籤 |
+| `zA("Next Steps"` | `zA("後續步驟"` | 無色 Terminal 標籤 |
+
+> **歷次函式名變遷：** v10.6.2 `bp/_p` → v11.0.0 `mf/ff` → v13.2.0 `BA/zA`。每次升級可能再改名，先 grep `Investigated` 找實際呼叫的函式名。
 
 #### Markdown 摘要標籤
 
@@ -53,6 +55,7 @@
 | `**Next Steps:**` | `**後續步驟：**` | Markdown 摘要 |
 | `**Files Read:**` | `**已讀取檔案：**` | Markdown 摘要 |
 | `**Files Edited:**` | `**已編輯檔案：**` | Markdown 摘要 |
+| `**Files Modified:**` | `**已修改檔案：**` | Markdown 摘要（v13.2.0 新增） |
 | `**Date:**` | `**日期：**` | Markdown 摘要 |
 | `**In Progress**` | `**進行中**` | Session 狀態 |
 | `**Request:**` | `**請求：**` | Session 請求 |
@@ -82,6 +85,12 @@
 > 完整簡繁對照請直接比較 `files/code--zh-tw.json` 與原版 `code--zh.json`。
 
 ## 版本差異記錄
+
+### v11.0.0 → v13.2.0 變更
+
+- Terminal 輸出函式：`mf("X"` / `ff("X"` → `BA("X"` / `zA("X"`
+- 新增 `**Files Modified:**` Markdown 標籤（與 `**Files Read:**`、`**Files Edited:**` 並列）
+- 其餘共用 UI 字串與 Markdown 標籤無變化
 
 ### v10.6.2 → v11.0.0 變更
 
@@ -122,15 +131,15 @@ for DIR in "$CACHE" "$MARKET"; do
   done
 
   # ---- worker-service.cjs 專用 ----
-  # v11.0.0: mf() = 彩色, ff() = 無色
-  sed -i '' 's/mf("Investigated"/mf("已調查"/g' "$W"
-  sed -i '' 's/mf("Completed"/mf("已完成"/g' "$W"
-  sed -i '' 's/mf("Learned"/mf("已學習"/g' "$W"
-  sed -i '' 's/mf("Next Steps"/mf("後續步驟"/g' "$W"
-  sed -i '' 's/ff("Investigated"/ff("已調查"/g' "$W"
-  sed -i '' 's/ff("Completed"/ff("已完成"/g' "$W"
-  sed -i '' 's/ff("Learned"/ff("已學習"/g' "$W"
-  sed -i '' 's/ff("Next Steps"/ff("後續步驟"/g' "$W"
+  # v13.2.0: BA() = 彩色, zA() = 無色（v11.0.0 為 mf/ff）
+  sed -i '' 's/BA("Investigated"/BA("已調查"/g' "$W"
+  sed -i '' 's/BA("Completed"/BA("已完成"/g' "$W"
+  sed -i '' 's/BA("Learned"/BA("已學習"/g' "$W"
+  sed -i '' 's/BA("Next Steps"/BA("後續步驟"/g' "$W"
+  sed -i '' 's/zA("Investigated"/zA("已調查"/g' "$W"
+  sed -i '' 's/zA("Completed"/zA("已完成"/g' "$W"
+  sed -i '' 's/zA("Learned"/zA("已學習"/g' "$W"
+  sed -i '' 's/zA("Next Steps"/zA("後續步驟"/g' "$W"
 
   # Markdown 標籤（先長後短）
   sed -i '' 's/\*\*Status:\*\* Active - summary pending/\*\*狀態：\*\* 進行中 - 摘要待生成/g' "$W"
@@ -139,6 +148,7 @@ for DIR in "$CACHE" "$MARKET"; do
   sed -i '' 's/\*\*Next Steps:\*\*/\*\*後續步驟：\*\*/g' "$W"
   sed -i '' 's/\*\*Files Read:\*\*/\*\*已讀取檔案：\*\*/g' "$W"
   sed -i '' 's/\*\*Files Edited:\*\*/\*\*已編輯檔案：\*\*/g' "$W"
+  sed -i '' 's/\*\*Files Modified:\*\*/\*\*已修改檔案：\*\*/g' "$W"
   sed -i '' 's/\*\*Date:\*\*/\*\*日期：\*\*/g' "$W"
   sed -i '' 's/\*\*In Progress\*\*/\*\*進行中\*\*/g' "$W"
   sed -i '' 's/\*\*Request:\*\*/\*\*請求：\*\*/g' "$W"

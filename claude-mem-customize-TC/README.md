@@ -1,6 +1,6 @@
 # claude-mem 繁體中文化客製
 
-> 適用版本：claude-mem 11.0.0（thedotmack/claude-mem plugin）
+> 適用版本：claude-mem 13.2.0（thedotmack/claude-mem plugin）
 
 ## 說明
 
@@ -73,6 +73,28 @@ cp files/code--zh-tw.json "$CACHE_DIR/modes/"
 | `code--zh.json`（原版簡體） | `~/.claude/plugins/marketplaces/thedotmack/plugin/modes/` |
 
 ## 版本差異記錄
+
+### v11.0.0 → v13.2.0
+
+- Terminal 輸出函式名稱改變：`mf("X")` / `ff("X")` → `BA("X")` / `zA("X")`
+- 新增 `**Files Modified:**` Markdown 標籤
+- 其餘共用 UI 字串與 Markdown 標籤無變化
+- **已知 bug（[issue #2437](https://github.com/thedotmack/claude-mem/issues/2437)）**：plugin 發佈缺少 runtime dependency `zod`，worker 啟動會炸 `Cannot find module 'zod/v3'`。
+  Workaround（**每次升級都要重做**，因為新版本另一個 cache 目錄）：
+
+  ```bash
+  VERSION=13.2.0  # 改成當前版本
+  CACHE=~/.claude/plugins/cache/thedotmack/claude-mem/${VERSION}
+  MARKET=~/.claude/plugins/marketplaces/thedotmack/plugin
+
+  # 只裝 zod，不要做完整 npm install（會觸發 tree-sitter native 編譯）
+  (cd "$CACHE" && npm install --no-save --no-package-lock --no-audit --no-fund zod@4.3.6)
+
+  # marketplaces 端 symlink 到 cache，省一次安裝
+  [ -e "$MARKET/node_modules" ] || ln -s "$CACHE/node_modules" "$MARKET/node_modules"
+
+  pkill -f 'worker-service.cjs.*--daemon' 2>/dev/null
+  ```
 
 ### v10.6.2 → v11.0.0
 
