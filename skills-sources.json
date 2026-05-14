@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "purpose": "外部 skill 出處索引。sync-my-claude-setting skill 在重產 README/CATALOG 時讀取此檔，但永遠不會修改它。",
+    "schema": {
+      "<skill-name>": {
+        "source": "上游 URL（必填）",
+        "installed": "YYYY-MM-DD（選填）",
+        "note": "備註（選填）"
+      }
+    },
+    "rules": [
+      "由使用者手動維護，sync skill 不可寫入。",
+      "skill-name 必須對應 skills/<name>/ 目錄名。",
+      "自家寫的 skill 不需登錄；只記外部安裝來的。"
+    ]
+  },
+  "neat-freak": {
+    "source": "https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak",
+    "installed": "2026-04-30",
+    "note": "跨平台知識庫整理 skill"
+  },
+  "humanizer-zh-tw": {
+    "source": "https://github.com/op7418/humanizer-zh",
+    "note": "fork 自 blader/humanizer，再參考 hardikpandya/stop-slop"
+  }
+}

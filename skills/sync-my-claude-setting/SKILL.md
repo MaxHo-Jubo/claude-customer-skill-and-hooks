@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -181,13 +181,47 @@ rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
 
 讀取同步後的 repo 內容，自動重新產生文件。
 
+#### 3.0 載入 source 標註索引（read-only）
+
+讀取 `$TARGET/skills-sources.json` 取得**外部 skill 的出處資訊**。
+
+```bash
+SOURCES_FILE="$TARGET/skills-sources.json"
+if [ -f "$SOURCES_FILE" ]; then
+  # 讀進記憶體後續使用，但絕不修改此檔案
+  cat "$SOURCES_FILE"
+else
+  echo "（無 skills-sources.json，跳過 source 標註）"
+fi
+```
+
+> **不可變規則**：
+> - 此檔案由使用者手動維護，sync skill **永遠不寫入、不修改、不增刪**。
+> - 即使發現 `skills/` 多了未登錄的 skill，也只能在 commit message / 摘要中提示使用者，不可自動寫回 `skills-sources.json`。
+> - 若檔案不存在，視為所有 skill 都是自家 skill，不顯示出處欄位。
+> - **忽略 `_` 開頭的 key**（如 `_meta`、`_schema`、`_notes`）— 這些是文件區，不是 skill 條目。掃描與一致性檢查時都要排除。
+
+Schema：
+```json
+{
+  "_meta": { "...": "any documentation, ignored by sync skill" },
+  "<skill-name>": {
+    "source": "上游 URL",
+    "installed": "YYYY-MM-DD（選填）",
+    "note": "備註（選填）"
+  }
+}
+```
+
 #### 3.1 掃描資料來源
 
 | 資料 | 來源 | 擷取方式 |
 |------|------|---------|
 | Skills 清單 | `skills/*/SKILL.md` | 讀取每個 SKILL.md 的標題（`# ` 行）、第一段描述、用法區段 |
+| Skill 出處 | `skills-sources.json`（3.0 載入） | 以 skill 目錄名 join，取得 source / installed / note |
+| Skill 載入狀態 | `settings.json` → `skillOverrides` | 解析 JSON，列出非 `on` 狀態的 skill（four states：on/name-only/user-invocable-only/off）|
 | Hooks 清單 | `settings.json` → `hooks` 區段 | 解析 JSON，擷取每個 hook 的 type、matcher、command |
-| Scripts 清單 | `scripts/*.{sh,cjs}` | 讀取每個檔案的前 5 行註解 |
+| Scripts 清單 | `scripts/*.{sh,cjs,ts}` | 讀取每個檔案的前 5 行註解 |
 | Agents 清單 | `agents/*.md` | 讀取每個 agent 的 frontmatter（name、description、model、version） |
 | Plugins 清單 | `settings.json` → `plugins` 區段 | 解析 JSON，擷取啟用/停用狀態 |
 | StatusLine | `statusline/statusline-command.sh` | 讀取檔頭註解 |
@@ -196,7 +230,7 @@ rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
 #### 3.2 產生 README.md
 
 保留現有結構，更新以下區段：
-- **Skills 一覽**：表格（Skill | 指令 | 用途）
+- **Skills 一覽**：表格（Skill | 指令 | 版本 | 用途）；用途欄位**末尾追加**「來源：[org/repo](URL)」當該 skill 在 `skills-sources.json` 有登錄
 - **Hooks 一覽**：表格（Hook 類型 | 觸發時機 | 腳本 | 用途）
 - **Plugins & MCP Servers**：表格（分類 | 數量 | 說明）
 - **檔案位置**：確認路徑正確
@@ -205,13 +239,34 @@ rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
 #### 3.3 產生 CATALOG.md
 
 保留現有結構，更新以下區段：
-- **Skills**：每個 skill 的完整說明（位置、用法、功能、依賴）
+- **Skill 載入狀態總覽**（`## Skills` 第一個子段）：表格列出所有 `skillOverrides` 中**非 `on`** 狀態的 skill（欄位：Skill / 狀態 / 說明）；若 `skillOverrides` 為空或全為 `on`，仍保留說明段但表格寫「目前所有 skill 皆為預設 `on` 狀態」；表格下方保留四種狀態與 plugin skill 限制的說明
+- **Skills**：每個 skill 的完整說明（位置、用法、功能、依賴）；若該 skill 在 `skills-sources.json` 有登錄，**位置欄位下方**插入「**來源**：[<host>/<path>](URL)（installed: YYYY-MM-DD，note）」一行
 - **Hooks**：每個 hook 的表格
 - **Scripts（輔助工具）**：每個 script 的表格
 - **Plugins & MCP Servers**：啟用/停用清單
 - **StatusLine**：確認描述正確
 - **持續學習系統**：確認描述正確
 - **依賴關係圖**：根據實際 skill 間的關係更新
+
+#### 3.4 一致性檢查（read-only 提示）
+
+掃描 `skills/` 目錄與 `skills-sources.json` 的差集，**僅提示不修改**。
+
+**比對前先過濾**：從 `skills-sources.json` 取 keys 時，**排除以底線（`_`）開頭的 key**（這些是文件區，例如 `_meta`、`_schema`、`_notes`）。
+
+```bash
+# 取出所有有效 skill 條目（過濾掉 _meta 等文件 key）
+jq -r 'to_entries | map(select(.key | startswith("_") | not)) | .[].key' "$SOURCES_FILE"
+```
+
+- `skills/` 有但 `skills-sources.json` 沒有 → 視為「自家 skill」，不顯示出處（正常情況）
+- `skills-sources.json` 有但 `skills/` 沒有 → 警告「source 索引含已不存在的 skill：<name>」，提示使用者清理
+
+範例提示：
+```
+ℹ️  skills-sources.json 共登錄 N 個外部 skill，全部對應到 skills/ 目錄
+⚠️  skills-sources.json 有 'old-skill' 但 skills/ 已無此目錄，請手動清理 sources 條目
+```
 
 ### STEP 04: Commit & Push
 

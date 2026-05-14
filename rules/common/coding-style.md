@@ -31,8 +31,7 @@ INPUT-VALIDATION:
   trust: never trust external data(API responses/user input/file content)
 
 MAGIC-NUMBER:
-  banned: 未經解釋的數字常數
-  action: 抽出為具名常數並加上用途註解
+  action: 數字常數抽出為具名常數並加用途註解
 
 NULL-SAFETY:
   action: 空值/undefined 存取必須做防護
@@ -41,7 +40,7 @@ NULL-SAFETY:
 
 COMMENT-ACCURACY:
   rule: 程式邏輯與註解必須一致
-  banned: 過時註解 / 錯誤註解 / 註解錯字
+  action: 修改程式碼時同步更新對應註解；刪除已無對應程式碼的舊註解；拼寫與邏輯一致
 
 </rules>
 

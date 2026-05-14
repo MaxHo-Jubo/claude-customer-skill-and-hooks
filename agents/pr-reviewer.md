@@ -6,6 +6,7 @@ description: >
   Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。
   預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent，移植自 CI workflow）。
   觸發方式：POST-COMMIT-REVIEW 自動觸發（lite）或手動指定 PR（full）。
+  Full 模式支援 inline review comments（含 GitHub Suggested Change）。
 tools: ["Read", "Grep", "Glob", "Bash", "Agent"]
 model: sonnet
 ---
@@ -261,11 +262,22 @@ gh pr view <PR_NUMBER> --json state,mergedAt
 
 ### STEP 08: 輸出報告
 
-按照「輸出格式」區段的模板產出結構化報告。
+按照「輸出格式」區段的模板產出結構化報告，包含 Inline Review Comments 區段。
 
 ## 輸出格式
 
-所有輸出必須使用以下模板格式。禁止在報告開頭加入 **PR**、**PR URL**、**Review 模式** 等 metadata 欄位，直接從分類開始。
+所有輸出必須使用以下模板格式。禁止在報告開頭加入 **PR**、**PR URL**、**Review 模式** 等 metadata 欄位，直接從品味評分開始。
+
+### 品味評分
+
+| 評級 | 評語 |
+|------|------|
+| 🟢/🟡/🔴 | <一句話整體程式碼品味評語> |
+
+評級標準：
+- 🟢 資料結構設計良好，邊界情況自然消失，抽象恰當
+- 🟡 部分邊界情況用條件判斷處理，有改進空間
+- 🔴 過多 if 處理邊界情況、過度/不足抽象、資料結構設計不當
 
 ### Code Review Results (供參考)
 
@@ -288,17 +300,58 @@ gh pr view <PR_NUMBER> --json state,mergedAt
 
 ### Quality Score
 
-| 項目 | 分數 |
-|------|------|
-| Magic Number | X/5 |
-| 邏輯與註解一致性 | X/5 |
-| 函式註解 | X/5 |
-| 變數/常數/props/state 註解 | X/5 |
-| 註解錯字 | X/5 |
-| 系統穩定性 | X/5 |
-| **總分** | **XX/30** |
+**此表格為必要輸出，禁止省略。不可只列總分，必須逐項列出。**
+
+| 項目 | 分數 | 說明 |
+|------|------|------|
+| Magic Number | X/5 | ≤3 分時必填說明 |
+| 邏輯與註解一致性 | X/5 | ≤3 分時必填說明 |
+| 函式註解 | X/5 | ≤3 分時必填說明 |
+| 變數/常數/props/state 註解 | X/5 | ≤3 分時必填說明 |
+| 註解錯字 | X/5 | ≤3 分時必填說明 |
+| 系統穩定性 | X/5 | ≤3 分時必填說明 |
+| **總分** | **XX/30** | |
 
 > 5=完美 4=不錯 3=還可以 2=不好 1=拒絕接受
+>
+> 分數 ≤3 的項目必須在說明欄簡述扣分原因（例：`第 42 行有未命名常數 3000`）；4-5 分可留空。
+
+### Inline Review Comments（Full 模式限定）
+
+Full 模式下，對每個 CRITICAL 或 MINOR issue，若能提出具體程式碼修正建議，須同時產出 inline review comment 資料，供外部 script 以 GitHub Review API 發布為行級留言（含 Suggested Change）。
+
+**產生規則：**
+- 從 diff 中定位該 issue 對應的新增/修改行的確切內容與行號
+- 撰寫修正後的完整替換程式碼（保持原始縮排）
+- 無法提出具體程式碼修正的 issue（如架構建議、缺少測試、需更多上下文）不產生 inline comment，僅留在上方 summary
+
+**行號規則：**
+- `line`：PR diff 中新檔案側（RIGHT side）的結束行號
+- `start_line`：多行建議時的起始行號；單行建議省略此欄位
+- 行號必須落在 PR diff 的 hunk 範圍內，否則 GitHub API 會拒絕
+
+**格式：**
+
+在報告最末尾（Quality Score 之後），用 HTML comment delimiter 包裹 JSON array：
+
+    <!-- INLINE_REVIEW_COMMENTS
+    [
+      {
+        "path": "src/middlewares/reduxAjaxMiddleware.js",
+        "line": 134,
+        "start_line": 132,
+        "side": "RIGHT",
+        "body": "🔴 Critical — `typeof` 檢查對 FormData 也為 true（信心：95/100）\n\n```suggestion\n            if (data && data.constructor === Object) {\n                data = { ...data, interactionName: currentActionName };\n            }\n```"
+      }
+    ]
+    INLINE_REVIEW_COMMENTS -->
+
+**body 格式：**
+- CRITICAL：前綴 `🔴 Critical — ` + 問題描述 +（信心：XX/100）+ 換行 + suggestion block
+- MINOR：前綴 `🟡 Minor — ` + 問題描述 +（信心：XX/100）+ 換行 + suggestion block
+- suggestion block 內的程式碼必須是完整的替換內容（取代 start_line 到 line 的所有行），保持原始縮排
+
+**無 inline comments 時：** 省略整個 `<!-- INLINE_REVIEW_COMMENTS ... -->` 區塊。
 
 ## 語言規則
 

@@ -15,8 +15,7 @@ INPUT-VALIDATION:
   pattern: z.object({ ... }).parse(input)
 
 CONSOLE-LOG:
-  banned: production code
-  action: use proper logging libraries
+  logging: 使用專案 logging library；console.log 僅限本地 debug，commit 前移除
   detection: see hooks
 
 REACT:

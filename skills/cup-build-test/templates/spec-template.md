@@ -164,30 +164,31 @@ R18 升級部署到測試環境後，用同份計劃再跑一次。
 
 本檔由 `/cup-build-test` skill 階段 2 產出，並由階段 3 同步產出 Playwright 腳本 `.claude/{{ISSUE_KEY}}-test.cjs`。
 
-執行命令（不需要 npm install playwright）：
+執行命令（target 專案 0 dep；playwright 由 helpers/ user-level 提供）：
 
 ```bash
 # R15 正式環境（baseline）
 VARIANT=r15 BASE_URL=https://luna.compal-health.com \
-  npx --yes -p playwright@latest node .claude/{{ISSUE_KEY}}-test.cjs
+  node .claude/{{ISSUE_KEY}}-test.cjs
 
 # 本地 R18
-npx --yes -p playwright@latest node .claude/{{ISSUE_KEY}}-test.cjs
+node .claude/{{ISSUE_KEY}}-test.cjs
 
 # Staging R18
 BASE_URL=https://staging.example.com \
-  npx --yes -p playwright@latest node .claude/{{ISSUE_KEY}}-test.cjs
+  node .claude/{{ISSUE_KEY}}-test.cjs
 
 # 只跑某個 prefix
-ONLY=A1 npx --yes -p playwright@latest node .claude/{{ISSUE_KEY}}-test.cjs
+ONLY=A1 node .claude/{{ISSUE_KEY}}-test.cjs
 
 # 第一個 fail 就停
-STOP_ON_FAIL=true npx --yes -p playwright@latest node .claude/{{ISSUE_KEY}}-test.cjs
+STOP_ON_FAIL=true node .claude/{{ISSUE_KEY}}-test.cjs
 ```
 
 執行前：
+- helpers/ user-level setup 已跑過（一次性）：
+  `cd ~/.claude/skills/cup-build-test/helpers && npm install && npx playwright install chromium`
 - `.playwright-auth/auth.json` 已透過 skill 階段 4b 互動式登入產生
-- 第一次跑時 npx 會下載 chromium driver（會慢一點，後續快取生效）
 
 ---
 

@@ -1,11 +1,26 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-04-19（新增 r15-syntax-guard PreToolUse hook、token-analyze、statusline 加 token 雙排）
+> 上次更新：2026-05-14（新增 daily-review、jira-test-report skill；rules / CLAUDE.md 規則措辭微調）
 
 ---
 
 ## Skills
+
+### Skill 載入狀態總覽
+
+由 `settings.json` → `skillOverrides` 控制（v2.1.129+）。未列出者預設 `on`（描述會主動進入 system prompt）。
+
+| Skill | 狀態 | 說明 |
+|-------|------|------|
+| `ai-md` | `user-invocable-only` | 僅手動 `/ai-md` 觸發；不主動推薦 |
+| `daily-review` | `user-invocable-only` | 僅手動 `/daily-review` 觸發 |
+| `humanizer-zh-tw` | `user-invocable-only` | 僅手動 `/humanizer-zh-tw` 觸發 |
+| `upgrade-to-status` | `user-invocable-only` | 僅手動 `/upgrade-to-status` 觸發 |
+
+**四種狀態**：`on`（完整載入）｜`name-only`（只載名稱省描述）｜`user-invocable-only`（保留指令但不主動推薦）｜`off`（完全隱藏）。Plugin 內的 skill 不受此設定控制，須用 `/plugin` 開關。
+
+---
 
 ### 開發流程類
 
@@ -47,6 +62,17 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
+#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.1.0）
+
+- **位置**：`~/.claude/skills/jira-test-report/SKILL.md`（含 `helpers/` 子目錄）
+- **用法**：`/jira-test-report`、`/jira-test-report {ISSUE_KEY}`、`/jira-test-report --resume`
+- **功能**：
+  - 對 Jira issue 跑 Playwright E2E 測試
+  - 自動截圖並以 inline 形式上傳到 issue comment（直接顯示在留言中，非附件清單）
+  - 支援 `progress.md` 機制：中斷後可 `--resume` 從上次斷點繼續
+- **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
+- **依賴**：Atlassian MCP、Playwright MCP、git repository
+
 #### `/weekly-review` — 每週工作回顧（v1.2.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
@@ -62,6 +88,17 @@
   8. Amendment 成效追蹤（Subagent B，與 STEP 06 平行）— 比對 `AMENDMENTS.md` 修補前後錯誤頻率
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
+
+#### `/daily-review` — 每日工作回顧（v1.0.1）
+
+- **位置**：`~/.claude/skills/daily-review/SKILL.md`
+- **用法**：`/daily-review`、「今日回顧」、「今天做了什麼」、「daily digest」、「明日焦點」
+- **功能**：weekly-review 的輕量版
+  - 彙整當日 commit、auto memory 變動、各專案未勾 todo
+  - 輸出 digest 並提出明日 1-3 個焦點候選
+- **不做**：記憶整理、error 分析、Obsidian 歸檔（這些是 weekly-review 的範圍）
+- **載入狀態**：`user-invocable-only`（只手動觸發）
+- **依賴**：git、claude-mem MCP、auto memory
 
 #### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.2.0）
 
@@ -243,13 +280,6 @@
   - Structured-label 格式使 Codex compliance 從 6/8 提升至 8/8
   - 同樣規則、更少 token、更高精確度
 - **依賴**：無
-
----
-
-#### agent-browser — 瀏覽器自動化
-
-- **位置**：`~/.claude/skills/agent-browser/SKILL.md`
-- **功能**：瀏覽器自動化 CLI，支援網頁導航、表單填寫、按鈕點擊、截圖、資料擷取、測試 Web App
 
 ---
 
@@ -445,10 +475,11 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（15）
+### 啟用的 Plugins（14）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
+| code-simplifier | claude-plugins-official | 後置 commit 自動精簡程式碼 |
 | code-review | claude-plugins-official | PR 自動化 code review |
 | atlassian | claude-plugins-official | Jira & Confluence 整合 |
 | frontend-design | claude-plugins-official | 前端設計輔助 |
@@ -459,17 +490,18 @@
 | context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
 | claude-mem | thedotmack | 跨 session 持久記憶系統 |
 | context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
-| document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
-| superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
 | claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
+| playwright | claude-plugins-official | 瀏覽器自動化（取代 agent-browser skill） |
 
-### 停用的 Plugins（2）
+### 停用的 Plugins（4）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
 | github | claude-plugins-official | 用 gh CLI 替代 |
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
+| document-skills | anthropic-agent-skills | 文件處理套件，目前用不到 |
+| superpowers | claude-plugins-official | 已分別啟用個別功能（context-mode 等），不需整套 |
 
 ### MCP Servers
 
