@@ -88,12 +88,13 @@ process.stdin.on('end', () => {
 
     // STEP 08: 輸出結果
     if (missing.length > 0) {
-      let msg = `\n⚠️  Spec 驗證: ${fileName} 缺少以下 section:\n`;
-      for (const m of missing) {
-        msg += `   - ${m}\n`;
-      }
-      msg += `   現有 headings: ${headings.map(h => h.replace('## ', '')).join(', ')}`;
-      console.log(msg);
+      const existingHeadings = headings.map(h => h.replace('## ', '')).join(', ');
+      const missingList = missing.map(m => `- ${m}`).join('\n');
+      console.log(JSON.stringify({
+        decision: 'block',
+        reason: `Spec 驗證失敗: ${fileName} 缺少以下必要 section:\n${missingList}\n現有 headings: ${existingHeadings}\n請補齊後再寫入。`,
+      }));
+      process.exit(2);
     }
   } catch {
     // 靜默失敗

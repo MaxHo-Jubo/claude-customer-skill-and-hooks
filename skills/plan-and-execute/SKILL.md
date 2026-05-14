@@ -1,7 +1,7 @@
 ---
 name: plan-and-execute
 description: "從 openspec change 的 plan.md 自動執行實作。讀取 plan → TDD 分 Wave 實作 → 驗證 → 收尾。純自動執行，不需互動（除非 BLOCKED）。可搭配 /loop 分批執行。當使用者提到 /plan-and-execute、「執行計畫」、「從 spec 開工」、「從 spec 開始實作」、「開始做」時觸發。不適用於簡單 bug fix 或單檔修改。"
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Plan and Execute — 自動執行 openspec plan
@@ -14,12 +14,67 @@ version: 2.0.0
 - 專案已執行 `openspec init`（有 `openspec/` 目錄）
 - change 目錄下必須有 `plan.md`（由 `spec-design` Phase 8-9 產出）
 
+**明確依賴的 superpowers skills**（此 skill 在執行時會透過 Skill tool 調用）：
+
+| skill | 使用 phase | 用途 |
+|---|---|---|
+| `superpowers:executing-plans` | 整體流程 | 執行 plan.md 的骨幹流程（Wave / Task 節奏控制） |
+| `superpowers:test-driven-development` | Phase 2a | RED → GREEN → REFACTOR 測試紀律 |
+| `superpowers:subagent-driven-development` | Phase 2b | 派 subagent 實作、狀態處理（DONE/BLOCKED/...） |
+| `superpowers:verification-before-completion` | Phase 3 | 最終驗證（測試、coverage、E2E、review）才宣告完成 |
+| `superpowers:finishing-a-development-branch` | Phase 4 | PR / merge / archive 收尾流程 |
+
 ## 使用方式
 
 - `/plan-and-execute <change-name>` — 指定 openspec change，從 plan.md 開始自動執行
 - `/plan-and-execute` — 無參數時列出 `openspec/changes/` 下有 plan.md 的 change
 - `/plan-and-execute --resume <change-name>` — 從上次中斷處繼續（讀 plan.md checkbox 狀態）
 - `/plan-and-execute --wave <N> <change-name>` — 只執行指定 Wave
+
+## STEP 00: 前置檢查（MANDATORY — 必須最先執行）
+
+**任何 Phase 開始前**，先驗證 superpowers plugin 啟用狀態。
+
+執行：
+
+```bash
+jq -r '
+  .enabledPlugins
+  | to_entries
+  | map(select(.key | startswith("superpowers@")))
+  | if length == 0 then "NOT_INSTALLED"
+    elif .[0].value == true then "ENABLED"
+    else "DISABLED" end
+' ~/.claude/settings.json
+```
+
+判斷結果：
+
+| 結果 | 動作 |
+|---|---|
+| `ENABLED` | 繼續進入流程概覽 |
+| `DISABLED` | 向使用者顯示下方錯誤訊息並**立即跳出**，不進入 Phase 1 |
+| `NOT_INSTALLED` | 向使用者顯示下方錯誤訊息並**立即跳出**，不進入 Phase 1 |
+
+**錯誤訊息範本（DISABLED）**：
+
+> ⛔ plan-and-execute 無法執行：superpowers plugin 目前停用。
+>
+> 此 skill 的 Phase 2-4 依賴 `superpowers:executing-plans` / `test-driven-development` / `subagent-driven-development` / `verification-before-completion` / `finishing-a-development-branch`。請先執行：
+>
+> ```
+> /plugin enable superpowers@claude-plugins-official
+> ```
+>
+> 啟用後重新執行 `/plan-and-execute`。
+
+**錯誤訊息範本（NOT_INSTALLED）**：
+
+> ⛔ plan-and-execute 無法執行：superpowers plugin 未安裝。
+>
+> 此 skill 的 Phase 2-4 依賴多個 superpowers skills（executing-plans / TDD / subagent-driven-development / verification-before-completion / finishing-a-development-branch）。請從 marketplace 安裝 superpowers plugin 後再試。
+
+跳出後**不要**嘗試繞過（例如自行模擬 TDD 或 subagent 流程），直接結束 skill 執行。
 
 ## 流程概覽
 
@@ -65,7 +120,11 @@ openspec list
 
 ## Phase 2: 逐 Wave 執行
 
+> **Import（整體節奏）**：`Skill("superpowers:executing-plans")`
+
 ### 2a. 寫測試（RED）
+
+> **Import**：`Skill("superpowers:test-driven-development")`
 
 每個 Wave 開始前：
 1. **產出 unit test**：
@@ -76,6 +135,8 @@ openspec list
 3. 若有測試意外 PASS → 檢查是否測試寫錯或功能已存在
 
 ### 2b. 實作（GREEN）
+
+> **Import**：`Skill("superpowers:subagent-driven-development")`
 
 依 plan 逐 task 派 subagent 實作：
 
@@ -126,6 +187,8 @@ openspec list
 **循序執行**：同一時間只有一個 subagent 在實作（避免衝突），但 review subagent 可平行。
 
 ## Phase 3: 最終驗證
+
+> **Import**：`Skill("superpowers:verification-before-completion")`
 
 全部 Wave 完成後：
 
@@ -180,6 +243,8 @@ openspec list
    ```
 
 ## Phase 4: 收尾
+
+> **Import**：`Skill("superpowers:finishing-a-development-branch")`
 
 1. **通知使用者**：
 

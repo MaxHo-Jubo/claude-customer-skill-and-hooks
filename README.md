@@ -51,7 +51,7 @@
 
 ---
 
-## Skills 一覽（29 個，含 plugin 提供）
+## Skills 一覽（28 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -60,18 +60,21 @@
 | jira | `/jira` | 1.1.0 | Jira Issue 管理，自動從 branch 識別 issue |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
+| jira-test-report | `/jira-test-report` | 2.1.0 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.2.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步） |
+| daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
-| neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/) |
-| humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然 |
+| neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
+| humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
 | spec-design | `/spec-design` | 3.1.1 | 從需求到設計 spec + 實作計畫：openspec explore → brainstorming → openspec artifacts → 4-agent review → plan mode → 4-agent plan review |
 | plan-and-execute | `/plan-and-execute` | 2.0.0 | 自動執行 openspec plan：讀取 plan.md → TDD 分 Wave 實作 → 驗證。支援 `--resume`/`--wave`/`/loop` 分批執行 |
+| upgrade-to-status | `/upgrade-to-status` | 1.1.0 | 將專案升級為 status.md 架構（Milestone / 北極星 / Insight / Current / Next） |
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
@@ -83,12 +86,12 @@
 
 | Skill | 用途 |
 |-------|------|
-| agent-browser | 瀏覽器自動化 CLI，支援網頁互動、表單填寫、截圖、資料擷取 |
 | gitnexus-exploring | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
 | gitnexus-debugging | 用 GitNexus 追蹤呼叫鏈除錯 |
 | gitnexus-impact-analysis | 用 GitNexus 分析修改的影響範圍 |
 | gitnexus-refactoring | 用 GitNexus 規劃安全的重構 |
-| document-skills | 文件技能（由 plugin 提供） |
+
+> **載入狀態**：`ai-md` / `daily-review` / `humanizer-zh-tw` / `upgrade-to-status` 設為 `user-invocable-only`（不主動推薦，只在使用者輸入 slash command 時觸發）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
 
 ## Hooks 一覽
 
@@ -127,8 +130,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 15 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、document-skills、superpowers、claude-hud、pr-review-toolkit、claude-mem |
-| Plugins（停用） | 2 | github、everything-claude-code |
+| Plugins（啟用） | 14 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、claude-hud、pr-review-toolkit、claude-mem、playwright |
+| Plugins（停用） | 4 | github、everything-claude-code、document-skills、superpowers |
 | MCP Servers | 2 | pr-watcher、gitnexus（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
@@ -252,6 +255,25 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-14: 新增 daily-review、jira-test-report skill；更新 skill 與規則
+
+**Skills 新增/更新：**
+- 新增 `daily-review` skill（v1.0.1）— 每日工作回顧（weekly-review 輕量版）
+- 新增 `jira-test-report` skill（v2.1.0）— Jira issue 跑 Playwright E2E 並 inline 上傳截圖
+- `cup-build-test`、`plan-and-execute`、`spec-design`、`spec-module`、`sync-my-claude-setting`、`weekly-review`、`upgrade-to-status` 文字精修
+
+**Settings 變更：**
+- `enabledPlugins`：移除 `playwright` 之外的列表整理；新增 `skillOverrides`（`ai-md`/`daily-review`/`humanizer-zh-tw`/`upgrade-to-status` 設為 `user-invocable-only`）
+- `PostToolUse` catch-all：`post_tool_error.py` 從 `hook-error-wrapper` 包裝改為直接 `python3` 呼叫
+
+**Rules 與 CLAUDE.md：**
+- `rules/common/coding-style.md` 與 `rules/typescript/coding-style.md` 微調（FILE-ORG、COMMENT-ACCURACY 等規則措辭）
+- CLAUDE.md PERSONA 新增 `reporting-style`；CORE-PRINCIPLES 將 `no-gratuitous-abstraction` 整併為 `abstraction`，`no-lazy` 改為 `root-cause`；CODE-STYLE 加入 `file-edit-tool` 條目
+
+**Hooks 與 Scripts：**
+- 新增 `hooks/gitnexus/gitnexus-hook.cjs`（與 `.ts` 並存）
+- `scripts/review-pr.sh`、`scripts/pre-compact-snapshot.ts`、`scripts/spec-section-validator.ts` 更新
 
 ### 2026-04-19 (晚): 新增 r15-syntax-guard PreToolUse hook
 

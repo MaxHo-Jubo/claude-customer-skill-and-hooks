@@ -1,7 +1,7 @@
 ---
 name: weekly-review
-description: "每週工作回顧與記憶整理。彙整 commit、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.4.0
+description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
+version: 1.7.0
 context: fork
 ---
 
@@ -17,12 +17,71 @@ context: fork
 
 ## 使用方式
 
-- `/weekly-review` — 完整八步驟回顧
+- `/weekly-review` — 完整回顧（會先檢查 Atlassian MCP 連線）
 - `/weekly-review --days 14` — 指定回顧天數（預設 7 天）
-- 使用者說「整理記憶」— 只執行步驟 5（記憶整理）
-- 使用者說「review skill errors」— 只執行步驟 6~8（錯誤分析循環）
+- `/weekly-review --skip-jira` — 跳過 STEP 00 與 STEP 01.5（不需 Jira 整合）
+- 使用者說「整理記憶」— 只執行步驟 5（記憶整理），不檢查 MCP
+- 使用者說「review skill errors」— 只執行步驟 6~8（錯誤分析循環），不檢查 MCP
+
+## Busboy 紀律（執行所有步驟時遵守）
+
+餐廳的 busboy 只巡桌歸碗盤，不煮菜、不點餐。本 skill 在彙整/歸檔/整理時套用相同紀律：
+
+- **只歸位，不發明章節**：週報、修補建議、記憶整理都必須對齊現有 schema。禁止產出「決議 / 風險 / 結論 / 深度反思 / 啟示」這類看似專業但會爆炸的新段落
+- **只填既有欄位**：輸出格式已在各 STEP 定義，多一個欄位都不行。缺資料就留空或寫「無」，不要自動補湊
+- **不做創意判斷**：不對使用者的工作內容下價值判斷（「這個決策很棒」「這個錯誤很嚴重」），只陳述事實
+- **不重組輸入**：commit/memory/observation 原本的分類就是分類，不二次歸類
+
+違反紀律的徵兆：輸出變長、出現 schema 沒定義的 heading、開始講「我發現」「值得注意的是」。看到就停下。
 
 ## 執行步驟
+
+### STEP 00: 前置檢查 — Atlassian MCP 連線（只在完整流程執行）
+
+本 skill 的 STEP 01.5 依賴 Atlassian MCP。進入 STEP 01 之前先驗證連線與認證。
+
+**何時檢查：**
+
+| 觸發情境 | 執行 STEP 00？ |
+|---------|--------------|
+| `/weekly-review` / `--days N` | ✅ 檢查 |
+| `/weekly-review --skip-jira` | ❌ 跳過 |
+| 「整理記憶」（只 STEP 05） | ❌ 跳過 |
+| 「review skill errors」（只 STEP 06~08） | ❌ 跳過 |
+
+**檢查方式：**
+
+呼叫 Atlassian MCP 的最小查詢（例如以 JQL `assignee = currentUser()` 限 1 筆進行 issue search），觀察回應：
+
+- 呼叫成功、回傳 JSON → 通過，繼續 STEP 01
+- 呼叫失敗、401 Unauthorized、OAuth expired、token invalid、MCP tool 不存在 → 進入「未通過處理」
+
+**未通過處理：**
+
+顯示以下訊息，然後**立即結束 skill，不執行任何後續步驟**：
+
+```
+❌ Atlassian MCP 未連線或 OAuth 已過期
+
+weekly-review 需要 Atlassian MCP 來撈本週 Jira 活動（STEP 01.5）。請先處理：
+
+1. 檢查 atlassian plugin 是否啟用
+   - `/plugin` → 確認 atlassian 為 enabled
+2. 重新 OAuth 認證
+   - `/mcp` → 找到 atlassian 條目 → 重新登入
+3. 認證完成後，重新執行 /weekly-review
+
+逃生閥（若暫時不需要 Jira 整合）：
+- /weekly-review --skip-jira  → 跳過 STEP 01.5
+- 「整理記憶」                  → 只跑 STEP 05（記憶整理）
+- 「review skill errors」       → 只跑 STEP 06~08（錯誤分析）
+```
+
+**紀律：**
+
+- 不嘗試自動認證或重試
+- 不 degrade 為「跳過 Jira 繼續跑」（使用者明確要求擋下）
+- 認證問題屬於 session-level 環境問題，由使用者處理
 
 ### STEP 01: Git 工作摘要
 
@@ -48,6 +107,52 @@ git log --all --since="7 days ago" --oneline --no-merges --author="$(git config 
 - 涉及專案: N 個
 - 主要工作類型: feat/fix/refactor 佔比
 ```
+
+### STEP 01.5: Jira 週活動
+
+> 前置：STEP 00 已通過（MCP 可用、OAuth 有效）。`--skip-jira` 模式下本步驟整段跳過。執行中若發生非預期錯誤（超時、rate limit），回報使用者並詢問是否繼續，不自動 degrade。
+
+從 STEP 01 的 commit message 提取 Jira ID（符合 `\[([A-Z]+-\d+)\]` 的前綴，如 `[ERPD-7777]`、`[LVB-7866]`），並執行兩組查詢補齊事實：
+
+**查詢 A：commit 涉及的 ticket 當前狀態**
+
+對每個出現在本週 commit 的 Jira ID，用 atlassian MCP 查詢當前 status/summary，確認是否已關閉。
+
+**查詢 B：assigned 給我且未完成的 ticket**
+
+JQL：`assignee = currentUser() AND status != Done AND updated >= -{days}d`
+
+（`{days}` 為本 skill 回顧天數，預設 7）
+
+**查詢 C：無 commit 但本週有狀態變更**
+
+JQL：`assignee = currentUser() AND status CHANGED DURING (-{days}d, now())`
+
+從結果中剔除已在查詢 A 出現過的 ticket，只保留「沒對應 commit」的活動（例如只改狀態、只留 comment）。
+
+輸出格式：
+
+```
+## Jira 週活動
+
+### 本週 commit 涉及的 Ticket
+| ID | Summary | Status | Commit 數 |
+|----|---------|--------|----------|
+
+### 我 assigned 但未完成
+| ID | Summary | Status | Priority | 最後更新 |
+|----|---------|--------|---------|---------|
+
+### 無 commit 但本週有狀態變更
+| ID | Summary | Status 變化 |
+|----|---------|------------|
+```
+
+**Busboy 紀律**：
+- 不對 ticket 下評論（「這個很重要」「這個應該優先」）
+- 不推測 ticket 之間的關係
+- ticket 查不到（權限/ID 錯）→ 標 `(查無資料)` 不要省略那一列
+- 無資料的區段輸出「（無）」不要刪除標題
 
 ### STEP 02: 觀察記錄回顧
 
@@ -96,13 +201,18 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 
 ### STEP 04: 週報彙整與模式提取
 
-綜合前三步結果，產出結構化週報：
+綜合 STEP 01 / 01.5 / 02 / 03 結果，產出結構化週報：
 
 ```
 ## 週報（{起始日} ~ {結束日}）
 
 ### 做了什麼
-- {按重要性排列的工作項目}
+- {按重要性排列的工作項目；每項若對應 Jira ticket 標註 ID}
+
+### Jira 狀態對齊
+- 本週 commit 涉及 {N} 個 ticket，已關閉 {M} 個
+- 我 assigned 未完成 {K} 個（P0: {x}、P1: {y}、其他: {z}）
+- 無 commit 但狀態變更 {J} 個
 
 ### 學到什麼
 - {從糾正和決策中提取的學習}
@@ -141,7 +251,13 @@ period: {起始日} ~ {結束日}
 **同步記憶檔到 Obsidian vault：**
 
 ```bash
-bash ~/.claude/scripts/sync-memories-to-obsidian.sh
+SCRIPT=~/.claude/scripts/sync-memories-to-obsidian.sh
+if [ -f "$SCRIPT" ]; then
+  [ -x "$SCRIPT" ] || chmod +x "$SCRIPT"
+  bash "$SCRIPT"
+else
+  echo "(sync-memories-to-obsidian.sh 不存在，跳過 vault 同步)"
+fi
 ```
 
 **輸出週報後，等待使用者確認再進入步驟 5。**

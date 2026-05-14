@@ -1,7 +1,7 @@
 ---
 name: spec-design
 description: "從需求到設計 spec 的結構化流程：brainstorming → openspec 撰寫 → 4-agent review → 迭代修正。當使用者提到 /spec-design、「設計新功能」、「寫設計 spec」、「brainstorm 新功能」、「需求探索」、「新功能架構設計」、「技術方案討論」、「寫 RFC」、想從零開始設計一個功能或系統時觸發。不適用於：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix。"
-version: 3.1.1
+version: 3.2.0
 ---
 
 # Spec Design — 需求探索到設計 spec + 實作計畫
@@ -12,10 +12,61 @@ version: 3.1.1
 - superpowers plugin 必須安裝且啟用
 - `@fission-ai/openspec` CLI 必須已全域安裝（`npm install -g @fission-ai/openspec`）
 
+**明確依賴的 superpowers skills**（此 skill 在執行時會透過 Skill tool 調用）：
+
+| skill | 使用 phase | 用途 |
+|---|---|---|
+| `superpowers:brainstorming` | Phase 1-4 | 結構化收斂需求、方案比較、設計確認 |
+
 ## 使用方式
 
 - `/spec-design` — 互動式需求探索
 - `/spec-design <需求描述>` — 帶初始需求直接開始
+
+## STEP 00: 前置檢查（MANDATORY — 必須最先執行）
+
+**任何 phase 開始前**，先驗證 superpowers plugin 啟用狀態。
+
+執行：
+
+```bash
+jq -r '
+  .enabledPlugins
+  | to_entries
+  | map(select(.key | startswith("superpowers@")))
+  | if length == 0 then "NOT_INSTALLED"
+    elif .[0].value == true then "ENABLED"
+    else "DISABLED" end
+' ~/.claude/settings.json
+```
+
+判斷結果：
+
+| 結果 | 動作 |
+|---|---|
+| `ENABLED` | 繼續進入流程概覽 |
+| `DISABLED` | 向使用者顯示下方錯誤訊息並**立即跳出**，不進入 Phase 0 |
+| `NOT_INSTALLED` | 向使用者顯示下方錯誤訊息並**立即跳出**，不進入 Phase 0 |
+
+**錯誤訊息範本（DISABLED）**：
+
+> ⛔ spec-design 無法執行：superpowers plugin 目前停用。
+>
+> 此 skill 的 Phase 1-4 依賴 `superpowers:brainstorming`。請先執行：
+>
+> ```
+> /plugin enable superpowers@claude-plugins-official
+> ```
+>
+> 啟用後重新執行 `/spec-design`。
+
+**錯誤訊息範本（NOT_INSTALLED）**：
+
+> ⛔ spec-design 無法執行：superpowers plugin 未安裝。
+>
+> 此 skill 的 Phase 1-4 依賴 `superpowers:brainstorming`。請從 marketplace 安裝 superpowers plugin 後再試。
+
+跳出後**不要**嘗試繞過（例如自行模擬 brainstorming 流程），直接結束 skill 執行。
 
 ## 流程概覽
 
@@ -63,6 +114,8 @@ Phase 10: 使用者最終確認 + 轉入下一步
 **跳過條件**：使用者帶著明確需求直接來（如 `/spec-design 新增使用者匯出功能`），可跳過 Phase 0 直接進 Phase 1。
 
 ## Phase 1-4: Brainstorming
+
+> **Import**：`Skill("superpowers:brainstorming")`
 
 調用 `superpowers:brainstorming` skill，完成：
 - 專案 context 探索

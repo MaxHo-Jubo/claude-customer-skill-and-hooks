@@ -75,7 +75,14 @@ def main() -> None:
         # Not a valid hook call — exit silently, never block Claude
         sys.exit(0)
 
-    tool_response = hook_input.get("tool_response", {})
+    # Claude Code 在取消的 tool 或部分 MCP tool 會送 null；全部視為沒東西可記
+    if not isinstance(hook_input, dict):
+        sys.exit(0)
+
+    tool_response = hook_input.get("tool_response") or {}
+    if not isinstance(tool_response, dict):
+        sys.exit(0)
+
     exit_code = tool_response.get("exit_code")
 
     # Only log actual failures (non-zero exit code)

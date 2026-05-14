@@ -253,6 +253,12 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "skillOverrides": {
+    "ai-md": "user-invocable-only",
+    "daily-review": "user-invocable-only",
+    "humanizer-zh-tw": "user-invocable-only",
+    "upgrade-to-status": "user-invocable-only"
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -275,16 +281,6 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart ~/.claude/scripts/detect-jira-issue.sh",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs",
-            "timeout": 10000
           }
         ]
       }
@@ -329,7 +325,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.claude/hooks/post_tool_error.py",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse python3 /Users/maxhero/.claude/hooks/post_tool_error.py",
             "timeout": 3000
           }
         ]
@@ -343,12 +339,7 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact bun /Users/maxhero/.claude/scripts/pre-compact-snapshot.ts",
             "timeout": 3000,
-            "statusMessage": "Saving pre-compact snapshot..."
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/compact-counter.sh",
-            "timeout": 1000
+            "statusMessage": "Preparing compact..."
           }
         ]
       }
@@ -387,16 +378,6 @@
             "statusMessage": "Checking R15 syntax compatibility..."
           }
         ]
-      },
-      {
-        "matcher": "Bash|WebFetch|Read|Grep|Agent|Task|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /Users/maxhero/.claude/plugins/cache/claude-context-mode/context-mode/1.0.53/hooks/pretooluse.mjs",
-            "timeout": 10000
-          }
-        ]
       }
     ]
   },
@@ -415,13 +396,14 @@
     "github@claude-plugins-official": false,
     "context-mode@claude-context-mode": true,
     "everything-claude-code@everything-claude-code": false,
-    "document-skills@anthropic-agent-skills": true,
+    "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,
     "jdtls-lsp@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": false,
     "claude-hud@claude-hud": true,
     "pr-review-toolkit@claude-plugins-official": true,
-    "claude-mem@thedotmack": true
+    "claude-mem@thedotmack": true,
+    "playwright@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -435,5 +417,7 @@
   "effortLevel": "xhigh",
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "skipAutoPermissionPrompt": true
+  "remoteControlAtStartup": false,
+  "skipAutoPermissionPrompt": true,
+  "model": "opus[1m]"
 }
