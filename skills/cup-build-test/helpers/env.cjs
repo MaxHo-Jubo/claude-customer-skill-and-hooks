@@ -46,13 +46,24 @@ function parseEnv(input) {
   const progressPath = path.join('.claude', `${issueKey}-progress.md`);
   const authPath = '.playwright-auth/auth.json';
 
+  // STEP 02.01: 組 API 登入參數（local + CI 統一走 API 登入）
+  //   缺必填 env var 不在此 throw；交給 launchBrowser 真正用到時 throw，
+  //   讓 cjs 在僅 dry-run 階段也能 parseEnv 不擋（例如 --check 語法時）
+  const login = {
+    baseUrl,
+    account: process.env.E2E_ACCOUNT || '',
+    password: process.env.E2E_PASSWORD || '',
+    type: process.env.E2E_TYPE || 'e',
+    loginPath: process.env.LOGIN_PATH || undefined,
+  };
+
   // STEP 03: 解析 ENTRY_PATH 中的 {placeholder}
   const entryPath = resolveEntryPath(input.entryPath);
 
   // STEP 04: 套用 defaults 覆寫（如 template 想改 authPath 等）
   const merged = {
     issueKey, variant, baseUrl, headless, stopOnFail,
-    only, resumeFrom, screenshotDir, progressPath, authPath, entryPath,
+    only, resumeFrom, screenshotDir, progressPath, login, authPath, entryPath,
     ...(input.defaults || {}),
   };
 

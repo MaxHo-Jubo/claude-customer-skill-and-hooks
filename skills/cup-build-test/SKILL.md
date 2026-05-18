@@ -483,19 +483,35 @@ A. 新增單次活動排程
 5. 等使用者確認
 6. **建立 progress.md**（cross-session resume 用）：把所有 case 列為 `[ ]` 未勾選狀態，寫到 `.claude/{ISSUE_KEY}-progress.md`，並寫入 `Variant` / `Started` 欄位。若帶 `--resume` 旗標跳過此步（檔案已存在，append 模式）。
 
-### 4b. 取得登入態
+### 4b. 取得登入態（API 模式，無人為介入）
 
-1. 檢查 `.playwright-auth/auth.json` 是否存在且未過期（簡單方式：跑 cjs，若 exit 2 → 缺、exit 3 → 過期）
-2. 缺/過期則互動式登入（**透過 Playwright MCP，由使用者親自輸入密碼**）：
-   - skill 不在對話中索取密碼、不暫存密碼於檔案、不寫 prompt 要求使用者「貼進來」
-   - 流程：
-     1. 用 `mcp__plugin_playwright_playwright__browser_navigate` 開 `https://luna.compal-health.com/login`
-     2. 告知使用者：「**請在剛開啟的瀏覽器視窗手動輸入帳號密碼並登入**」
-     3. 用 `browser_wait_for` 等使用者完成（例：等 dashboard 元素出現，或等 url 變為 dashboard）
-     4. 用 `browser_run_code_unsafe` 跑 `await context.storageState({ path: '.playwright-auth/auth.json' })` 存登入態
-     5. `browser_close` 關閉
-3. 確認 frontend `.gitignore` 含 `.playwright-auth/`，缺則 append 並提示
-4. **任何時候 skill 自己看到帳號或密碼字串都立即中止**，提示使用者：密碼只能在瀏覽器視窗輸入，不可在對話中分享
+local dev (localhost:3000) 與 CI / staging URL 都統一走 API 登入，**完全不走互動式 Playwright MCP**。
+
+1. **檢查 `.env.local` 是否存在**（在 frontend 根目錄）：
+   - 內容範例：
+     ```
+     BASE_URL=http://localhost:3000              # 或 https://staging.example.com
+     E2E_ACCOUNT=<帳號>
+     E2E_PASSWORD=<密碼>
+     E2E_TYPE=e
+     ```
+   - **必填**：`BASE_URL` / `E2E_ACCOUNT` / `E2E_PASSWORD`。`E2E_TYPE` 預設 `e`
+   - 缺檔則提示使用者建立並列出範例內容，**但 skill 自己絕不索取密碼、不寫入密碼**
+2. **檢查 `.gitignore` 含 `.env.local`**，缺則 append 並提示
+3. **檢查 `.gitignore` 含 `.playwright-auth/`**（舊互動模式產物，向後相容）
+4. **不需要手動登入**：cjs 透過 `helpers/login.cjs::authStateFromApi` 直接呼叫 `/account/login` 取得 cookies，每次跑 cjs 都即時拿 storageState，**不再依賴 `.playwright-auth/auth.json`**
+5. **跑 cjs 前先驗證等價**（首次或登入 API 變動時）：
+   ```bash
+   cd <frontend>
+   set -a; source .env.local; set +a
+   node ~/.claude/skills/cup-build-test/scripts/diagnose-auth.cjs
+   ```
+   - ✅ cookies / localStorage 等價 → cjs 直接用 `launchBrowser({ login: ... })`
+   - ⚠️ 有差異 → 依輸出提示在 cjs 加 `context.addInitScript` 補塞必要 localStorage key
+6. **安全紀律**（絕對遵守）：
+   - **任何時候 skill 自己看到帳號或密碼字串都立即中止**並提示「密碼只能放 `.env.local` 或 Keychain，不可在對話中分享」
+   - 不在對話中索取密碼、不暫存密碼於非 gitignored 檔案、不把密碼寫進 cjs source
+   - 密碼來源：`.env.local`（local）/ GitHub Secrets（CI）/ macOS Keychain（最佳）
 
 ### 4c. 自動跑
 
@@ -792,8 +808,10 @@ R15 重跑驗證：
 | Branch 名沒有 CUP-XX | 提示使用者 `--issue CUP-XX` 或切 branch |
 | 不在 luna frontend cwd | 中止，要求 `cd ~/Documents/Compal/luna_web/frontend` |
 | `git diff main...HEAD` 為空 | 中止，提示先 commit |
-| auth.json 過期（cjs exit 3） | 自動回階段 4b 重登 |
-| auth.json 缺（cjs exit 2） | 自動回階段 4b 互動登入 |
+| `.env.local` 不存在 | 階段 4b 提示使用者建立並列出範例 |
+| 登入 API 回 4xx（密碼錯/account 鎖） | 印錯誤訊息，要求使用者驗證 `.env.local` 內容；不自動 retry |
+| 登入 API 回 5xx | retry 一次；仍失敗則中止 |
+| cjs exit 2（舊互動模式 auth.json 缺） | 提示改走 API 模式（建 `.env.local`） |
 | test-plan 已存在 | 問使用者：覆蓋 / 合併 / 中止 |
 | cjs 已存在 | 同上 |
 | `node --check` 失敗 | 印錯誤，回階段 3 修，不前進 |
@@ -828,7 +846,8 @@ R15 重跑驗證：
 | `.claude/CUP-XX-temp/<variant>/NN-*.png` | 步驟截圖 | 否 |
 | `.claude/CUP-XX-progress.md` | 跨 session 進度紀錄（`--resume` 用） | 否 |
 | `.claude/CUP-XX-verification-report.md` | 階段 6 步驟 11 自動產出的驗收對照表 | 否 |
-| `.playwright-auth/auth.json` | 登入 storageState | 否 |
+| `.env.local` | API 登入帳密（BASE_URL/E2E_ACCOUNT/E2E_PASSWORD/E2E_TYPE）| 否 |
+| `.playwright-auth/auth.json` | 舊互動模式 storageState（deprecated，僅向後相容）| 否 |
 
 ### Common selectors（luna 前端）
 
@@ -890,7 +909,9 @@ template 已 require 以下模組，**修改測試共用邏輯（modal / waitSta
 | `helpers/confirmDialog.cjs` | `confirmYes(page, { timeout?, scope?, extraButtonTexts?, strategy? })` | 點二次確認對話「是 / 確認 / 確定 / 刪除 / 同意」（接受）。預設 strategy=last 抓最新跳出的 modal |
 | `helpers/confirmDialog.cjs` | `confirmNo(page, { ... })` | 點二次確認對話「否 / 取消 / 關閉」（拒絕）。參數同 confirmYes |
 | `helpers/confirmDialog.cjs` | `DEFAULT_YES_BUTTON_TEXTS` / `DEFAULT_NO_BUTTON_TEXTS` | 預設按鈕文字清單，發現新文字直接 push |
-| `helpers/browser.cjs` | `launchBrowser({ headless, authPath, viewport?, locale? })` | chromium.launch + storageState + newPage；auth 缺則 exit 2 |
+| `helpers/login.cjs` | `authStateFromApi({ baseUrl, account, password, type?, loginPath? })` | API 登入取 storageState（cookies）；失敗 throw |
+| `helpers/login.cjs` | `loginParamsFromEnv()` | 從 `BASE_URL`/`E2E_ACCOUNT`/`E2E_PASSWORD`/`E2E_TYPE` env 組登入參數；缺必填 throw |
+| `helpers/browser.cjs` | `launchBrowser({ headless, login?, authPath?, viewport?, locale? })` | chromium.launch + newContext + newPage；`login` 為主流程（API 登入），`authPath` 為 deprecated 後備 |
 | `helpers/browser.cjs` | `attachConsoleCollector(page, errors)` | 註冊 console.error / pageerror handler，append 到傳入陣列 |
 | `helpers/bundle.cjs` | `detectBundle(page)` → `BundleInfo` | 回傳 `{ hasR15, hasR18, hasReactBsTable, fiberKey }` |
 | `helpers/bundle.cjs` | `assertVariant(page, 'r15' \| 'r18')` | 驗證 bundle path + react-bs-table 存在性 + fiber key，不符 throw |

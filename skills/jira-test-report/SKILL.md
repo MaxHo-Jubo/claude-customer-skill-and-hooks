@@ -109,7 +109,7 @@ Phase B / Phase C 不論模式都由主 context Edit。
 | Atlassian API token | https://id.atlassian.com/manage-profile/security/api-tokens |
 | Atlassian email | 對應 Jira 帳號的 email |
 | dev server 已啟動 | `npm run dev` 或專案對應命令 |
-| 登入 session | `.playwright-auth/auth.json` 存在；無則跑一次互動模式產生 |
+| 登入帳密 | frontend 根目錄有 `.env.local`，含 `BASE_URL` / `E2E_ACCOUNT` / `E2E_PASSWORD` / `E2E_TYPE`（gitignored） |
 | 測試步驟來源 | `.claude/{ISSUE_KEY}.md` / `.claude/{ISSUE_KEY}-test-plan.md` 的「測試步驟」section |
 | Playwright 可用 | 互動模式：playwright MCP plugin；腳本模式：`playwright` npm package（`npx playwright install chromium` 一次） |
 
@@ -161,15 +161,21 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 從 `.claude/{ISSUE_KEY}.md` 拿「## 測試步驟」section。沒這個檔就讓使用者口述步驟。
 
-### 步驟 4：登入 + 存 storageState（Playwright MCP）
+### 步驟 4：取得登入態（API 模式，無人為介入）
 
-```
-mcp__plugin_playwright_playwright__browser_navigate({ url: <dev URL> })
-→ 自動填帳號密碼
-→ 暫停讓使用者填驗證碼
-→ browser_run_code_unsafe: page.context().storageState({ path: '.playwright-auth/auth.json' })
-→ 把 .playwright-auth/ 加 .gitignore
-```
+local dev 與 CI 都統一走 API 登入：
+
+1. **檢查 `.env.local`** 在 frontend 根目錄存在；缺則提示使用者建立並列出範例：
+   ```
+   BASE_URL=http://localhost:3000    # 或 https://staging.example.com
+   E2E_ACCOUNT=<帳號>
+   E2E_PASSWORD=<密碼>
+   E2E_TYPE=e
+   ```
+2. **確認 `.gitignore` 含 `.env.local`**，缺則 append 並提示
+3. **互動模式**：透過 `mcp__plugin_playwright_playwright__browser_run_code_unsafe` 呼叫 `helpers/login.cjs::authStateFromApi` 直接取 storageState，無需手動填帳密
+4. **腳本模式**：cjs 內 `launchBrowser({ login: env.login })` 自動處理，env.login 由 `helpers/env.cjs::parseEnv` 從 env var 組合
+5. **安全紀律**：密碼只放 `.env.local` 或 macOS Keychain，**不在對話中分享**、不寫進 cjs。skill 看到密碼字串立即中止
 
 ### 步驟 5：跑測試 + 截圖
 
@@ -202,16 +208,15 @@ filename: {ISSUE_KEY}-temp/01-xxx.png, 02-xxx.png, ...
 
 同互動模式步驟 1–2。
 
-### 步驟 S2：讀測試步驟 + 確認 storageState 存在
+### 步驟 S2：讀測試步驟 + 確認 .env.local 存在
 
 ```bash
-test -f .playwright-auth/auth.json || echo "NEED_LOGIN"
+test -f .env.local || echo "NEED_ENV_LOCAL"
+# 必要 keys: BASE_URL, E2E_ACCOUNT, E2E_PASSWORD, E2E_TYPE
+grep -E '^(BASE_URL|E2E_ACCOUNT|E2E_PASSWORD|E2E_TYPE)=' .env.local | wc -l   # 應為 4
 ```
 
-若無，先請使用者跑一次互動模式登入，或手動執行：
-```bash
-npx playwright codegen --save-storage=.playwright-auth/auth.json <DEV_URL>
-```
+若無，提示使用者建立並列出範例內容（見步驟 4）。**absolute 不要從對話索取密碼**。
 
 ### 步驟 S3：生成 Playwright 腳本
 
@@ -280,9 +285,15 @@ const path = require('path');
 const ISSUE_KEY = '{ISSUE_KEY}';
 const VARIANT = process.env.VARIANT || 'r18';      // r15 / r18 比對用
 const SCREENSHOT_DIR = `.claude/${ISSUE_KEY}-temp/${VARIANT}`;
-const AUTH_PATH = '.playwright-auth/auth.json';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const HEADLESS = process.env.HEADLESS !== 'false';
+// API 登入參數（local + CI 統一走 API，無互動式登入）
+const LOGIN_PARAMS = {
+  baseUrl: BASE_URL,
+  account: process.env.E2E_ACCOUNT,
+  password: process.env.E2E_PASSWORD,
+  type: process.env.E2E_TYPE || 'e',
+};
 // RESUME_FROM_IDX：跨 session 續跑用（跳過 step idx ≤ RESUME_FROM_IDX 的 step）
 const RESUME_FROM_IDX = Number(process.env.RESUME_FROM_IDX || 0);
 const PROGRESS_PATH = `.claude/${ISSUE_KEY}-progress.md`;
@@ -367,9 +378,18 @@ async function step(page, name, fn) {
 
 (async () => {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
+  // API 登入取 storageState（local + CI 統一）
+  const { authStateFromApi } = require(path.join(
+    process.env.CUP_HELPERS_DIR
+      || `${require('os').homedir()}/.claude/skills/cup-build-test/helpers`,
+    'login.cjs',
+  ));
+  const storageState = await authStateFromApi(LOGIN_PARAMS);
+
   const browser = await chromium.launch({ headless: HEADLESS });
   const context = await browser.newContext({
-    storageState: AUTH_PATH,
+    storageState,
     viewport: { width: 1440, height: 900 },
   });
   const page = await context.newPage();
@@ -528,7 +548,7 @@ rm -rf .claude/{ISSUE_KEY}-temp
 # progress.md 預設保留作為執行歷史，使用者下次跑全新 issue 前可手動刪除
 ```
 
-`.playwright-auth/auth.json` **保留**（下次重用 session）。
+`.env.local` **保留**（每次跑都 API 登入，無暫存 session 檔需要清理）。
 `.claude/{ISSUE_KEY}-progress.md` **預設保留**（執行歷史紀錄）；下次跑同 issue 全新流程前用 `rm` 或選擇 `[2] 刪除舊檔，重跑完整流程`。
 
 ### 步驟 9：提醒撤銷 token
@@ -583,13 +603,13 @@ h3. 結論
 
 ## 失敗處理
 
-- **Login redirect 但驗證碼錯**：請使用者重填，重存 storageState
+- **API 登入回 4xx**：密碼錯/account 鎖；驗證 `.env.local` 內容（不要在對話貼密碼）
+- **API 登入回 5xx**：後端問題；retry 一次仍失敗則中止
 - **Upload 401**：token 失效，重新驗證
 - **Comment 400 ATTACHMENT_VALIDATION_ERROR**：誤用 v3 ADF + attachment id，改回 v2 wiki
 - **截圖路徑 access denied（互動模式）**：Playwright MCP 限制只能存到專案根目錄之內，不能存 ~/Desktop
-- **session 過期**：刪 `.playwright-auth/auth.json` 重登
-- **腳本模式 `Cannot find module 'playwright'`**：在專案根目錄跑 `npm i -D playwright && npx playwright install chromium`
-- **腳本模式 storageState 失效（被導回 login）**：跑互動模式重存 auth.json
+- **session 過期（被導回 login）**：API 登入是 stateless 每跑都重取，不會發生 session 過期。若仍出現代表後端 session 失效時間 < cjs 跑完時間，需縮短測試或登入 API 加 `keep-alive` 邏輯
+- **腳本模式 `Cannot find module 'playwright'`**：跑 `cd ~/.claude/skills/cup-build-test/helpers && npm install && npx playwright install chromium`
 - **腳本模式 selector 找不到（R18 升級後）**：用 `HEADLESS=false` 重跑看實際畫面，調整 selector
 - **跑到一半 rate limit**：**不要閒置等待**（5 分鐘 prompt cache 會過期，恢復時瞬間燒幾萬 token 重建 cache）。建議：當前 step 跑完後 `/clear` 開新 session，下次用 `/jira-test-report --resume` 從 progress.md 接續（Phase A/B/C 自動接力）
 - **`--resume` 但 progress.md 不存在**：提示使用者「尚未跑過，無進度可續，請去掉 `--resume` 旗標」
