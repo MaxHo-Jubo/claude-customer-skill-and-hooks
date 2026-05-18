@@ -1,6 +1,6 @@
 {
   "name": "cup-build-test-helpers",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "User-level helper library for cup-build-test skill — Playwright runtime shared across all CUP projects so target projects stay zero-dep.",
   "dependencies": {

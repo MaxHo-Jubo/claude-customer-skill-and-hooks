@@ -59,62 +59,93 @@ async function dismissAnnouncement(page, extraSelectors = []) {
 }
 
 /**
- * 進入頁面後的完整 dismiss 流程：
- *   1. 等公告 modal 出現（timeout 內若沒出現就跳過）
- *   2. 嘗試勾 checkbox + 點「確認 / 同意」
- *   3. 不論成不成，nuclear DOM remove（雙保險）
+ * 單輪 dismiss pass — 等 modal 出現 → click confirm/checkbox → nuclear nuke
+ * 內部 helper，waitAndDismissOnEntry 多輪呼叫；不對外匯出
  *
  * @param {import('playwright').Page} page
- * @param {{ timeout?: number, extraSelectors?: string[], waitMs?: number }} [options]
- *   - timeout: 等 modal 出現的 timeout（預設 5000ms）
+ * @param {string[]} extraSelectors  除 DEFAULT 外要處理的 modal selector
+ * @param {number} timeout  等 modal 出現的 timeout（ms）
+ */
+async function runDismissPass(page, extraSelectors, timeout) {
+  const modalSelectors = [...DEFAULT_ANNOUNCEMENT_SELECTORS, ...extraSelectors];
+  const joinedSelector = modalSelectors.join(', ');
+
+  // STEP 01: 等任一公告 modal 出現（超時不報錯）
+  const found = await page.waitForSelector(joinedSelector, {
+    timeout,
+    state: 'visible',
+  }).then(() => true).catch(() => false);
+
+  // STEP 02: 試著勾 checkbox + 點 confirm（click 不一定生效，但有些 modal 需要才不會再跳）
+  if (found) {
+    try {
+      const checkboxSelector = modalSelectors
+        .map((s) => `${s} input[type="checkbox"]`)
+        .join(', ');
+      const cb = page.locator(checkboxSelector).first();
+      if (await cb.count() > 0 && !(await cb.isChecked())) {
+        await cb.check({ timeout: 2000 }).catch(() => {});
+      }
+      const confirmBtnSelector = modalSelectors
+        .flatMap((s) => [
+          `${s} button:has-text("確定")`,    // luna 公告 modal 實際用此（CUP-179 實戰糾正）
+          `${s} button:has-text("確認")`,
+          `${s} button:has-text("同意")`,
+          `${s} button:has-text("我知道了")`,
+          `${s} button:has-text("關閉")`,
+        ])
+        .join(', ');
+      const confirmBtn = page.locator(confirmBtnSelector).first();
+      if (await confirmBtn.count() > 0) {
+        await confirmBtn.click({ timeout: 3000, force: true }).catch(() => {});
+      }
+      await page.waitForTimeout(300);
+    } catch {
+      // STEP 02.01: click 失敗無妨，下面 nuclear 會處理
+    }
+  }
+
+  // STEP 03: Nuclear DOM remove（最終保險；DOM 沒 modal 時 querySelectorAll 回空，no-op）
+  await dismissAnnouncement(page, extraSelectors);
+}
+
+/**
+ * 進入頁面後的完整 dismiss 流程（多輪重試）：
+ *   1. 第一輪：等 timeout 內公告 modal 出現 → click confirm/checkbox → nuke
+ *   2. 重試輪 × retries：用 retryTimeout 短等再次 dismiss
+ *      LVB-7963 實戰兩種情境都會撞到：
+ *        (a) modal mount 比第一輪 timeout 慢 → i=0 miss、i=1 catch
+ *        (b) modal 被 nuke 後 React 又 re-mount → i=0 hit、i=1 再 catch 第二次
+ *      因此無論 i=0 是否命中，都必須跑完 retry 輪（不可 early-exit）
+ *
+ * @param {import('playwright').Page} page
+ * @param {{
+ *   timeout?: number,
+ *   extraSelectors?: string[],
+ *   waitMs?: number,
+ *   retries?: number,
+ *   retryTimeout?: number,
+ * }} [options]
+ *   - timeout: 第一輪等 modal 出現的 timeout（預設 5000ms）
  *   - extraSelectors: 除 DEFAULT 外要處理的 modal selector
- *   - waitMs: 流程結束後額外等待時間（預設 500ms）
+ *   - waitMs: 每輪結束額外等待時間（預設 500ms）
+ *   - retries: 額外重試輪數，捕捉晚到 / re-mount 的 modal（預設 1）
+ *   - retryTimeout: 重試輪等 modal 出現的 timeout（預設 3000ms，比首輪短）
  */
 async function waitAndDismissOnEntry(page, options = {}) {
   const {
     timeout = 5000,
     extraSelectors = [],
     waitMs = 500,
+    retries = 1,
+    retryTimeout = 3000,
   } = options;
-  const modalSelectors = [...DEFAULT_ANNOUNCEMENT_SELECTORS, ...extraSelectors];
-  const joinedSelector = modalSelectors.join(', ');
 
-  // STEP 01: 等任一公告 modal 出現（超時不報錯）
-  await page.waitForSelector(joinedSelector, {
-    timeout,
-    state: 'visible',
-  }).catch(() => {});
-
-  // STEP 02: 試著勾 checkbox + 點 confirm（click 不一定生效，但有些 modal 需要才不會再跳）
-  try {
-    const checkboxSelector = modalSelectors
-      .map((s) => `${s} input[type="checkbox"]`)
-      .join(', ');
-    const cb = page.locator(checkboxSelector).first();
-    if (await cb.count() > 0 && !(await cb.isChecked())) {
-      await cb.check({ timeout: 2000 }).catch(() => {});
-    }
-    const confirmBtnSelector = modalSelectors
-      .flatMap((s) => [
-        `${s} button:has-text("確定")`,    // luna 公告 modal 實際用此（CUP-179 實戰糾正）
-        `${s} button:has-text("確認")`,
-        `${s} button:has-text("同意")`,
-        `${s} button:has-text("我知道了")`,
-        `${s} button:has-text("關閉")`,
-      ])
-      .join(', ');
-    const confirmBtn = page.locator(confirmBtnSelector).first();
-    if (await confirmBtn.count() > 0) {
-      await confirmBtn.click({ timeout: 3000, force: true }).catch(() => {});
-    }
-    await page.waitForTimeout(300);
-  } catch {
-    // STEP 02.01: click 失敗無妨，下面 nuclear 會處理
+  for (let i = 0; i <= retries; i += 1) {
+    const passTimeout = i === 0 ? timeout : retryTimeout;
+    await runDismissPass(page, extraSelectors, passTimeout);
+    await page.waitForTimeout(waitMs);
   }
-
-  // STEP 03: Nuclear DOM remove（最終保險）
-  await dismissAnnouncement(page, extraSelectors);
-  await page.waitForTimeout(waitMs);
 }
 
 /**
