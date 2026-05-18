@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-14（新增 daily-review、jira-test-report skill；rules / CLAUDE.md 規則措辭微調）
+> 上次更新：2026-05-18（cup-build-test / jira-test-report helpers v0.3.0 — 公告 modal dismiss 多輪重試；補齊 jira-test-report helpers mirror 與 login.cjs）
 
 ---
 

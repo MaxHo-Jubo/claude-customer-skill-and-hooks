@@ -269,6 +269,7 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - `scripts/diagnose-auth.cjs` — 比對 API 登入 vs 手動 storageState 等價性
 - `scripts/test-api-login-navigate.cjs` — 驗證 API 登入能進受保護頁、偵測彈窗
 - `scripts/sync-helpers.sh` — 加 release-tests/_helpers optional mirror
+- `helpers/modal.cjs` v0.2.0 → **v0.3.0**：抽 `runDismissPass` inner helper；`waitAndDismissOnEntry` 加 `retries` / `retryTimeout` 多輪重試（解 LVB-7963 實戰 `.latest-release-rote-modal` r18 mount 比首輪 timeout 晚 + React re-mount 兩種情境）
 
 **業務 repo（luna_web）配套**（此 repo 之外）：
 - `e2e/release-tests/` 目錄 + vendor `_helpers/` + README
