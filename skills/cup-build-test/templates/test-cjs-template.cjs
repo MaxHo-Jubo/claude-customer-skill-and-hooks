@@ -9,6 +9,7 @@
 // Helper API 速查請看 ~/.claude/skills/cup-build-test/SKILL.md「Helper API 速查」段。
 //
 // 用法（target 專案 0 dep；playwright runtime 由 helpers/ user-level 提供）：
+//   set -a; source .env.local; set +a   # 載入 BASE_URL / E2E_ACCOUNT / E2E_PASSWORD / E2E_TYPE
 //   node .claude/{{ISSUE_KEY}}-test.cjs
 //   HEADLESS=false node .claude/{{ISSUE_KEY}}-test.cjs                          # 看著瀏覽器跑
 //   VARIANT=r15 BASE_URL=https://luna.compal-health.com node .claude/{{ISSUE_KEY}}-test.cjs
@@ -20,7 +21,12 @@
 //   1. helpers user-level setup（一次性，跨專案共用）：
 //        cd ~/.claude/skills/cup-build-test/helpers && npm install && npx playwright install chromium
 //   2. dev server（local 跑時）：npm run dev（預設 localhost:3000）
-//   3. 登入態：.playwright-auth/auth.json 存在（無則跑互動模式產生）
+//   3. 登入帳密放 .env.local（gitignored）：
+//        BASE_URL=http://localhost:3000  # 或 https://staging.example.com
+//        E2E_ACCOUNT=<帳號>
+//        E2E_PASSWORD=<密碼>
+//        E2E_TYPE=e
+//      cjs 跑時內部呼叫 helpers/login.cjs::authStateFromApi 取得 cookies，無需手動登入。
 //
 // 輸出（皆在 .gitignore 內）：
 //   stdout: 一行一個 JSON（step / status / screenshot），最後一行 summary
@@ -30,9 +36,9 @@
 // Exit codes：
 //   0  全 pass
 //   1  有 fail
-//   2  AUTH_MISSING（auth.json 不存在）
-//   3  AUTH_EXPIRED（被踢回登入頁）
+//   3  AUTH_EXPIRED（被踢回登入頁，session 失效）
 //   4  MISSING_ENV（ENTRY_PATH 含動態參數但 env var 沒設，例 CASE_ID）
+//   非 0  其他（含 API 登入失敗 — error 訊息會印 HTTP status）
 
 const path = require('path');
 const os = require('os');
@@ -67,7 +73,7 @@ void assertVariant;
   require('fs').mkdirSync(env.screenshotDir, { recursive: true });
   const { browser, page } = await launchBrowser({
     headless: env.headless,
-    authPath: env.authPath,
+    login: env.login,
   });
 
   /** @type {string[]} */
