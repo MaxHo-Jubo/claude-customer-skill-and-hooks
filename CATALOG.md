@@ -62,7 +62,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.1.0）
+#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.2.0）
 
 - **位置**：`~/.claude/skills/jira-test-report/SKILL.md`（含 `helpers/` 子目錄）
 - **用法**：`/jira-test-report`、`/jira-test-report {ISSUE_KEY}`、`/jira-test-report --resume`
@@ -70,6 +70,7 @@
   - 對 Jira issue 跑 Playwright E2E 測試
   - 自動截圖並以 inline 形式上傳到 issue comment（直接顯示在留言中，非附件清單）
   - 支援 `progress.md` 機制：中斷後可 `--resume` 從上次斷點繼續
+  - **v2.2.0 新增**：登入流程改用 API（`.env.local` + `authStateFromApi`），移除互動式 MCP 登入；步驟 8 可選 publish 到業務 repo `e2e/release-tests/`
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
@@ -314,7 +315,7 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
-#### `/cup-build-test` — CUP 項目測試建立（v1.0.0）
+#### `/cup-build-test` — CUP 項目測試建立（v1.1.0）
 
 - **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
 - **用法**：`/cup-build-test`、「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」
@@ -325,11 +326,12 @@
   - **階段 3**：產 Playwright 腳本 `.claude/CUP-XX-test.cjs`，`node --check` 語法驗證
   - **階段 4**：正式環境半自動驗證 — dry-run 列計畫 → 三選一執行模式（一次跑 / 分輪跑 / 自訂 ONLY）→ `npx --yes -p playwright@latest node` 跑 R15 baseline
   - **階段 5**：根據 fail 結果分類修正 test-plan（測試項目錯 / selector 錯 / R15 bug），不自動 commit
-  - **階段 6**：重產 cjs 腳本給 local/staging/R18 用
+  - **階段 6**：重產 cjs 腳本給 local/staging/R18 用；步驟 12 可選 publish 到業務 repo `e2e/release-tests/`
 - **產物管理**：所有 `.claude/CUP-*-test-plan.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
 - **不依賴 package.json**：執行時 `npx --yes -p playwright@latest node ...` 動態取得 Playwright，不污染專案依賴
+- **v1.1.0 新增**：登入流程改用 API（`.env.local` + `helpers/login.cjs::authStateFromApi`），移除互動式 MCP 登入；新增 `scripts/diagnose-auth.cjs` 與 `scripts/test-api-login-navigate.cjs` 驗證工具；新增 `helpers/login.cjs`；`browser.cjs` 支援 `{ login }` 主流程
 - **與既有 skill 區隔**：`/jira-test-report` 對既有 test-plan 跑測試並上 Jira；本 skill 是**從零產 test-plan + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
-- **依賴**：git repository、cwd 在 luna_web/frontend（或結構相同 R15→R18 repo）、Playwright MCP（互動登入用）
+- **依賴**：git repository、cwd 在 luna_web/frontend（或結構相同 R15→R18 repo）、`.env.local` 含登入帳密
 
 #### `/token-analyze` — Session Token 使用量分析（v1.0.0）
 

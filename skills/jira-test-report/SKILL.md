@@ -540,7 +540,24 @@ await fetch(`https://{site}.atlassian.net/rest/api/2/issue/${issueKey}/comment`,
 - comment POST 成功後，立刻 Edit `progress.md` Phase C 從 `[ ]` 改 `[x]`，記下 comment id
 - `--resume` 模式下：若 Phase C 已 `[x]` 表示上次已發過 — 此時應改 PUT comment（覆蓋）或 append 新 comment（依使用者意圖選一），**預設 append** 避免覆蓋人工修改
 
-### 步驟 8：清理
+### 步驟 8：publish 到 release-tests（選用，腳本模式才適用）
+
+腳本模式測試通過後，**問使用者**：
+
+```
+是否將此 cjs 加入 release E2E 測試清單？
+  [1] 是 → 自動執行：
+      a. 偵測業務 repo（git rev-parse --show-toplevel）
+      b. cp .claude/{ISSUE_KEY}-test.cjs <repo>/e2e/release-tests/{ISSUE_KEY}.cjs
+      c. 在業務 repo 跑 git add e2e/release-tests/{ISSUE_KEY}.cjs
+      d. 提示使用者開 PR / 觸發 release-e2e workflow
+  [2] 否（僅本地使用）
+```
+
+互動模式不適用（步驟未產出 cjs）。
+詳細機械步驟與 require path 處理同 cup-build-test 階段 6 步驟 12。
+
+### 步驟 9：清理
 
 ```bash
 rm -rf .claude/{ISSUE_KEY}-temp
@@ -551,7 +568,7 @@ rm -rf .claude/{ISSUE_KEY}-temp
 `.env.local` **保留**（每次跑都 API 登入，無暫存 session 檔需要清理）。
 `.claude/{ISSUE_KEY}-progress.md` **預設保留**（執行歷史紀錄）；下次跑同 issue 全新流程前用 `rm` 或選擇 `[2] 刪除舊檔，重跑完整流程`。
 
-### 步驟 9：提醒撤銷 token
+### 步驟 10：提醒撤銷 token
 
 最後一定提醒使用者去 https://id.atlassian.com/manage-profile/security/api-tokens 撤銷剛才用的 token。
 

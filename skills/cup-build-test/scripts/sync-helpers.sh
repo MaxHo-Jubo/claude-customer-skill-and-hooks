@@ -28,9 +28,10 @@ declare -a MIRRORS=(
 )
 
 # Optional mirror: business repo 的 e2e/release-tests/_helpers/
-# 預設指向 luna_web/frontend；可由 RELEASE_TESTS_HELPERS env var 覆寫。
+# 預設指向 luna_web monorepo 根目錄（frontend 與 backend 同層的 e2e/）；
+# 可由 RELEASE_TESTS_HELPERS env var 覆寫。
 # 父目錄存在時自動加入 mirror 清單，缺則 skip（避免在沒設定的環境噴錯）。
-RELEASE_TESTS_HELPERS="${RELEASE_TESTS_HELPERS:-$HOME/Documents/Compal/luna_web/frontend/e2e/release-tests/_helpers}"
+RELEASE_TESTS_HELPERS="${RELEASE_TESTS_HELPERS:-$HOME/Documents/Compal/luna_web/e2e/release-tests/_helpers}"
 if [[ -d "$(dirname "$RELEASE_TESTS_HELPERS")" ]]; then
   MIRRORS+=("$RELEASE_TESTS_HELPERS")
   echo "ℹ️  偵測到業務 repo release-tests，加入 mirror：$RELEASE_TESTS_HELPERS"

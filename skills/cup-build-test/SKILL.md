@@ -799,6 +799,44 @@ R15 重跑驗證：
 - R15 baseline 沒跑完 → 不產（沒對照基準）
 - 使用者明確說「Staging 跑完再產」→ 跳過此步驟，留下提示
 
+### 步驟 12：publish 到 release-tests（選用，CUP-180 後新增）
+
+階段 6 全部完成且 staging 驗收 PASS 後，**問使用者**：
+
+```
+是否將此 cjs 加入 release E2E 測試清單？
+  [1] 是 → 自動執行：
+      a. 偵測業務 repo 根目錄（預設 ~/Documents/Compal/luna_web）
+      b. cp .claude/{ISSUE_KEY}-test.cjs <repo>/e2e/release-tests/{ISSUE_KEY}.cjs
+      c. 在業務 repo 跑 git add e2e/release-tests/{ISSUE_KEY}.cjs
+  [2] 否（僅本地使用）
+```
+
+#### 機械步驟
+
+1. 偵測業務 repo：`git rev-parse --show-toplevel`（在 frontend cwd 內跑）
+2. 確認 `<repo>/e2e/release-tests/_helpers/` 存在；不存在則提示使用者先建立（連結到 luna_web 的 README）
+3. 複製 cjs：
+   ```bash
+   cp .claude/{ISSUE_KEY}-test.cjs <repo>/e2e/release-tests/{ISSUE_KEY}.cjs
+   ```
+4. **改寫 require path**：cjs 內 `HELPERS_DIR` 預設 `~/.claude/skills/cup-build-test/helpers`，CI 環境用 `CUP_HELPERS_DIR` env var override。**不需要修改 cjs source**，release-e2e workflow 已設 `CUP_HELPERS_DIR: ${{ github.workspace }}/e2e/release-tests/_helpers`
+5. 在業務 repo 跑：
+   ```bash
+   cd <repo>
+   git add e2e/release-tests/{ISSUE_KEY}.cjs
+   ```
+6. **不自動 commit**，由使用者決定 branch / commit message
+7. 提示使用者下一步：
+   - 開 PR 把 cjs 推上 master / release branch
+   - 下次 Release 前手動觸發 `Release E2E Tests` workflow
+
+#### 不適用情境
+
+- cjs 還有 fail（不該進 release 測試清單）→ 不問，直接跳過
+- 業務 repo 偵測失敗（cwd 不在 git repo 內）→ 提示使用者手動 cp 並列出路徑
+- `e2e/release-tests/_helpers/` 不存在 → 提示先 vendor helpers（連到 luna_web README）
+
 ---
 
 ## 失敗處理
