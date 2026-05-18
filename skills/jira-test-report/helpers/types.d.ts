@@ -53,10 +53,21 @@ export type EnvConfig = {
   screenshotDir: string;
   /** progress.md 路徑 */
   progressPath: string;
-  /** Playwright storageState 路徑 */
+  /** API 登入參數（從 E2E_ACCOUNT / E2E_PASSWORD / E2E_TYPE 與 baseUrl 組成） */
+  login: LoginParams;
+  /** Playwright storageState 路徑（deprecated 後備路徑） */
   authPath: string;
   /** 解析後完整 ENTRY_PATH（已替換模板變數） */
   entryPath: string;
+};
+
+/** API 登入參數 */
+export type LoginParams = {
+  baseUrl: string;
+  account: string;
+  password: string;
+  type: string;
+  loginPath?: string;
 };
 
 /** R15 / R18 識別 */
