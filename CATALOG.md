@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-18（cup-build-test / jira-test-report helpers v0.3.0 — 公告 modal dismiss 多輪重試；補齊 jira-test-report helpers mirror 與 login.cjs）
+> 上次更新：2026-05-19（cup-build-test v1.2.0 / jira-test-report v2.4.0 — 落實斷言截圖三合一規範 + evidence helper；helpers/login.cjs 改用 `loginInContext` 主流程保留 host-only cookies）
 
 ---
 
@@ -62,7 +62,7 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.2.0）
+#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.4.0）
 
 - **位置**：`~/.claude/skills/jira-test-report/SKILL.md`（含 `helpers/` 子目錄）
 - **用法**：`/jira-test-report`、`/jira-test-report {ISSUE_KEY}`、`/jira-test-report --resume`
@@ -70,7 +70,8 @@
   - 對 Jira issue 跑 Playwright E2E 測試
   - 自動截圖並以 inline 形式上傳到 issue comment（直接顯示在留言中，非附件清單）
   - 支援 `progress.md` 機制：中斷後可 `--resume` 從上次斷點繼續
-  - **v2.2.0 新增**：登入流程改用 API（`.env.local` + `authStateFromApi`），移除互動式 MCP 登入；步驟 8 可選 publish 到業務 repo `e2e/release-tests/`
+  - **v2.4.0 新增**：落實「斷言截圖三合一規範」（程式斷言 throw / UI 視覺變更 / evidence overlay 注入結論，三者缺一不可）；`.env.local` 完整範例補上 Atlassian API token + 業務 fixture 變數對照；`helpers/login.cjs::loginInContext` 主流程保留 host-only cookies
+  - **v2.2.0 起**：登入流程改用 API（`.env.local`），移除互動式 MCP 登入；步驟 8 可選 publish 到業務 repo `e2e/release-tests/`
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
@@ -315,7 +316,7 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
-#### `/cup-build-test` — CUP 項目測試建立（v1.1.0）
+#### `/cup-build-test` — CUP 項目測試建立（v1.2.0）
 
 - **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
 - **用法**：`/cup-build-test`、「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」
@@ -329,7 +330,8 @@
   - **階段 6**：重產 cjs 腳本給 local/staging/R18 用；步驟 12 可選 publish 到業務 repo `e2e/release-tests/`
 - **產物管理**：所有 `.claude/CUP-*-test-plan.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
 - **不依賴 package.json**：執行時 `npx --yes -p playwright@latest node ...` 動態取得 Playwright，不污染專案依賴
-- **v1.1.0 新增**：登入流程改用 API（`.env.local` + `helpers/login.cjs::authStateFromApi`），移除互動式 MCP 登入；新增 `scripts/diagnose-auth.cjs` 與 `scripts/test-api-login-navigate.cjs` 驗證工具；新增 `helpers/login.cjs`；`browser.cjs` 支援 `{ login }` 主流程
+- **v1.2.0 新增**：「斷言截圖三合一規範」— 每個 step 須同時具備 (1) 程式斷言 throw + 實測 vs 預期 (2) 真實頁面操作或視覺變更 (3) evidence overlay 注入結論；純資料比對 step 視為 anti-pattern，必須補 UI 證據（`select.size=N` 展開 / 逐一 selectOption / DOM highlight 三選一）；新增 `helpers/evidence.cjs`（封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`）
+- **v1.1.0 起**：登入流程改用 API（`.env.local` + `helpers/login.cjs`），移除互動式 MCP 登入；`browser.cjs` 支援 `{ login }` 主流程（v1.2.0 改為 `loginInContext` 保留 host-only cookies）
 - **與既有 skill 區隔**：`/jira-test-report` 對既有 test-plan 跑測試並上 Jira；本 skill 是**從零產 test-plan + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
 - **依賴**：git repository、cwd 在 luna_web/frontend（或結構相同 R15→R18 repo）、`.env.local` 含登入帳密
 

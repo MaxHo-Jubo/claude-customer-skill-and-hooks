@@ -134,13 +134,32 @@ function createStepRunner(config) {
   }
 
   /**
-   * 執行單一測試步驟，自動截圖與計時
-   * @param {import('playwright').Page} page
-   * @param {string} caseId
-   * @param {string} name
-   * @param {StepFn} fn
+   * 把字串 sanitize 為 filename 安全形式：去掉跨平台 fs 禁用字元（/ \ : * ? " < > |）
+   * 中文等 unicode 字元保留（macOS/Linux/Windows 都支援）
+   * @param {string} s
    */
-  async function step(page, caseId, name, fn) {
+  function sanitizeForFilename(s) {
+    return String(s).replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, '');
+  }
+
+  /**
+   * 執行單一測試步驟，自動截圖與計時
+   *
+   * 簽名向後相容：
+   *   step(page, caseId, name, fn)                 ← 舊用法（description 為空）
+   *   step(page, caseId, name, description, fn)    ← 新用法（中文描述）
+   *
+   * @param {import('playwright').Page} page
+   * @param {string} caseId 題組編號（如 'A1.1' = A 群第 1 題第 1 步驟）
+   * @param {string} name 步驟短名（建議中文，如 '結案頁載入'）
+   * @param {string | StepFn} descOrFn 中文長描述（新用法）或 fn（舊用法）
+   * @param {StepFn} [maybeFn] 新用法的 fn（4th arg 是 description 時放這）
+   */
+  async function step(page, caseId, name, descOrFn, maybeFn) {
+    // STEP 00: 解析向後相容簽名
+    const fn = /** @type {StepFn} */ (typeof descOrFn === 'function' ? descOrFn : maybeFn);
+    const description = typeof descOrFn === 'function' ? '' : (descOrFn || '');
+
     // STEP 01: ONLY filter（指定 prefix 才跑）
     if (only && !caseId.startsWith(only)) {
       return;
@@ -150,7 +169,7 @@ function createStepRunner(config) {
       return;
     }
     const idx = String(results.length + 1).padStart(2, '0');
-    const safeName = `${caseId}-${name}`.replace(/[^\w.-]+/g, '-');
+    const safeName = sanitizeForFilename(`${caseId}-${name}`);
     const screenshot = `${idx}-${safeName}.png`;
     const screenshotPath = path.join(screenshotDir, screenshot);
     const t0 = Date.now();
@@ -160,7 +179,7 @@ function createStepRunner(config) {
     try {
       await fn(page);
       await page.screenshot({ path: screenshotPath, fullPage: true });
-      logResult({ step: idx, caseId, name, status: 'PASS', screenshot, ms: Date.now() - t0 });
+      logResult({ step: idx, caseId, name, description, status: 'PASS', screenshot, ms: Date.now() - t0 });
     } catch (e) {
       stepStatus = 'FAIL';
       stepError = e instanceof Error ? e.message : String(e);
@@ -170,7 +189,7 @@ function createStepRunner(config) {
         // STEP 03: 連截圖都失敗就放棄
       }
       logResult({
-        step: idx, caseId, name, status: 'FAIL', screenshot,
+        step: idx, caseId, name, description, status: 'FAIL', screenshot,
         error: stepError, ms: Date.now() - t0,
       });
       if (stopOnFail) {

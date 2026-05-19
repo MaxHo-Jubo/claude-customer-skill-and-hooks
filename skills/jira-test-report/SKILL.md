@@ -1,7 +1,7 @@
 ---
 name: jira-test-report
 description: "對 Jira issue 跑 Playwright E2E 測試，自動截圖並 inline 上傳到 issue comment（截圖直接顯示在留言中，非附件清單）。當使用者提到 /jira-test-report、「跑測試報告」、「驗收測試上 Jira」、「截圖到 Jira」、「自動化測試 + Jira」、想對某個 issue 跑驗收測試並把結果留在 Jira 時觸發。"
-version: 2.1.0
+version: 2.4.0
 ---
 
 # Jira E2E 測試報告（含 inline 截圖）
@@ -106,14 +106,37 @@ Phase B / Phase C 不論模式都由主 context Edit。
 
 | 項目 | 取得方式 |
 |------|---------|
-| Atlassian API token | https://id.atlassian.com/manage-profile/security/api-tokens |
-| Atlassian email | 對應 Jira 帳號的 email |
+| Atlassian API token | https://id.atlassian.com/manage-profile/security/api-tokens — **存到 `.env.local` 的 `ATLASSIAN_API_TOKEN`，不在對話貼明文** |
+| Atlassian email | 對應 Jira 帳號 email — **存到 `.env.local` 的 `ATLASSIAN_EMAIL`** |
+| Jira site | 例如 `jubo-health.atlassian.net` — 存到 `.env.local` 的 `ATLASSIAN_SITE`（不含 https 前綴） |
 | dev server 已啟動 | `npm run dev` 或專案對應命令 |
 | 登入帳密 | frontend 根目錄有 `.env.local`，含 `BASE_URL` / `E2E_ACCOUNT` / `E2E_PASSWORD` / `E2E_TYPE`（gitignored） |
 | 測試步驟來源 | `.claude/{ISSUE_KEY}.md` / `.claude/{ISSUE_KEY}-test-plan.md` 的「測試步驟」section |
 | Playwright 可用 | 互動模式：playwright MCP plugin；腳本模式：`playwright` npm package（`npx playwright install chromium` 一次） |
 
-**Token / email**：使用者貼到對話中即可（用完提醒撤銷）。
+**Token / email**：一律存 `.env.local`，**不在對話中貼明文**。token 用完仍提醒使用者去 Atlassian 後台撤銷。
+
+### `.env.local` 完整範例
+
+```
+# --- E2E 登入 ---
+BASE_URL=http://localhost:3000                              # local dev server
+STAGING_URL=https://lunastaging.compal-health.com          # staging（release-e2e workflow 同源）
+E2E_ACCOUNT=<帳號>
+E2E_PASSWORD=<密碼>
+E2E_TYPE=e
+
+# --- Jira API（jira-test-report skill 用）---
+ATLASSIAN_EMAIL=<your-email@example.com>
+ATLASSIAN_API_TOKEN=<從 id.atlassian.com 申請；於 YYYY-MM-DD 到期>
+ATLASSIAN_SITE=jubo-health.atlassian.net
+
+# --- 業務 fixture（依 cjs 需求補；本地與 CI generic 名稱對齊）---
+# CASE_ID=<已結案居服個案 id；LVB-7963 用>
+# DAYCARE_CASE_ID=<已結案日照個案 id；LVB-7963 B 區用>
+```
+
+`.gitignore` 必含 `.env.local`，缺則 append。skill 執行時用 dotenv 或簡易 parser 讀入 `process.env`，**禁止**把 token / 密碼寫入任何 commit 進 git 的檔案。
 
 ---
 
@@ -155,7 +178,7 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 ### 步驟 2：驗證 token
 
-打 `/rest/api/3/myself`，回 displayName 即過。失敗時讓使用者重給 token。
+從 `.env.local` 讀 `ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE`，組 Basic auth header 打 `https://{ATLASSIAN_SITE}/rest/api/3/myself`，回 displayName 即過。失敗時提示使用者更新 `.env.local`（**不要**請使用者貼 token 到對話）。
 
 ### 步驟 3：讀測試步驟
 
@@ -165,13 +188,7 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 local dev 與 CI 都統一走 API 登入：
 
-1. **檢查 `.env.local`** 在 frontend 根目錄存在；缺則提示使用者建立並列出範例：
-   ```
-   BASE_URL=http://localhost:3000    # 或 https://staging.example.com
-   E2E_ACCOUNT=<帳號>
-   E2E_PASSWORD=<密碼>
-   E2E_TYPE=e
-   ```
+1. **檢查 `.env.local`** 在 frontend 根目錄存在；缺則提示使用者依「`.env.local` 完整範例」段建立（含 E2E + Atlassian 兩組 keys）
 2. **確認 `.gitignore` 含 `.env.local`**，缺則 append 並提示
 3. **互動模式**：透過 `mcp__plugin_playwright_playwright__browser_run_code_unsafe` 呼叫 `helpers/login.cjs::authStateFromApi` 直接取 storageState，無需手動填帳密
 4. **腳本模式**：cjs 內 `launchBrowser({ login: env.login })` 自動處理，env.login 由 `helpers/env.cjs::parseEnv` 從 env var 組合
@@ -182,11 +199,14 @@ local dev 與 CI 都統一走 API 登入：
 依測試步驟逐項操作，每步存截圖到專案根目錄下 **暫存資料夾**（不能在 frontend 之外，Playwright MCP 有 root 限制）：
 
 ```
+rm -rf {ISSUE_KEY}-temp       # 自 v2.4.1 起強制：清除上一次 FAIL/重跑留下的 stale 截圖
 mkdir -p {ISSUE_KEY}-temp
 filename: {ISSUE_KEY}-temp/01-xxx.png, 02-xxx.png, ...
 ```
 
 命名規則：`{流水號}-{語意描述}.png`，流水號保 2 位數方便 sort。
+
+**為什麼跑前必清空**：step 命名若在不同 run 之間改名（例如 `04-A4-下拉搜尋鄧候選.png` 改 `04-A4-下拉搜尋陳候選.png`），temp dir 會同時留兩個版本。Phase B 上傳前若沒手動過濾，會把 stale 截圖一起傳到 Jira，造成 inline comment 與舊截圖混淆。`--resume` 模式例外，依 progress.md 跳過已完成 step（不要清 temp）。
 
 **Token 節省鐵則**（互動模式必遵守）：
 - `browser_take_screenshot` **必須**指定 `filename` 參數，否則回 base64 進 context（單張可吃 5,000–20,000+ tokens）
@@ -212,229 +232,223 @@ filename: {ISSUE_KEY}-temp/01-xxx.png, 02-xxx.png, ...
 
 ```bash
 test -f .env.local || echo "NEED_ENV_LOCAL"
-# 必要 keys: BASE_URL, E2E_ACCOUNT, E2E_PASSWORD, E2E_TYPE
+# E2E 登入必要 keys
 grep -E '^(BASE_URL|E2E_ACCOUNT|E2E_PASSWORD|E2E_TYPE)=' .env.local | wc -l   # 應為 4
+# Jira API 必要 keys（Phase B/C 才需要；只跑 Phase A 可暫缺）
+grep -E '^(ATLASSIAN_EMAIL|ATLASSIAN_API_TOKEN|ATLASSIAN_SITE)=' .env.local | wc -l   # 應為 3
 ```
 
-若無，提示使用者建立並列出範例內容（見步驟 4）。**absolute 不要從對話索取密碼**。
+若無，提示使用者依「`.env.local` 完整範例」段建立。**absolute 不要從對話索取密碼或 token**。
 
 ### 步驟 S3：生成 Playwright 腳本
 
 寫到 `.claude/{ISSUE_KEY}-test.cjs`（用 Write 工具，不要用 ctx_execute）：
 
-#### 進階用法：引用 cup-build-test helpers（v2.1.0+ 推薦）
+#### Helpers 架構與 API 速查（v2.4.4+ 全面 helpers 化）
 
-`~/.claude/skills/jira-test-report/helpers/` 從 cup-build-test sync 來（master：`~/.claude/skills/cup-build-test/helpers/`，用 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh` 同步）。
+`~/.claude/skills/jira-test-report/helpers/` 是 jira-test-report skill 自帶的 helpers，**獨立可運作不依賴 cup-build-test**。透過 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh` 從 master（`~/.claude/skills/cup-build-test/helpers/`）同步以避免分歧。
 
-luna 系統測試常撞的三類問題，**helper 已抽出統一處理**，建議產出 cjs 時引用以省下 inline 維護成本：
+骨架預設 `require` 整套 helpers（無需手動加），API 速查：
 
-| 場景 | 用 helper 取代 inline | Helper |
+| Helper | 主要 API | 用途 |
 |---|---|---|
-| 進入頁面後跳公告 modal（`.latest-release-rote-modal` / `.FeatureTermsOfUseModal` 攔截 click）| `await waitAndDismissOnEntry(page)` / `await dismissAnnouncement(page)` | `helpers/modal.cjs` |
-| mutation step 連跑時前 case 留下 modal 殘留，新 modal 開不起來 | `await ensureCleanState(page)` 加在 step 入口 | `helpers/modal.cjs` |
-| 二次確認對話（「改動此日期...」「確認刪除嗎?」這類「是/否」按鈕）| `await confirmYes(page)` / `await confirmNo(page, { scope })` | `helpers/confirmDialog.cjs` |
+| `env.cjs` | `parseEnv({ issueKey, entryPath })` | 解析 BASE_URL / HEADLESS / SCREENSHOT_BASE_DIR / login / fixture placeholder 等成 `env` 物件 |
+| `browser.cjs` | `launchBrowser({ headless, login })` / `attachConsoleCollector(page, errors)` | 開瀏覽器 + API 登入（內部走 `loginInContext`，含 host-only token cookie + `x-request-from: web` header）；console error 收集 |
+| `step.cjs` | `createStepRunner({ screenshotDir, progressPath, only, resumeFrom, stopOnFail })` → `{ step, skipStep, waitStable, getResults }` | 5 參數中文化 step、自動截圖、progress.md 寫入、ONLY / RESUME_FROM 過濾 |
+| `modal.cjs` | `waitAndDismissOnEntry(page)` / `dismissAnnouncement(page)` / `ensureCleanState(page)` | 進入頁面後 dismiss 公告 modal（多輪重試）；mutation step 入口防殘留 |
+| `confirmDialog.cjs` | `confirmYes(page)` / `confirmNo(page, { scope })` | 二次確認對話「是/否」「確認/取消」統一處理 |
+| `evidence.cjs` | `injectEvidence(p, ev)` / `clearEvidence(p)` / `expandSelectAsListbox(selectLocator)` | 三合一規範必備：右上角證據面板 + select 強制展開為 listbox（規範 (a)） |
+| `report.cjs` | `writeResultsJson(dir, payload)` / `printSummary(results, errors)` / `exitCodeForResults(results)` | finally 收尾統一處理 |
+| `login.cjs` | `loginParamsFromEnv()` / `loginInContext(...)` | 已被 `parseEnv` 與 `launchBrowser` 包裝，cjs 通常不直接 require |
 
-**首次 setup**（一次性，跟 cup-build-test 共用 chromium driver，無重複安裝成本）：
+**首次 setup**（一次性）：
 
 ```bash
 cd ~/.claude/skills/jira-test-report/helpers
 npm install                       # 拉 playwright
-npx playwright install chromium   # 跟 cup-build-test 共用 ~/Library/Caches/ms-playwright/
+npx playwright install chromium   # 共用 ~/Library/Caches/ms-playwright/
 ```
 
-**引用範例**（在「腳本骨架」require 之後加）：
-
-```javascript
-const path = require('path');
-const os = require('os');
-const HELPERS_DIR = process.env.CUP_HELPERS_DIR
-  || path.join(os.homedir(), '.claude/skills/jira-test-report/helpers');
-const { waitAndDismissOnEntry, dismissAnnouncement, ensureCleanState } = require(path.join(HELPERS_DIR, 'modal.cjs'));
-const { confirmYes, confirmNo } = require(path.join(HELPERS_DIR, 'confirmDialog.cjs'));
-
-// 用法：
-// 1. 進入頁面後第一件事
-await waitAndDismissOnEntry(page);
-
-// 2. mutation step 入口（避免前 case modal 殘留）
-await ensureCleanState(page);
-
-// 3. 點儲存後跳「改動此日期可能會造成統計資料的改動」確認對話
-await page.locator('button:has-text("儲存")').click();
-await confirmYes(page);
-
-// 4. 點刪除後彈確認對話 → 取消
-await page.locator('.btn-danger').first().click();
-await confirmNo(page, { scope: page.locator('.modal.show') });
-```
+**修 helper 的方向**：先改 master `~/.claude/skills/cup-build-test/helpers/`，再跑 `sync-helpers.sh` 推到 jira-test-report mirror 與 `e2e/release-tests/_helpers/`。直接改 mirror 會在下次 sync 被覆蓋。
 
 完整 API 參考：`~/.claude/skills/cup-build-test/SKILL.md`「Helper API 速查」段。
 
-> 💡 **既有 cjs 不強制升級** — 既有測試在 inline 寫 modal handling 也能跑，但新產 cjs 建議用 helpers 共享 cup-build-test 累積的修正。
+> ⚠️ **既有 cjs 應升級** — v2.4.3 以前的 cjs 大量 inline 重複邏輯（step / evidence / progress / results 寫入），下次回歸時建議改寫對齊 v2.4.4 骨架；新產 cjs 一律走 helpers。
 
 ---
 
-**腳本骨架**（依測試步驟填充 `// === 測試步驟區塊 ===` 內容）：
+**腳本骨架**（自 v2.4.4 起全面 helpers 化，對齊 LVB-7963 風格）：
 
 ```javascript
 // .claude/{ISSUE_KEY}-test.cjs
-const { chromium } = require('playwright');
-const fs = require('fs');
+// @ts-check
+// {ISSUE_KEY} {一句話描述} 回歸測試腳本
+//
+// 此檔由 /jira-test-report skill 階段 S3 自動產出，共用邏輯由 jira-test-report/helpers
+// 提供（env / step / modal / browser / report / evidence），修 bug 或加新功能優先改 helpers/。
+//
+// Root cause（見 frontend/.claude/{ISSUE_KEY}.md）：
+//   {root cause 一兩行摘要}
+//
+// 修正：
+//   - {file path}：{修正摘要}
+//
+// 驗證情境：
+//   - {頁面路徑}
+//   - 預期：{預期結果}
+//
+// 用法（不需 npm install playwright，helpers/ 已自帶）：
+//   .claude/ 階段（skill 產出後本機驗證）：
+//     node .claude/{ISSUE_KEY}-test.cjs
+//   release-tests 階段（publish 後本機對 staging 驗證）：
+//     cd frontend
+//     set -a; source .env.local; set +a
+//     BASE_URL=$STAGING_URL node ../e2e/release-tests/{ISSUE_KEY}.cjs
+//
+// 環境變數：
+//   HEADLESS=false               看畫面 debug
+//   STOP_ON_FAIL=true            遇 FAIL 即停
+//   ONLY=A1.1                    只跑指定 step
+//   RESUME_FROM=A3.1             從指定 step 接續
+//   CUP_HELPERS_DIR=<path>       覆寫 helpers 路徑（預設 ~/.claude/skills/jira-test-report/helpers）
+//
+// 前置：
+//   1. API 登入用 env：BASE_URL / E2E_ACCOUNT / E2E_PASSWORD / E2E_TYPE
+//      本地走 .env.local（set -a; source .env.local），CI 走 GitHub Secrets
+//   2. {fixture env var}（如 CASE_ID）已 hardcode staging default，可 env 覆寫
+//
+// Exit codes：
+//   0 = 全 PASS / 1 = 有 FAIL / 3 = AUTH_EXPIRED / 4 = MISSING_ENV
+
 const path = require('path');
+const os = require('os');
 
-const ISSUE_KEY = '{ISSUE_KEY}';
-const VARIANT = process.env.VARIANT || 'r18';      // r15 / r18 比對用
-const SCREENSHOT_DIR = `.claude/${ISSUE_KEY}-temp/${VARIANT}`;
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const HEADLESS = process.env.HEADLESS !== 'false';
-// API 登入參數（local + CI 統一走 API，無互動式登入）
-const LOGIN_PARAMS = {
-  baseUrl: BASE_URL,
-  account: process.env.E2E_ACCOUNT,
-  password: process.env.E2E_PASSWORD,
-  type: process.env.E2E_TYPE || 'e',
-};
-// RESUME_FROM_IDX：跨 session 續跑用（跳過 step idx ≤ RESUME_FROM_IDX 的 step）
-const RESUME_FROM_IDX = Number(process.env.RESUME_FROM_IDX || 0);
-const PROGRESS_PATH = `.claude/${ISSUE_KEY}-progress.md`;
+// STEP 01: 載入 helpers（.claude/ 階段預設指向 jira-test-report skill；publish 到 release-tests 後改指 _helpers vendor）
+const HELPERS_DIR = process.env.CUP_HELPERS_DIR
+  || path.join(os.homedir(), '.claude/skills/jira-test-report/helpers');
 
-const results = [];
+const { parseEnv } = require(path.join(HELPERS_DIR, 'env.cjs'));
+const { createStepRunner } = require(path.join(HELPERS_DIR, 'step.cjs'));
+const { waitAndDismissOnEntry, ensureCleanState } = require(path.join(HELPERS_DIR, 'modal.cjs'));
+const { launchBrowser, attachConsoleCollector } = require(path.join(HELPERS_DIR, 'browser.cjs'));
+const { writeResultsJson, printSummary, exitCodeForResults } = require(path.join(HELPERS_DIR, 'report.cjs'));
+const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
 
-function logResult(r) {
-  // 一行 JSON，方便外部工具 parse
-  console.log(JSON.stringify(r));
-  results.push(r);
-}
+// STEP 01.05: Staging fixture（hardcode 預設值，本地驗證可 env 覆寫）
+//   {fixture 來源說明 — 例：「已結案」狀態個案，於 staging 環境穩定存在；過期請 PR 更新}
+const STAGING_CASE_ID = '<paste-staging-case-id>';
+process.env.CASE_ID = process.env.CASE_ID || STAGING_CASE_ID;
 
-/**
- * 跨 session 進度檔更新：把 progress.md 內 step idx 對應條目從 [ ] 改 [x] 並填欄位
- * 失敗時 silent（progress.md 不存在或格式異常都不影響主流程）
- */
-function updateProgressMd(idx, name, fields) {
-  if (!fs.existsSync(PROGRESS_PATH)) return;
-  try {
-    const content = fs.readFileSync(PROGRESS_PATH, 'utf8');
-    // STEP A: 匹配「- [ ] {idx} {name}」開頭的整個 step block（含後續的 - Status/Screenshot/Run at 行）
-    const blockRe = new RegExp(
-      `(^- \\[[ x]\\] ${idx} [^\\n]*$)(\\n  - [^\\n]*$)*`,
-      'm',
-    );
-    const match = content.match(blockRe);
-    if (!match) return;
-    const newHeader = match[1].replace('[ ]', '[x]');
-    const newBlock =
-      `${newHeader}\n` +
-      `  - Status: ${fields.status}\n` +
-      `  - Screenshot: ${fields.screenshot}\n` +
-      `  - Run at: ${fields.runAt}`;
-    let updated = content.replace(blockRe, newBlock);
-    if (/^Last update: /m.test(updated)) {
-      updated = updated.replace(/^Last update: .*$/m, `Last update: ${fields.runAt}`);
-    }
-    fs.writeFileSync(PROGRESS_PATH, updated);
-  } catch {
-    // STEP B: progress.md 寫入失敗不阻斷測試
-  }
-}
+// STEP 02: 解析環境變數（parseEnv 統一處理 BASE_URL / HEADLESS / SCREENSHOT_DIR / PROGRESS_PATH / login 等）
+const env = parseEnv({
+  issueKey: '{ISSUE_KEY}',
+  entryPath: '/path/to/entry/{caseId}',   // {caseId} placeholder 會自動代入 process.env.CASE_ID
+});
 
-async function step(page, name, fn) {
-  const idx = String(results.length + 1).padStart(2, '0');
-  // RESUME_FROM_IDX skip：跨 session 續跑時跳過已完成 step（注意：results.push 也跳過，保持 idx 對應）
-  if (RESUME_FROM_IDX && Number(idx) <= RESUME_FROM_IDX) {
-    results.push({ step: idx, name, status: 'SKIPPED_RESUME' });
-    return;
-  }
-  const safeName = name.replace(/[^\w-]+/g, '-');
-  const screenshot = `${idx}-${safeName}.png`;
-  const screenshotPath = path.join(SCREENSHOT_DIR, screenshot);
-  const t0 = Date.now();
-  let stepStatus = 'PASS';
-  let stepError = null;
-  try {
-    await fn(page);
-    await page.screenshot({ path: screenshotPath, fullPage: true });
-    logResult({ step: idx, name, status: 'PASS', screenshot, ms: Date.now() - t0 });
-  } catch (e) {
-    stepStatus = 'FAIL';
-    stepError = e.message;
-    try { await page.screenshot({ path: screenshotPath, fullPage: true }); } catch {}
-    logResult({ step: idx, name, status: 'FAIL', screenshot, error: e.message, ms: Date.now() - t0 });
-    if (process.env.STOP_ON_FAIL === 'true') {
-      updateProgressMd(idx, name, {
-        status: `FAIL: ${stepError}`,
-        screenshot: screenshotPath,
-        runAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      });
-      throw e;
-    }
-  }
-  // 每跑完一個 step 立刻寫 progress.md（cross-session resume）
-  updateProgressMd(idx, name, {
-    status: stepStatus === 'PASS' ? 'PASS' : `FAIL: ${stepError}`,
-    screenshot: screenshotPath,
-    runAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-  });
-}
+// STEP 03: 共用 selector 與預期值定義（依測試情境填）
+// 例：
+// const MODAL_OPEN_SEL = '.modal.in, .modal.show';        // R15 .in + R18 .show 雙覆蓋
+// const EXPECTED_OPTIONS = ['選項 A', '選項 B'];
 
 (async () => {
-  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
-
-  // API 登入取 storageState（local + CI 統一）
-  const { authStateFromApi } = require(path.join(
-    process.env.CUP_HELPERS_DIR
-      || `${require('os').homedir()}/.claude/skills/cup-build-test/helpers`,
-    'login.cjs',
-  ));
-  const storageState = await authStateFromApi(LOGIN_PARAMS);
-
-  const browser = await chromium.launch({ headless: HEADLESS });
-  const context = await browser.newContext({
-    storageState,
-    viewport: { width: 1440, height: 900 },
+  // STEP 01: 環境準備 & 開瀏覽器
+  require('fs').mkdirSync(env.screenshotDir, { recursive: true });
+  // 開瀏覽器 + API 登入：launchBrowser 內部走 loginInContext，cookies 直接進 context jar
+  //   含 host-only token cookie + x-request-from: web header（見 S3 準則「登入用 launchBrowser」）
+  //   啟動第一行應印 `[login] OK 200 — N cookies: token,lunastaging.sid`
+  const { browser, page } = await launchBrowser({
+    headless: env.headless,
+    login: env.login,
   });
-  const page = await context.newPage();
 
-  // Console error 收集（不入主 context，只寫檔）
+  /** @type {string[]} */
   const consoleErrors = [];
-  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-  page.on('pageerror', e => consoleErrors.push('pageerror: ' + e.message));
+  attachConsoleCollector(page, consoleErrors);
+
+  // STEP 02: 建立 step runner（5 參數中文化簽名、自動截圖、progress.md 寫入、ONLY / RESUME_FROM 過濾）
+  const { step, skipStep, waitStable, getResults } = createStepRunner({
+    screenshotDir: env.screenshotDir,
+    progressPath: env.progressPath,
+    only: env.only,
+    resumeFrom: env.resumeFrom,
+    stopOnFail: env.stopOnFail,
+  });
 
   try {
-    await page.goto(BASE_URL + '/activityManager/activityCalendar', { waitUntil: 'networkidle' });
+    // ========================================================================
+    // A. {場景一名稱}
+    // ========================================================================
 
-    // === 測試步驟區塊（依 test plan 填充） ===
-    await step(page, 'page-loaded', async (p) => {
-      await p.waitForSelector('.fc-toolbar, [class*="calendar"]', { timeout: 15000 });
+    // STEP 03: 進入頁面（waitUntil 一律 'domcontentloaded'，禁 'networkidle'，見 S3 準則）
+    await page.goto(env.baseUrl + env.entryPath, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await waitStable(page, 1000);
+
+    // STEP 03.01: AUTH_EXPIRED fail-fast — token 失效不要拖到 step 才爆
+    if (/\/login/.test(page.url())) {
+      console.error(`AUTH_EXPIRED: redirected to ${page.url()}.`);
+      process.exit(3);
+    }
+
+    // STEP 03.02: dismiss 公告 modal（helpers 內建多輪重試捕捉晚到 modal）
+    await waitAndDismissOnEntry(page);
+
+    // === 測試步驟區塊（依 test plan 填充）===
+    // step 呼叫一律 5 參數中文版（v2.3.2+ 強制）：
+    //   step(page, caseId, '中文短名', '中文長描述', async (p) => {...})
+    // 每個斷言 step 必須三合一：程式邏輯 throw + 真實 UI 操作或視覺變更 + injectEvidence overlay（見 S3.5）
+
+    await step(page, 'A1.1', '頁面載入', '進入入口頁，等關鍵 anchor 渲染', async (p) => {
+      // STEP 01: 真實 UI 等待
+      await p.waitForSelector('.your-anchor-selector', { timeout: 15000 });
+      await waitStable(p, 500);
+      // STEP 02: evidence — 標頁面狀態
+      const ok = await p.locator('.your-anchor-selector').first().isVisible();
+      await injectEvidence(p, {
+        title: 'A1.1 頁面載入',
+        actual: { url: p.url(), anchorVisible: ok },
+        conclusion: ok ? '頁面已渲染' : '頁面未渲染',
+        ok,
+      });
     });
 
-    // 範例：點某天加號 → 開新增 modal
-    // await step(page, 'click-add-button', async (p) => {
-    //   await p.locator('th:has-text("3") .glyphicon-plus').first().click();
-    //   await p.waitForSelector('.modal.in', { timeout: 5000 });
+    // 範例：純資料斷言 step 用 expandSelectAsListbox 補 UI 證據（規範 (a)）
+    // await step(page, 'A2.1', '驗證下拉完整列表', '把 select 強制 size=N 展開為 listbox，肉眼可數所有 option', async (p) => {
+    //   await clearEvidence(p);
+    //   const selectLocator = p.locator('select.form-control').first();
+    //   await expandSelectAsListbox(selectLocator);
+    //   const actual = await selectLocator.evaluate((el) =>
+    //     Array.from(/** @type {HTMLSelectElement} */ (el).options).map((o) => (o.textContent || '').trim()));
+    //   const missing = EXPECTED_OPTIONS.filter((e) => !actual.includes(e));
+    //   await injectEvidence(p, {
+    //     title: `A2.1 完整 ${actual.length} 項`,
+    //     actual, expected: EXPECTED_OPTIONS,
+    //     conclusion: missing.length === 0 ? '完全覆蓋' : `缺少 ${JSON.stringify(missing)}`,
+    //     ok: missing.length === 0,
+    //   });
+    //   if (missing.length > 0) {
+    //     throw new Error(`下拉缺少：${JSON.stringify(missing)}`);
+    //   }
     // });
+
     // === 測試步驟區塊結束 ===
-
   } finally {
+    // STEP 05: 收尾 — 寫 _results.json + 印 summary + 關 browser + 回 exit code
+    const results = getResults();
+    writeResultsJson(env.screenshotDir, {
+      issueKey: env.issueKey,
+      variant: env.variant,
+      baseUrl: env.baseUrl,
+      results,
+      consoleErrors,
+    });
+    printSummary(results, consoleErrors);
     await browser.close();
+    process.exit(exitCodeForResults(results));
   }
-
-  fs.writeFileSync(path.join(SCREENSHOT_DIR, '_results.json'), JSON.stringify({
-    issueKey: ISSUE_KEY,
-    variant: VARIANT,
-    baseUrl: BASE_URL,
-    results,
-    consoleErrors,
-    summary: {
-      total: results.length,
-      pass: results.filter(r => r.status === 'PASS').length,
-      fail: results.filter(r => r.status === 'FAIL').length,
-    },
-  }, null, 2));
-
-  const pass = results.filter(r => r.status === 'PASS').length;
-  console.log(`\nDONE: ${pass}/${results.length} PASS, console errors: ${consoleErrors.length}`);
-  if (results.some(r => r.status === 'FAIL')) process.exit(1);
-})();
+})().catch((err) => {
+  console.error('FATAL:', err);
+  process.exit(1);
+});
 ```
 
 **寫腳本準則**：
@@ -443,10 +457,126 @@ async function step(page, name, fn) {
 - `page.locator(...)` 鏈式呼叫，不要存中間變數（locator 是 lazy 的）
 - 等待用 `waitForSelector` / `waitForLoadState`，**不要** `page.waitForTimeout(N)` 死等
 - 不可逆操作（建立、刪除）要在 try/catch 包起來，避免污染下次測試資料
+- **判斷「進入子頁/編輯狀態」預設 DOM-driven 不要 URL-driven**（自 v2.4.1 起）：SPA inline 編輯（同 URL 開 modal / 切 panel / 列 inline 編輯）URL 通常不變，靠 `url !== originalUrl` 判斷會永遠 false。應改靠 DOM 訊號（表單欄位 mount / 預期按鈕「儲存」「取消」出現 / typeahead mount）。luna FE 不論 r15 / r18 多數頁面屬此模式，但少數會 push history state — 第一次寫腳本時 `HEADLESS=false` 跑一次觀察點完按鈕 URL 有沒有變，再決定該 step 用 DOM 訊號還是 URL diff。**範例**：`const enteredEdit = (await p.locator('.bootstrap-typeahead input').count()) > 0;`
+- **第三方元件 selector 寫前先 grep 實際版本**（自 v2.4.1 起）：`react-bootstrap-typeahead` v1.x 用 `.bootstrap-typeahead`，v4+ 改成 `.rbt-`，class 名差很大。寫死 selector 前 grep 一次 `<project>/node_modules/<lib>/lib/*.js` 或 `package.json` 確認版本，避免照範本貼新版 class 卻撞舊版套件
+- **登入用 `launchBrowser({ login: env.login })`，禁止 `authStateFromApi` + `storageState`**（自 v2.4.3 起，v2.4.4 改走 `parseEnv` 封裝）：luna staging 的 `token` cookie 是 **host-only**（無 Domain 屬性），`storageState` 序列化會漏 → 進頁面後前端發現無 token → SSO redirect 到 `icaretest*.compal-health.com` 子網域，30 秒 timeout 看似 `page.goto` wait condition 問題其實是登入機制問題（可從 `page.title()` 看到 `Loading https://icaretest...` 確認）。`browser.cjs::launchBrowser({ login })` 內部走 `loginInContext` 把 cookies 直接寫入 BrowserContext cookie jar（包含 host-only），且自動帶 `x-request-from: web` header 後端才會發 `token` cookie。`parseEnv` 已從 `E2E_ACCOUNT` / `E2E_PASSWORD` / `E2E_TYPE` 組好 `env.login`，cjs 不再直接 require `loginParamsFromEnv`。本機驗證指標：腳本啟動第一行 console 應印出 `[login] OK 200 — N cookies: token,lunastaging.sid`（**`token` 必須在 cookie 列表中**）。`authStateFromApi` 已 deprecated（見 `_helpers/login.cjs:11-13`），新 cjs 不准用
+- **`page.goto` waitUntil 一律用 `'domcontentloaded'`，禁止 `'networkidle'`**（自 v2.4.2 起）：luna staging/prod 的 R18 SPA 背景有 GA4 / tracking / polling / WebSocket 持續 network 活動，`networkidle`（要求 500ms 無 network request）在多數頁面永遠達不到，CI 上必 timeout（30 秒），且不同頁面行為不一致（同寫法 `/homecareCaseClose` 過、`/supervisorVisitRecord` fail）。改用 `domcontentloaded` 只等 DOM 載入，真正的「ready 條件」由 `waitAndDismissOnEntry` + 各 step `waitFor({ state: 'visible' })` 把關 — 這也是 Playwright 對 SPA 的官方建議。`page.goto` 後立刻加 `if (/\/login/.test(page.url())) { console.error('AUTH_EXPIRED'); process.exit(3); }` fail-fast，token 失效不要拖到 step 才爆
+- **step 呼叫中文化**（自 v2.3.2 起，所有產出 cjs 強制）：用 5 參數中文版簽名 `step(page, caseId, '中文短名', '中文長描述', async (p) => {...})`，例如 `step(page, 'A1.1', '結案頁載入', '進入個案結案頁，等歷史紀錄區塊載入', async (p) => {...})`。理由：截圖檔名 / Jira inline comment / progress.md / GitHub Actions log 都吃 `name` 與 `description`，中文化讓非技術 stakeholder 看 release-e2e workflow 結果就能理解每步在做什麼。helpers/step.cjs `createStepRunner` 已支援 5 參數簽名向後相容（4 參數舊用法 description 為空），不需修 helper
+- **斷言截圖三合一規範**（自 v2.4.0 起強制，見下方專段）：每個 step 必須同時具備「程式邏輯斷言」「真實頁面操作或視覺變更」「斷言結論可視化（evidence overlay）」三要素，純資料比對 step 視為 anti-pattern
+- **helpers 全面化，禁止 inline 重複實作**（自 v2.4.4 起）：S3 骨架已 require 整套 `env.cjs` / `step.cjs` / `modal.cjs` / `browser.cjs` / `report.cjs` / `evidence.cjs`，cjs 主體只放測試 step 邏輯與業務專屬 selector / fixture / 預期值。不准在 cjs inline 重複實作 `step()` runner、`updateProgressMd`、`injectEvidence`、`writeResultsJson` 等已抽 helper 的功能。修共用邏輯改 master `~/.claude/skills/cup-build-test/helpers/` 後跑 `sync-helpers.sh`，不要直接改 release-tests/_helpers 或 jira-test-report/helpers
+
+### 步驟 S3.5：斷言截圖三合一規範（v2.4.0+ 強制）
+
+**問題背景**：截圖測試報告同時有兩個目的 — **驗證程式邏輯**（陣列比對、欄位順序、API 回傳）與**驗證 UI 行為**（按鈕真的能點、選項真的能選、Modal 真的會開）。若 step 只做程式邏輯比對（純 `array.includes()` / `JSON.stringify()` 比對），雖然 PASS 但截圖會跟前一步一模一樣，**非工程 stakeholder 看 Jira / GitHub Actions artifact 無法判讀斷言依據**，等同沒測。
+
+LVB-7963 A3.2~A3.4 是反面教材：「必要選項皆存在」「完整 14 項皆存在」「順序正確」三步截圖完全雷同，因為三步都只比對 A3.1 收進來的 `actualOptions` 陣列，沒有任何 page 操作。
+
+**三合一規範**：每個 step 必須同時滿足下列三點：
+
+| 要素 | 內容 | 失敗例 |
+|---|---|---|
+| 1. 程式邏輯斷言 | `throw new Error(...)` 條件式必須能被自動化判讀；錯誤訊息含「實測 vs 預期」對比 | `expect(...)` 抽象包裝、err 只 throw 「失敗」沒寫差異 |
+| 2. 真實頁面操作或視覺變更 | DOM 至少有一處可被截圖識別的變化（點擊後狀態切換、屬性注入、focus、scroll、hover、樣式變更等） | 純讀資料、不對 page 做任何操作 |
+| 3. 斷言結論可視化 | 注入 evidence overlay：固定位置 div，列出實測值 / 預期值 / 結論（✅/❌）；截圖直接呈現「斷言依據與結果」 | 結論只在 stdout、Jira 看不到 |
+
+**純資料斷言 step 強制重構**：若 step 本質是「對 JS 陣列 / 物件做比對」，必須用下列方式之一補回頁面證據：
+
+- (a) **強制 native 元素展開呈現**：例如 `<select>` 改 `size = options.length` 變 listbox 直接看見所有選項；`<details>` 改 `open=true` 展開
+- (b) **逐項真實 UI 互動**：例如要驗證 4 個必要選項都能選，就 `selectLocator.selectOption(value)` 逐一選一次，最後留在最後一個選項狀態
+- (c) **highlight + 標號**：用 `evaluate` 在 DOM 上加 outline / badge 標出比對的元素
+- (a/b/c) 任選一個必須伴隨 evidence overlay 注入
+
+**evidence overlay 由 `evidence.cjs` helper 提供**（自 v2.4.4 起，三個 API 都在 `_helpers/evidence.cjs` 與 `jira-test-report/helpers/evidence.cjs`，無需 inline）：
+
+| API | 簽名 | 用途 |
+|---|---|---|
+| `injectEvidence(p, ev)` | `ev: { title, actual, expected?, conclusion, ok }` | 右上角注入證據面板，紅綠框依 `ok`；同 step 內可重複呼叫覆寫 |
+| `clearEvidence(p)` | - | 移除證據面板（下一個 step 開頭 / mutation 前用） |
+| `expandSelectAsListbox(selectLocator)` | - | 把 native `<select>` 強制 `size = options.length` 變 listbox，截圖肉眼可數所有 option（搭配三合一規範 (a)） |
+
+骨架已 `require` 此三個 API：
+
+```javascript
+const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
+```
+
+**LVB-7963 範本重構（示範三合一）**：
+
+```javascript
+// A3.2 必要選項皆可選取 — 程式邏輯 + UI 逐一選取 + evidence
+await step(page, 'A3.2', '必要選項皆可選取', '逐一在下拉中選取 4 個必要選項（value 9/10/11/12），確認 UI 接受', async (p) => {
+  const selectLocator = p.locator(MODAL_SELECT_SEL).first();
+  const requiredValues = ['9', '10', '11', '12'];
+  // STEP 01: 真實 UI 操作 — 逐一 selectOption（不只是 DOM 存在，UI 可選才算）
+  for (const v of requiredValues) {
+    await selectLocator.selectOption(v);
+    await waitStable(p, 150);
+  }
+  // STEP 02: 程式邏輯斷言
+  const missing = findMissingOptions(actualOptions, REQUIRED_NEW_OPTIONS);
+  // STEP 03: evidence overlay（不論 pass / fail 都注入）
+  await injectEvidence(p, {
+    title: 'A3.2 必要選項皆可選取',
+    actual: actualOptions.filter((o) => REQUIRED_NEW_OPTIONS.includes(o)),
+    expected: REQUIRED_NEW_OPTIONS,
+    conclusion: missing.length === 0
+      ? `4 個必要選項皆出現於下拉且 UI 可選（已逐一 selectOption 驗證）`
+      : `缺少 ${missing.length} 項：${JSON.stringify(missing)}`,
+    ok: missing.length === 0,
+  });
+  if (missing.length > 0) {
+    throw new Error(`結案原因下拉缺少必要選項：${JSON.stringify(missing)}`);
+  }
+});
+
+// A3.3 完整 14 項皆存在 — 把 select 展開成 listbox 視覺呈現（用 evidence.cjs::expandSelectAsListbox）
+await step(page, 'A3.3', '完整 14 項列表展示', '將 select 強制展開為 listbox 視覺呈現 14 項，搭配 evidence 標示比對結果', async (p) => {
+  // STEP 01: 真實 UI 變更 — helper 一行搞定（內部就是 s.size = s.options.length + 樣式）
+  const selectLocator = p.locator(MODAL_SELECT_SEL).first();
+  await expandSelectAsListbox(selectLocator);
+  // STEP 02: 程式邏輯斷言
+  const missing = findMissingOptions(actualOptions, EXPECTED_FULL_ORDER);
+  // STEP 03: evidence
+  await injectEvidence(p, {
+    title: `A3.3 完整 ${actualOptions.length} 項`,
+    actual: actualOptions,
+    expected: EXPECTED_FULL_ORDER,
+    conclusion: missing.length === 0
+      ? `實測 ${actualOptions.length} 項 / 預期 ${EXPECTED_FULL_ORDER.length} 項，完全覆蓋`
+      : `缺少 ${missing.length} 項：${JSON.stringify(missing)}`,
+    ok: missing.length === 0 && actualOptions.length === EXPECTED_FULL_ORDER.length,
+  });
+  if (missing.length > 0) {
+    throw new Error(`結案原因下拉缺少完整選項：${JSON.stringify(missing)}`);
+  }
+});
+```
+
+**Cleanup**：cancel modal 前用 `clearEvidence(p)` 移除 evidence overlay（避免下個 step 殘留）：
+
+```javascript
+await step(page, 'A4.1', '取消 Modal 不送出', '...', async (p) => {
+  await clearEvidence(p);
+  const cancelBtn = p.locator(MODAL_FOOTER_BTN_SEL).filter({ hasText: /取消|cancel/i }).first();
+  await cancelBtn.click();
+  await p.waitForSelector(MODAL_OPEN_SEL, { state: 'hidden', timeout: 5000 });
+});
+```
+
+**自我檢核清單（產出 cjs 前過一次）**：
+
+- [ ] 每個斷言 step 都有 `throw new Error(...)` 條件式（不是 silent 比對）
+- [ ] 純資料 step 已用 (a)/(b)/(c) 之一補上 UI 證據
+- [ ] 每個斷言 step 都有 `injectEvidence(p, {...})` 呼叫
+- [ ] 連續斷言 step 之間 evidence overlay 已 cleanup 或被覆寫
+- [ ] error message 含「實測 vs 預期」對比，不只「失敗」
 
 ### 步驟 S4：執行腳本
 
 ```bash
+# 跑前清空 stale 截圖（v2.4.1+ 強制；--resume 模式例外）
+rm -rf .claude/{ISSUE_KEY}-temp
+
 # 預設 headless 跑（CI 或快速回歸）
 node .claude/{ISSUE_KEY}-test.cjs
 
@@ -476,11 +606,15 @@ cat .claude/{ISSUE_KEY}-temp/{variant}/_results.json
 
 ### 步驟 6：批量上傳到 Jira
 
+從 `.env.local` 讀 `ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE` 組 Basic auth：
+
 ```javascript
 // node fetch + FormData
+const auth = Buffer.from(`${process.env.ATLASSIAN_EMAIL}:${process.env.ATLASSIAN_API_TOKEN}`).toString('base64');
+const site = process.env.ATLASSIAN_SITE;   // e.g. jubo-health.atlassian.net
 const fd = new FormData();
 fd.append("file", new Blob([buf], { type: "image/png" }), filename);
-await fetch(`https://{site}.atlassian.net/rest/api/3/issue/${issueKey}/attachments`, {
+await fetch(`https://${site}/rest/api/3/issue/${issueKey}/attachments`, {
   method: "POST",
   headers: { Authorization: `Basic ${auth}`, "X-Atlassian-Token": "no-check" },
   body: fd,
@@ -516,7 +650,7 @@ const wiki = [
   "",
 ].join("\n");
 
-await fetch(`https://{site}.atlassian.net/rest/api/2/issue/${issueKey}/comment`, {
+await fetch(`https://${process.env.ATLASSIAN_SITE}/rest/api/2/issue/${issueKey}/comment`, {
   method: "POST",
   headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
   body: JSON.stringify({ body: wiki }),
@@ -540,22 +674,157 @@ await fetch(`https://{site}.atlassian.net/rest/api/2/issue/${issueKey}/comment`,
 - comment POST 成功後，立刻 Edit `progress.md` Phase C 從 `[ ]` 改 `[x]`，記下 comment id
 - `--resume` 模式下：若 Phase C 已 `[x]` 表示上次已發過 — 此時應改 PUT comment（覆蓋）或 append 新 comment（依使用者意圖選一），**預設 append** 避免覆蓋人工修改
 
-### 步驟 8：publish 到 release-tests（選用，腳本模式才適用）
+### 步驟 8：publish 到 release-tests（腳本模式強制）
 
-腳本模式測試通過後，**問使用者**：
+腳本模式跑完 Phase A/B/C 後，**強制執行**將 cjs 轉成 release-tests 形態（讓 GitHub Actions release-e2e workflow 能跑）。互動模式不適用（未產 cjs）。
+
+#### S8.1 機械改動清單（v2.4.4+ 大幅簡化）
+
+把 `.claude/{ISSUE_KEY}-test.cjs` 複製到 `<repo-root>/e2e/release-tests/{ISSUE_KEY}.cjs`，因為 S3 骨架已全面 helpers 化，**publish 時實質只剩 1 點機械改動**：
+
+| # | 項目 | 從 | 到 |
+|---|---|---|---|
+| 1 | HELPERS_DIR fallback | `path.join(os.homedir(), '.claude/skills/jira-test-report/helpers')` | `path.join(__dirname, '_helpers')`（vendor 副本，release-tests 自帶） |
+
+其餘原本機械改動（chromium require、SCREENSHOT_DIR、.env.local 載入、progress.md silent、檔頭格式、step 中文化）**已由骨架預先處理**：
+
+| 原 # | 原項目 | 為何不再需要 |
+|---|---|---|
+| 2 | chromium require | 骨架不直接 require playwright，全由 `launchBrowser` 從 helpers 內 node_modules 拿 |
+| 3 | SCREENSHOT_DIR | `parseEnv` 自動處理 `SCREENSHOT_BASE_DIR` env var（v0.4.0+），CI 設 `SCREENSHOT_BASE_DIR=.` 即可 |
+| 4 | .env.local 自動載入 | 骨架本來就不寫此邏輯（依 release-tests/README 規範由 shell 預先 `set -a; source .env.local; set +a`） |
+| 5 | progress.md 寫入 | `createStepRunner` 內部已 silent（`progressPath` 對應檔案不存在時 noop） |
+| 6 | 檔頭格式 | 骨架已為 LVB-7963 風格（root cause / 修正 / 驗證情境 / 用法 / 前置 / exit codes 6 段） |
+| 7 | step 中文化 | 骨架已用 5 參數中文版 `step(page, caseId, '中文短名', '中文長描述', async (p) => {...})` |
+
+**publish 後仍應 grep 一次自我檢查**：
+
+- `grep "step(page," <release-tests>/{KEY}.cjs` 確認所有呼叫都是 5 參數（caseId + 中文短名 + 中文長描述 + fn），非中文 / 4 參數需補
+- `grep "injectEvidence\|expandSelectAsListbox\|clearEvidence" <release-tests>/{KEY}.cjs` 確認斷言 step 都注入 evidence（三合一規範）
+
+#### S8.2 範本 require 區塊（v2.4.4+ 對齊 S3 骨架完整 helpers 列表）
+
+publish 時 HELPERS_DIR fallback 路徑改指 `_helpers/`，其餘 require 整段照搬：
+
+```javascript
+const path = require('path');
+
+const HELPERS_DIR = process.env.CUP_HELPERS_DIR
+  || path.join(__dirname, '_helpers');   // ← .claude/ 階段是 ~/.claude/skills/jira-test-report/helpers
+
+const { parseEnv } = require(path.join(HELPERS_DIR, 'env.cjs'));
+const { createStepRunner } = require(path.join(HELPERS_DIR, 'step.cjs'));
+const { waitAndDismissOnEntry, ensureCleanState } = require(path.join(HELPERS_DIR, 'modal.cjs'));
+const { launchBrowser, attachConsoleCollector } = require(path.join(HELPERS_DIR, 'browser.cjs'));
+const { writeResultsJson, printSummary, exitCodeForResults } = require(path.join(HELPERS_DIR, 'report.cjs'));
+const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
+```
+
+#### S8.3 驗證時機（Local + Staging 雙環境）
+
+| 時機 | URL 來源 | 驗證對象 | 命令 |
+|---|---|---|---|
+| **publish 前** | localhost dev server | 當前 feature branch 含 commit | 從 `.claude/` 跑：`BASE_URL=http://localhost:3000 node .claude/{ISSUE_KEY}-test.cjs` |
+| **publish 後（每次改 cjs）** | release-tests 內位置 + staging URL | release-tests 環境 wiring 正確 + staging 已部署該功能 | 從 `frontend/` 跑：`set -a; source .env.local; set +a; BASE_URL=$STAGING_URL node ../e2e/release-tests/{ISSUE_KEY}.cjs` |
+
+**`.env.local` 同時宣告兩組 URL**：
 
 ```
-是否將此 cjs 加入 release E2E 測試清單？
-  [1] 是 → 自動執行：
-      a. 偵測業務 repo（git rev-parse --show-toplevel）
-      b. cp .claude/{ISSUE_KEY}-test.cjs <repo>/e2e/release-tests/{ISSUE_KEY}.cjs
-      c. 在業務 repo 跑 git add e2e/release-tests/{ISSUE_KEY}.cjs
-      d. 提示使用者開 PR / 觸發 release-e2e workflow
-  [2] 否（僅本地使用）
+BASE_URL=http://localhost:3000          # local dev server
+STAGING_URL=https://lunastaging.compal-health.com   # staging（release-e2e workflow 同源）
 ```
 
-互動模式不適用（步驟未產出 cjs）。
-詳細機械步驟與 require path 處理同 cup-build-test 階段 6 步驟 12。
+切換僅靠 `BASE_URL=$STAGING_URL` 前綴覆寫，不需改 cjs；對齊 CI 端 `secrets.E2E_STAGING_URL` 命名語義。
+
+**何時跳過 staging 驗證**：當前 feature branch 尚未 merge 進 master / staging 未部署該 commit → 跳過，標註「Staging 驗證待 staging 部署該 commit 後再跑」。
+
+#### S8.4 測試 fixture 管理（CASE_ID / DAYCARE_CASE_ID 等業務輸入）
+
+某些 cjs 需要業務 fixture（如 LVB-7963 需「已結案個案 ID」）。**推薦：hardcode staging 預設值 + env 可覆寫**。
+
+##### 主推：Hardcode default + env override
+
+cjs 內宣告 STAGING 常數，`process.env` 覆寫即可；CI 不需要 Variables，workflow yml 不需要 jq step。
+
+```javascript
+// ----- staging fixture（hardcode 預設值）-----
+// 「已結案」狀態居服個案，於 staging 環境穩定存在；過期請 PR 更新此值
+const STAGING_CASE_ID = 'a3f2c891-xxxx-xxxx-xxxx-xxxxxxxx';
+const STAGING_DAYCARE_CASE_ID = 'b7d4e123-yyyy-yyyy-yyyy-yyyyyyyy';
+
+// 本地可 export CASE_ID / DAYCARE_CASE_ID 覆寫
+process.env.CASE_ID = process.env.CASE_ID || STAGING_CASE_ID;
+process.env.DAYCARE_CASE_ID = process.env.DAYCARE_CASE_ID || STAGING_DAYCARE_CASE_ID;
+```
+
+**優點：**
+- cjs = 自帶測試規格，看 cjs 就知道測哪個個案（不必跨檔 trace Variables / yml）
+- 新增 cjs 只需 1 個 PR（不必再開第 2 個 PR 設 Variable）
+- 本地測試仍可 env override 走自己 dev db 個案
+- 個案 id 過期時 `git blame` 找得到當初是誰加的
+
+**適用前提：**
+- 個案 uuid 不含個資（純機器生成 id）— luna 符合，可進 git
+- staging db 不常重建、fixture 穩定
+
+##### Fallback：GitHub Variables JSON map（hardcode 不適用時）
+
+如果公司政策禁止任何測試資料 commit 進 git，改用 GitHub Variables：
+
+| 來源 | 寫法 | 範例 |
+|---|---|---|
+| 本地 `.env.local` | generic 名 | `CASE_ID=abc123` |
+| GitHub Variables | JSON map 集中 | 見下方 |
+
+```
+Name: RELEASE_TEST_FIXTURES
+Value:
+{
+  "LVB-7963": { "CASE_ID": "case_uuid_1", "DAYCARE_CASE_ID": "case_uuid_2" },
+  "CUP-180":  { "CASE_ID": "case_uuid_3" },
+  "ERPD-11841": {}
+}
+```
+
+`release-e2e.yml` matrix step 用 `jq` 解析：
+
+```yaml
+- name: Load fixtures for ${{ matrix.issue }}
+  shell: bash
+  env:
+    FIXTURES: ${{ vars.RELEASE_TEST_FIXTURES }}
+    ISSUE: ${{ matrix.issue }}
+  run: |
+    echo "$FIXTURES" | jq -r --arg k "$ISSUE" '.[$k] // {} | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+```
+
+cjs 端只讀 generic env，本地與 CI 程式碼一致。
+
+##### 缺 fixture 的 guard
+
+兩種方案共用：缺必填 env 必須 exit 4（MISSING_ENV，對齊 LVB-7963 exit code 規範），不跑下去。
+
+```javascript
+if (!process.env.CASE_ID) {
+  console.error('MISSING_ENV: CASE_ID required');
+  process.exit(4);
+}
+```
+
+hardcode 方案因為已注入 default，這個 guard 通常不會 trigger，但留著以防有人手動 unset。
+
+#### S8.5 機械步驟（v2.4.4+ 因 helpers 已收斂，步驟精簡）
+
+1. 偵測 repo root：`git rev-parse --show-toplevel`
+2. 確認 `<root>/e2e/release-tests/` 存在且含 `_helpers/`（vendor）；若無 → 中止，提示 release-tests 結構未建立
+3. **確認 `_helpers/` 內必要 cjs 完整**（自 v2.4.1 起，v2.4.4 helpers 列表擴充）：列出當前 cjs require 的 helper（骨架預設用：`env.cjs` / `step.cjs` / `modal.cjs` / `browser.cjs` / `report.cjs` / `evidence.cjs`），對每個 helper 檢查 `<root>/e2e/release-tests/_helpers/<helper>.cjs` 是否存在。**若缺**，跑 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh --force` 一次性同步（master `cup-build-test/helpers/` → 所有 mirrors 含 release-tests）。注意 `_helpers/` 即使只含 `node_modules/` 而沒有任何 cjs 檔也是合法狀態（首次 publish 時常見），不要因此中止流程
+4. `cp .claude/{ISSUE_KEY}-test.cjs <root>/e2e/release-tests/{ISSUE_KEY}.cjs`
+5. 套用 S8.1 第 1 點機械改動（用 Edit 工具改 `HELPERS_DIR` fallback：`os.homedir() + '.claude/skills/jira-test-report/helpers'` → `path.join(__dirname, '_helpers')`，順帶把不再需要的 `const os = require('os')` 移除）
+6. 若 cjs 需 fixture：確認 STAGING 預設值已 hardcode 在 cjs（S8.4 主推方案），CI 端不需設 Variable；若用 Fallback 方案則更新 `RELEASE_TEST_FIXTURES` Variable 並補進 `.env.local`
+7. grep 自我檢查：`step(page,` 全 5 參數中文版；斷言 step 都有 `injectEvidence`（三合一）
+8. 跑 S8.3「publish 前」local 驗證 1 次（當前 branch 應含 feature commit）
+9. 若 staging 已部署 → 跑 S8.3「publish 後」staging 驗證；若未部署 → 標註待 staging 後驗證
+10. 提示使用者：「PR 開出 / push 後可手動觸發 release-e2e workflow 對 staging 跑」
 
 ### 步驟 9：清理
 
@@ -568,9 +837,9 @@ rm -rf .claude/{ISSUE_KEY}-temp
 `.env.local` **保留**（每次跑都 API 登入，無暫存 session 檔需要清理）。
 `.claude/{ISSUE_KEY}-progress.md` **預設保留**（執行歷史紀錄）；下次跑同 issue 全新流程前用 `rm` 或選擇 `[2] 刪除舊檔，重跑完整流程`。
 
-### 步驟 10：提醒撤銷 token
+### 步驟 10：提醒撤銷 token（選用）
 
-最後一定提醒使用者去 https://id.atlassian.com/manage-profile/security/api-tokens 撤銷剛才用的 token。
+token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要 rotate，提醒去 https://id.atlassian.com/manage-profile/security/api-tokens 撤銷後從 `.env.local` 刪除舊值。
 
 ## Wiki Markup 速查
 
@@ -626,7 +895,7 @@ h3. 結論
 - **Comment 400 ATTACHMENT_VALIDATION_ERROR**：誤用 v3 ADF + attachment id，改回 v2 wiki
 - **截圖路徑 access denied（互動模式）**：Playwright MCP 限制只能存到專案根目錄之內，不能存 ~/Desktop
 - **session 過期（被導回 login）**：API 登入是 stateless 每跑都重取，不會發生 session 過期。若仍出現代表後端 session 失效時間 < cjs 跑完時間，需縮短測試或登入 API 加 `keep-alive` 邏輯
-- **腳本模式 `Cannot find module 'playwright'`**：跑 `cd ~/.claude/skills/cup-build-test/helpers && npm install && npx playwright install chromium`
+- **腳本模式 `Cannot find module 'playwright'`**：跑 `cd ~/.claude/skills/jira-test-report/helpers && npm install && npx playwright install chromium`（.claude/ 階段預設 require jira-test-report/helpers）
 - **腳本模式 selector 找不到（R18 升級後）**：用 `HEADLESS=false` 重跑看實際畫面，調整 selector
 - **跑到一半 rate limit**：**不要閒置等待**（5 分鐘 prompt cache 會過期，恢復時瞬間燒幾萬 token 重建 cache）。建議：當前 step 跑完後 `/clear` 開新 session，下次用 `/jira-test-report --resume` 從 progress.md 接續（Phase A/B/C 自動接力）
 - **`--resume` 但 progress.md 不存在**：提示使用者「尚未跑過，無進度可續，請去掉 `--resume` 旗標」
@@ -645,6 +914,160 @@ h3. 結論
 ## Changelog
 
 版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / 流程行為、MINOR=新增 helper / 模式 / 階段步驟、PATCH=修 bug 或文件更新。
+
+### v2.4.4 — 2026-05-19（LVB-7963 風格 codify + helpers 全面化 + 雙 skill 獨立）
+
+**新增**：
+
+- **S3 腳本骨架全面 helpers 化**：require 整套 `env.cjs` / `step.cjs` / `modal.cjs` / `browser.cjs` / `report.cjs` / `evidence.cjs`，cjs 主體只放測試 step 邏輯。不再 inline 寫 `step()` runner、`updateProgressMd`、`injectEvidence`、`writeResultsJson`、`fs.writeFileSync(_results.json)`、console error 收集等已有 helper 的程式碼
+- **檔頭格式對齊 LVB-7963 6 段**：(1) 一句話描述 (2) Root cause (3) 修正 (4) 驗證情境 (5) 用法 / 環境變數 / 前置 (6) Exit codes（0/1/3/4）
+- **S3.5 evidence overlay 改 require `evidence.cjs`**：不再 inline 30+ 行 `injectEvidence` 函式；列出 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox` 三個 API 用途
+- **S3 寫腳本準則加「helpers 全面化禁止 inline 重複」條**：明確禁止在 cjs 重複實作已 helper 化的功能
+- **進階用法段重寫為「Helpers 架構與 API 速查」**：列出 7 個 helper 的 API 簽名與用途；標註修 helper 走 master + sync-helpers.sh
+- **S8.1 機械改動從 7 點縮為 1 點**：只剩 `HELPERS_DIR` fallback 從 `~/.claude/skills/jira-test-report/helpers` 改 `path.join(__dirname, '_helpers')`；附表列出原 6 點為何不再需要
+- **S8.2 require 區塊對齊 S3 完整 helpers 列表**：6 個 require 一次補齊
+- **S8.5 機械步驟對齊新流程**：第 3 點 helpers 完整性檢查改為跑 `sync-helpers.sh --force` 一次性同步；第 5 點改動量從 6 點縮為 1 點；第 7 點新增 `grep injectEvidence` 自我檢查
+- **失敗處理段 npm install 路徑**：從 `cup-build-test/helpers` 改為 `jira-test-report/helpers`（兩個 skill 獨立可運作）
+
+**helpers 變化（反向同步補齊 master）**：
+
+- `cup-build-test/helpers/evidence.cjs` 新增（先前只在 `e2e/release-tests/_helpers/`，回灌 master）：提供 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox` 三個三合一規範必備 API
+- `cup-build-test/helpers/env.cjs` 更新到 release-tests 端 v0.4.0：新增 `SCREENSHOT_BASE_DIR` env var（給 CI 設 `.` 避開 hidden dir glob）、`SCREENSHOT_DIR` 完全覆寫、拿掉冗餘 variant 子目錄層
+- `cup-build-test/helpers/step.cjs` 更新到 release-tests 端 v0.4.0：`createStepRunner` 5 參數中文簽名 + `sanitizeForFilename` helper（保留 unicode 中文檔名）
+- `cup-build-test/helpers/types.d.ts` 更新：`StepResult` 加 `description?: string`
+- `sync-helpers.sh --force` 已把上述 4 個檔案推到 jira-test-report mirror 與 release-tests vendor，三邊一致
+
+**設計動機**：
+
+- LVB-7963 是 release-tests 第一個完整 helpers 化的腳本（520 行，cjs 主體只剩測試邏輯），但即將被刪除。先前 skill 範本仍是 v2.0 inline 寫法（LVB-7977 為證，562 行內含 100+ 行重複 helper 邏輯），新產出的 cjs 都未對齊 LVB-7963 風格
+- evidence.cjs 只在 release-tests/_helpers/ 沒同步回 master，導致 .claude/ 階段腳本無法 require → 每個 cjs 都得 inline 30+ 行 injectEvidence，違反 v2.4.0 三合一規範要求
+- 使用者明確要求「兩個 skill（cup-build-test / jira-test-report）獨立不互相依賴」：兩邊各自完整 helpers，透過 sync-helpers.sh 保持同步
+
+**影響範圍**：
+
+- **新產出 cjs**：強制套用新骨架（S3 + S3.5 + S8.1/S8.2/S8.5），平均行數從 ~560 行縮到 ~280 行
+- **既有 cjs**（v2.4.3 以前）：LVB-7977 / ERPD-11841 等下次回歸時建議改寫對齊；LVB-7963 即將刪除，其風格已 codify
+- **helpers master 版本建議 bump 0.3.0 → 0.4.0**：因新增 evidence.cjs + env.cjs 行為變更（破壞性需 caller 對齊新 SCREENSHOT_BASE_DIR 預設）
+
+### v2.4.3 — 2026-05-19（ERPD-11841 實戰回饋第 2 輪：禁用 authStateFromApi，登入改 launchBrowser({ login })）
+
+**新增**：
+
+- S3 寫腳本準則加「**登入用 `launchBrowser({ login: loginParamsFromEnv() })`，禁止 `authStateFromApi` + `storageState`**」：luna staging `token` cookie 是 host-only，storageState 序列化會漏，且 `authStateFromApi` 沒帶 `x-request-from: web` header，後端根本不發 token cookie
+- S3 骨架範本（main 開場 + S8.2 require 區塊）改用 `launchBrowser` + `loginParamsFromEnv`，移除手動 `chromium.launch` + `newContext({ storageState })` + 拋棄 `authStateFromApi`
+- 本機驗證指標：腳本啟動第一行應印出 `[login] OK 200 — N cookies: token,lunastaging.sid`，**`token` 必須在 cookie 列表中**，否則進頁面後會被 SSO redirect 到 `icaretest*`
+
+**設計動機**：ERPD-11841 在 GitHub Actions 跑 staging timeout 後本機重現，瀏覽器 `title="Loading https://icaretest115.compal-health.com/?q=ic"` 揭露真因 — 不是 wait condition，是 token cookie 沒拿到 → SSO redirect 卡死。v2.4.2 改 `domcontentloaded` 治標、v2.4.3 改 `launchBrowser({ login })` 治本。
+
+**影響範圍**：
+
+- 新產出 cjs 強制套用（S3 骨架已改）
+- 既有 cjs `grep authStateFromApi` 應全清為 `launchBrowser({ login })`：ERPD-11841（已修）；LVB-7963 / LVB-7977 早就用 `launchBrowser` 不需動
+- skill 互動模式段（約 193 行）的 `helpers/login.cjs::authStateFromApi` 引用建議下個版本一併更新為 `loginInContext`
+
+### v2.4.2 — 2026-05-19（ERPD-11841 實戰回饋：禁用 networkidle + AUTH_EXPIRED fail-fast）
+
+**新增**：
+
+- S3 寫腳本準則加「**`page.goto` waitUntil 一律用 `'domcontentloaded'`，禁止 `'networkidle'`**」：luna staging R18 SPA 背景 GA4/polling 持續，networkidle 30 秒 timeout
+- S3 骨架範本第 440 行同步改 `domcontentloaded`，並補上 `AUTH_EXPIRED` fail-fast block（對齊 LVB-7963.cjs 既有慣例）
+
+**設計動機**：ERPD-11841 在 GitHub Actions release-tests workflow 跑 staging 時 `page.goto('/supervisorVisitRecord', { waitUntil: 'networkidle' })` 30 秒 timeout 直接 fail。同寫法 LVB-7963 `/homecareCaseClose` 過得了是因為該頁 polling 較少，networkidle 在 SPA 上行為不穩定不可靠。
+
+**影響範圍**：
+
+- 新產出 cjs 強制套用（S3 骨架已改）
+- 既有 cjs 應逐步回頭把 `networkidle` 換成 `domcontentloaded`：ERPD-11841（已修）、LVB-7963（暫時還能過但建議下次回歸時換掉）
+
+### v2.4.1 — 2026-05-19（LVB-7977 實戰回饋：DOM-driven 判斷 + _helpers 完整性檢查 + 跑前清空 temp）
+
+**新增**：
+
+- S3 寫腳本準則加「**判斷進入子頁/編輯狀態預設 DOM-driven**」：SPA inline 編輯 URL 通常不變，靠 URL diff 判斷會永遠 false。改靠 DOM 訊號（表單欄位 / 按鈕 / typeahead mount）。luna FE r15/r18 多數頁面屬此模式但少數會 push history state，第一次寫腳本時 `HEADLESS=false` 觀察一次再決定
+- S3 寫腳本準則加「**第三方元件 selector 寫前先 grep 實際版本**」：react-bootstrap-typeahead v1.x 用 `.bootstrap-typeahead`，v4+ 改 `.rbt-`，差異大；寫死 selector 前先查 `node_modules/<lib>/lib/*.js` 或 `package.json`
+- S8.5 機械步驟第 3 點：**確認 `_helpers/` 內必要 cjs 完整**，缺則自動 cp from `~/.claude/skills/cup-build-test/helpers/`。空 `_helpers/`（只含 node_modules）為首次 publish 常見狀態，不應中止流程
+- 步驟 5 / S4 開頭加 `rm -rf .claude/{ISSUE_KEY}-temp` 跑前清空（`--resume` 模式例外）：避免 step 改名留下 stale 截圖污染 Phase B 上傳
+
+**設計動機**：LVB-7977 實戰踩到三個坑 — (1) A2 用 `url !== originalUrl` 判斷進入編輯頁永遠 false（luna 點編輯 URL 不變）；(2) TYPEAHEAD selector 用 v4+ `.rbt-*` 但 react_15 是 v1.x `.bootstrap-typeahead`，找不到任何元素；(3) Phase B 上傳前 temp dir 留有「A4 鄧 → 改成 A4 陳」兩個版本的截圖，未手動刪會混淆 Jira inline comment。
+
+### v2.4.0 — 2026-05-19（斷言截圖三合一規範：程式邏輯 + 真實頁面操作 + evidence overlay）
+
+**變更**：
+
+- 新增 **S3.5 斷言截圖三合一規範**（強制）：每個 step 必須同時具備
+  1. 程式邏輯斷言（throw new Error 含實測 vs 預期對比）
+  2. 真實頁面操作或視覺變更（DOM 至少一處可截圖識別的變化）
+  3. 斷言結論可視化（evidence overlay 注入右上角）
+- 純資料比對 step（截圖前後雷同）視為 anti-pattern，強制用以下方式之一補回頁面證據：
+  - (a) 強制 native 元素展開呈現（如 `<select>.size = N` 變 listbox）
+  - (b) 逐項真實 UI 互動（如 `selectLocator.selectOption()` 逐選驗證）
+  - (c) DOM highlight + 標號 outline / badge
+- 提供 `injectEvidence(p, {...})` 標準格式 helper 範例（inline 在 cjs，可選擇抽到 _helpers/evidence.cjs）
+- 提供 LVB-7963 A3.2 / A3.3 範本重構（必要選項用 (b) 逐一 selectOption、完整 14 項用 (a) listbox 展開）
+- 提供 cleanup pattern（cancel modal 前移除 evidence overlay）
+- 提供 self-check 5 點清單（每個 step throw / UI 證據 / evidence / cleanup / 對比訊息）
+
+**設計動機**：LVB-7963 實戰發現 A3.2~A3.4 三步截圖完全雷同（純對 JS 陣列做 includes 比對 + 順序比對），非工程 stakeholder 看 Jira inline comment 與 GitHub Actions artifact 無法判讀斷言依據，等同沒測。三合一規範強制每個斷言 step 都同時驗證程式邏輯與 UI 行為，截圖內可見斷言結論。
+
+**影響範圍**：
+- 新產出 cjs 強制套用（S3 寫腳本準則 + S3.5 規範）
+- 既有 cjs（LVB-7963 / CUP-180 / ERPD-11841）建議下次回歸時逐步補上 evidence overlay；LVB-7963 為首要範例改造目標
+- S8.5 機械步驟可加第 9 點：grep `injectEvidence` 確認斷言 step 都有注入（未來版本補）
+
+### v2.3.2 — 2026-05-19（產出 release-tests cjs 強制中文化 step 呼叫）
+
+**變更**：
+
+- S3「寫腳本準則」加一條「step 呼叫中文化」：所有產出 cjs 一律用 5 參數中文版簽名 `step(page, caseId, '中文短名', '中文長描述', async (p) => {...})`
+- S3 腳本骨架的 `step()` inline 函式改為支援 4 參數新版 + 2 參數 legacy 向後相容；截圖檔名改為 `{idx}-{caseId}-{中文短名}.png`，sanitize 改保留 unicode（中文不被替換成 `-`）
+- S3 腳本骨架的「測試步驟區塊」範例改用 5 參數中文版示範
+- S8.1 機械改動清單加第 7 點：publish 到 release-tests 時 grep `step(page,` 確認所有呼叫已中文化，未中文化要補
+- 設計動機：release-e2e workflow 跑完後，使用者在 GitHub Actions Job summary / artifact `_results.json` / 截圖檔名 / Jira inline comment 都吃 `name` / `description`，中文化讓非技術 stakeholder 看 workflow 結果就能理解每步在做什麼；對齊 LVB-7963 已落地的 `_helpers/step.cjs createStepRunner` 5 參數簽名規範
+
+**helpers 變化**：
+
+- `e2e/release-tests/_helpers/step.cjs` `createStepRunner` 已於 LVB-7963 commit 提供 5 參數簽名向後相容（typeof 判斷第 4 個 arg 是 function 或 string）
+- `e2e/release-tests/_helpers/types.d.ts` `StepResult` 加 `description?: string`
+- jira-test-report skill helpers/ 透過 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh` 同步即跟進
+
+### v2.3.1 — 2026-05-18（fixture 管理改推 hardcode default）
+
+**變更**：
+
+- S8.4 fixture 管理主推方案改為 **hardcode staging default + `process.env` 覆寫**（JSON map 移至 Fallback 段）
+- 設計動機：luna 個案 uuid 不含個資，hardcode 進 cjs 比 GitHub Variables 設定簡單、新增 cjs 不需要二段 PR、cjs 自帶測試規格不必跨檔 trace
+- JSON map 保留作為「公司政策禁止個案 id 進 git」時的 fallback 方案
+
+### v2.3.0 — 2026-05-18（步驟 8 publish 到 release-tests 強制 + 雙環境驗證 + fixture 管理）
+
+**變更**：
+
+- 步驟 8「publish 到 release-tests」從「選用」改強制執行（只腳本模式適用）
+- 新增 **S8.1 機械改動清單**：6 點對齊（HELPERS_DIR、chromium 路徑、SCREENSHOT_DIR、env.local 載入、progress.md silent、檔頭註解）
+- 新增 **S8.2 範本 require 區塊**：可直接複製對齊 LVB-7963 風格
+- 新增 **S8.3 驗證時機**：Local + Staging 雙環境
+  - `.env.local` 同時宣告 `BASE_URL`（dev）與 `STAGING_URL`（staging）
+  - 切換靠 `BASE_URL=$STAGING_URL` 前綴，不需改 cjs
+  - 對齊 CI `secrets.E2E_STAGING_URL` 語義
+- 新增 **S8.4 fixture 管理**：CASE_ID / DAYCARE_CASE_ID 等業務輸入
+  - 推薦 GitHub Variables 用 **JSON map `RELEASE_TEST_FIXTURES`**（key=issue, value=env map）
+  - workflow matrix step 用 `jq` export 為 env，cjs 完全不知 issue key
+  - 缺 fixture exit code 4（MISSING_ENV，對齊 LVB-7963）
+- 新增 **S8.5 機械步驟**：8 步驟清單從偵測 repo root 到提示使用者觸發 workflow
+
+**設計動機**：先前 release-tests publish 是選用、僅留指針到 cup-build-test，導致 ERPD-11841 手動補 6 點機械改動才能上 release-tests。把這些抽出來、加上雙環境驗證紀律與 fixture 統一管理規範
+
+### v2.2.0 — 2026-05-18（Atlassian credentials 改存 .env.local）
+
+**變更**：
+
+- Atlassian email / API token / site 一律改存 `.env.local`（keys：`ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE`），**不再從對話索取**
+- 新增「`.env.local` 完整範例」段，列出 E2E + Atlassian 兩組必要 keys
+- 步驟 2 / 步驟 S2 / 步驟 6 / 步驟 7 / 步驟 10 全部改為從 `process.env` 讀
+- 步驟 10「撤銷 token」改為選用 — token 持續複用，rotate 時才撤銷
+- `.gitignore` 必含 `.env.local`（之前已有，文字加強）
+
+**設計動機**：避免每次跑都要使用者貼 token，省 round trip；同時把 secret 集中在 gitignored 檔，降低不小心 commit 風險
 
 ### v2.1.0 — 2026-05-14（與 cup-build-test 共用 helpers）
 

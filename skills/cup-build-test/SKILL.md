@@ -6,7 +6,7 @@ description: >
   「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」、想為 CUP
   項目建立完整測試流程時觸發。不適用於：單一 issue 跑既有測試（用
   /jira-test-report）、純 R15/R18 程式碼比對（用 /r15-r18-verify）。
-version: 1.1.0
+version: 1.2.0
 ---
 
 # CUP 測試建立 skill
@@ -423,6 +423,65 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 ### 收尾
 
 - 確認 `.claude/CUP-XX-test.cjs` 已被 git ignore：先跑 `cd frontend && git check-ignore -v .claude/CUP-XX-test.cjs`，回 0 表示已 cover（可能是全域 `~/.gitignore_global` 或 frontend `.gitignore`）→ 略過；非 0 才 append `.claude/CUP-*-test.cjs` 到 frontend/.gitignore
+
+---
+
+## 階段 3.5：斷言截圖三合一規範（v1.2.0+ 強制）
+
+**問題背景**：截圖測試報告同時有兩個目的 — **驗證程式邏輯**（陣列比對、欄位順序、API 回傳）與**驗證 UI 行為**（按鈕真的能點、選項真的能選、Modal 真的會開）。若 step 只做程式邏輯比對（純 `array.includes()` / `JSON.stringify()` 比對），雖然 PASS 但截圖會跟前一步一模一樣，**非工程 stakeholder 看 Jira / GitHub Actions artifact 無法判讀斷言依據**，等同沒測。
+
+LVB-7963（release-e2e 實戰範例）A3.2~A3.4 是反面教材：「必要選項皆存在」「完整 14 項皆存在」「順序正確」三步截圖完全雷同，因為三步都只比對前一步收進來的 `actualOptions` 陣列，沒有任何 page 操作。
+
+**三合一規範**：每個 step 必須同時滿足下列三點：
+
+| 要素 | 內容 | 失敗例 |
+|---|---|---|
+| 1. 程式邏輯斷言 | `throw new Error(...)` 條件式必須能被自動化判讀；錯誤訊息含「實測 vs 預期」對比 | err 只 throw 「失敗」沒寫差異 |
+| 2. 真實頁面操作或視覺變更 | DOM 至少有一處可被截圖識別的變化（點擊後狀態切換、屬性注入、focus、scroll、hover、樣式變更等） | 純讀資料、不對 page 做任何操作 |
+| 3. 斷言結論可視化 | 注入 evidence overlay：固定位置 div，列出實測值 / 預期值 / 結論（✅/❌）；截圖直接呈現「斷言依據與結果」 | 結論只在 stdout、Jira 看不到 |
+
+**純資料斷言 step 強制重構**：若 step 本質是「對 JS 陣列 / 物件做比對」，必須用下列方式之一補回頁面證據：
+
+- (a) **強制 native 元素展開呈現**：例如 `<select>` 改 `size = options.length` 變 listbox 直接看見所有選項；`<details>` 改 `open=true` 展開
+- (b) **逐項真實 UI 互動**：例如要驗證 4 個必要選項都能選，就 `selectLocator.selectOption(value)` 逐一選一次，最後留在最後一個選項狀態
+- (c) **highlight + 標號**：用 `evaluate` 在 DOM 上加 outline / badge 標出比對的元素
+- (a/b/c) 任選一個必須伴隨 evidence overlay 注入
+
+**evidence helper**：`luna_web/e2e/release-tests/_helpers/evidence.cjs` 已封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，cup-build-test 產出 cjs 直接 require 使用（同樣存在於 `~/.claude/skills/cup-build-test/helpers/`，透過 `sync-helpers.sh` 同步維護）。若 helpers 尚未含 evidence.cjs，先從 `luna_web/e2e/release-tests/_helpers/evidence.cjs` 複製過來。
+
+```javascript
+const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
+
+// 範例：純資料斷言 step 改三合一
+await step(page, 'A3.3', '完整 14 項列表展示', '把 select 強制 size=N 展開為 listbox + evidence 標示比對結果', async (p) => {
+  const selectLocator = p.locator(MODAL_SELECT_SEL).first();
+  await expandSelectAsListbox(selectLocator);  // (a) UI 證據
+  const missing = findMissingOptions(actualOptions, EXPECTED_FULL_ORDER);
+  const ok = missing.length === 0;
+  await injectEvidence(p, {
+    title: `A3.3 完整 ${actualOptions.length} 項`,
+    actual: actualOptions,
+    expected: EXPECTED_FULL_ORDER,
+    conclusion: ok ? `實測 ${actualOptions.length} 項完全覆蓋預期` : `缺少 ${missing.length} 項：${JSON.stringify(missing)}`,
+    ok,
+  });
+  if (!ok) { throw new Error(`下拉缺少：${JSON.stringify(missing)}`); }
+});
+
+// cancel modal / 換頁前清掉 overlay
+await step(page, 'A4.1', '取消 Modal', '...', async (p) => {
+  await clearEvidence(p);
+  // ...
+});
+```
+
+**自我檢核清單（產出 cjs 前過一次）**：
+
+- [ ] 每個斷言 step 都有 `throw new Error(...)` 條件式（不是 silent 比對）
+- [ ] 純資料 step 已用 (a)/(b)/(c) 之一補上 UI 證據
+- [ ] 每個斷言 step 都有 `injectEvidence(p, {...})` 呼叫
+- [ ] 連續斷言 step 之間 evidence overlay 已 cleanup 或被覆寫
+- [ ] error message 含「實測 vs 預期」對比，不只「失敗」
 
 ---
 
@@ -978,6 +1037,20 @@ template 已 require 以下模組，**修改測試共用邏輯（modal / waitSta
 ## Changelog
 
 版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / API 行為、MINOR=新增 helper 或階段步驟、PATCH=修 bug 或文件更新。
+
+### v1.2.0 — 2026-05-19（斷言截圖三合一規範，與 jira-test-report v2.4.0 對齊）
+
+**變更**：
+
+- 新增 **階段 3.5 斷言截圖三合一規範**（強制）：每個 step 必須同時具備
+  1. 程式邏輯斷言（throw new Error 含實測 vs 預期對比）
+  2. 真實頁面操作或視覺變更（DOM 至少一處可截圖識別的變化）
+  3. 斷言結論可視化（evidence overlay 注入右上角）
+- 純資料比對 step（截圖前後雷同）視為 anti-pattern，強制用 (a) 強制 native 元素展開（如 `<select>.size = N`）/ (b) 逐項真實 UI 互動 / (c) DOM highlight + 標號 之一補回頁面證據
+- 引入 `_helpers/evidence.cjs`（與 luna_web/e2e/release-tests/_helpers/ 同步）匯出 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，cjs 直接 require 使用
+- 提供 5 點 self-check 清單
+
+**設計動機**：LVB-7963 release-e2e 實戰發現 A3.2~A3.4 三步截圖雷同（純對 JS 陣列做 includes / 順序比對），非工程 stakeholder 看 Jira inline comment 與 GitHub Actions artifact 無法判讀斷言依據。三合一規範強制每個斷言 step 都同時驗證程式邏輯與 UI 行為，截圖內可見斷言結論。與 jira-test-report skill v2.4.0 同步，兩條軌道對齊。
 
 ### v1.1.0 — 2026-05-14（CUP-179 實戰新增）
 

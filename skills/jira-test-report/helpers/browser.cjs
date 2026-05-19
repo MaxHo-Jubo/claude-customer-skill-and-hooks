@@ -2,8 +2,9 @@
 // CUP E2E Test - Browser launch helper
 //
 // 匯出：
-//   - launchBrowser(options): chromium.launch + newContext(storageState) + newPage
-//     ・主流程：opts.login 提供 API 登入參數 → 內部呼叫 authStateFromApi 取 state
+//   - launchBrowser(options): chromium.launch + newContext() + loginInContext + newPage
+//     ・主流程：opts.login 提供 API 登入參數 → 開空 context → 呼叫 loginInContext
+//       讓 cookies 直接進 context jar（**包含 host-only cookies**，避免 storageState 序列化漏帶）
 //     ・既有 cjs 後備：opts.authPath 指向 .playwright-auth/auth.json（deprecated，僅向後相容）
 //   - attachConsoleCollector(page, errors): 註冊 console.error / pageerror handler
 //
@@ -16,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { createRequire } = require('module');
-const { authStateFromApi } = require('./login.cjs');
+const { loginInContext } = require('./login.cjs');
 
 /** @typedef {import('./types').BrowserBundle} BrowserBundle */
 
@@ -87,7 +88,8 @@ function requirePlaywright() {
  * 啟動 chromium、套登入態、開新分頁
  *
  * 兩種登入模式（擇一）：
- * - `login`（主流程）：API 登入，內部呼叫 authStateFromApi 取 storageState
+ * - `login`（主流程）：開空 BrowserContext → 呼叫 loginInContext → cookies 進 context jar
+ *     此流程**包含 host-only cookies**（如 luna staging 的 `token`），避免 storageState 序列化漏帶
  * - `authPath`（deprecated，僅向後相容既有 cjs）：載入 .playwright-auth/auth.json
  *
  * 兩者都未提供時直接 throw。
@@ -114,35 +116,34 @@ async function launchBrowser(options) {
     throw new Error('launchBrowser: must provide either `login` (API mode) or `authPath` (deprecated file mode)');
   }
 
-  // STEP 01: 取得 storageState
-  //   API 模式：用 login params 即時 POST 取 cookies
-  //   File 模式：playwright 接受檔案路徑 string 自動解析
-  /** @type {string | { cookies: Array<any>, origins: Array<any> }} */
-  let storageState;
+  // STEP 01: lazy require playwright（helpers/ 本身不裝，由呼叫專案 cwd 的 node_modules 提供）
+  const { chromium } = requirePlaywright();
+  const browser = await chromium.launch({ headless });
+
+  // STEP 02: 開 context — login 模式不帶 storageState（避免漏 host-only cookie），authPath 模式才帶
+  /** @type {import('playwright').BrowserContext} */
+  let context;
   if (login) {
-    storageState = await authStateFromApi(login);
+    // STEP 02.01: 空 context → loginInContext 直接在 jar 內登入
+    context = await browser.newContext({ viewport, locale });
+    await loginInContext(context, login);
   } else {
-    // STEP 01.01: deprecated file mode — 驗證檔案存在
+    // STEP 02.02: deprecated file mode — 驗證檔案存在
     // @ts-ignore — authPath 已 guard 過
     if (!fs.existsSync(authPath)) {
       // @ts-ignore
       console.error(`AUTH_MISSING: ${authPath} not found. 改用 API 登入模式或先產生 storageState。`);
       process.exit(2);
     }
-    // @ts-ignore
-    storageState = authPath;
+    context = await browser.newContext({
+      // @ts-ignore — authPath 已 guard 過
+      storageState: authPath,
+      viewport,
+      locale,
+    });
   }
 
-  // STEP 02: lazy require playwright（helpers/ 本身不裝，由呼叫專案 cwd 的 node_modules 提供）
-  const { chromium } = requirePlaywright();
-
-  // STEP 03: launch + context + page
-  const browser = await chromium.launch({ headless });
-  const context = await browser.newContext({
-    storageState,
-    viewport,
-    locale,
-  });
+  // STEP 03: 開分頁
   const page = await context.newPage();
 
   return { browser, context, page };
