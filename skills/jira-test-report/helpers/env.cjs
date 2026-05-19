@@ -42,8 +42,20 @@ function parseEnv(input) {
   const stopOnFail = process.env.STOP_ON_FAIL === 'true';
   const only = process.env.ONLY || '';
   const resumeFrom = process.env.RESUME_FROM || '';
-  const screenshotDir = path.join('.claude', `${issueKey}-temp`, variant);
-  const progressPath = path.join('.claude', `${issueKey}-progress.md`);
+  // STEP 02.01: 截圖目錄（v0.4.0 變更）
+  //   - 預設 base dir 從 `.claude`（hidden）改為可由 SCREENSHOT_BASE_DIR env var 控制
+  //   - CI（release-e2e workflow）設 SCREENSHOT_BASE_DIR=. 直接寫到非 hidden 路徑
+  //     避開 actions/upload-artifact@v4 對 hidden 目錄 glob 不穩定的問題，
+  //     workflow 端可省掉 mv hidden→visible 的 step
+  //   - 本機跑沒設則 fallback `.claude`，維持原 gitignore 慣性
+  //   - 拿掉 variant 子目錄層（單環境跑時多一層冗餘）；
+  //     R15 vs R18 雙跑場景請改用 SCREENSHOT_BASE_DIR 或 SCREENSHOT_DIR 區隔
+  //   - 也允許 SCREENSHOT_DIR 完全覆寫整段路徑
+  const screenshotBaseDir = process.env.SCREENSHOT_BASE_DIR || '.claude';
+  const screenshotDir = process.env.SCREENSHOT_DIR
+    || path.join(screenshotBaseDir, `${issueKey}-temp`);
+  const progressPath = process.env.PROGRESS_PATH
+    || path.join(screenshotBaseDir, `${issueKey}-progress.md`);
   const authPath = '.playwright-auth/auth.json';
 
   // STEP 02.01: 組 API 登入參數（local + CI 統一走 API 登入）

@@ -60,7 +60,7 @@
 | jira | `/jira` | 1.1.0 | Jira Issue 管理，自動從 branch 識別 issue |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
-| jira-test-report | `/jira-test-report` | 2.2.0 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.2.0 改用 API 登入 + 可 publish 到 release-tests |
+| jira-test-report | `/jira-test-report` | 2.4.0 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」+ evidence helper（每 step 程式斷言 / UI 變更 / overlay 注入結論） |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
@@ -79,7 +79,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
 | r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| cup-build-test | `/cup-build-test` | 1.1.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.1.0 改用 API 登入 + 可 publish 到 release-tests |
+| cup-build-test | `/cup-build-test` | 1.2.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 
 ### 無 slash command 的 Skills
@@ -255,6 +255,21 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-19: 斷言截圖三合一規範 + loginInContext + evidence helper
+
+**Skills 版本號更新：**
+- `cup-build-test` v1.1.0 → **v1.2.0**：加入「斷言截圖三合一規範」（每 step 必須同時具備：程式斷言 throw / 真實 UI 操作或視覺變更 / evidence overlay 注入結論）；純資料比對 step 視為 anti-pattern，必須補 UI 證據
+- `jira-test-report` v2.2.0 → **v2.4.0**：對齊三合一規範；`.env.local` 完整範例補上 Atlassian API token + 業務 fixture 變數對照
+
+**Helpers 重構：**
+- `helpers/login.cjs` 新增 `loginInContext(context, opts)` 主流程 — cookies 直接進 BrowserContext jar，**保留 host-only cookies**（解 luna staging 的 `token` cookie 被 `storageState` 序列化漏帶問題）；舊 `authStateFromApi` 標記 deprecated
+- `helpers/browser.cjs` 改接 `loginInContext`：開空 context → 呼叫 login → cookies 進 jar；移除 storageState 中介步驟
+- `helpers/evidence.cjs` 新增 — 封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，cjs require 即用
+- `helpers/env.cjs` / `step.cjs` / `types.d.ts` / `package.json` 跟著對齊；兩個 skill 的 helpers 鏡像同步
+
+**Rules：**
+- `rules/typescript/testing.md` 新增 `screenshot-evidence-rule` — 全域強制三合一規範，列出三種 UI 證據展開技巧（`select.size=N` 展開 / 逐一 selectOption / DOM highlight）
 
 ### 2026-05-18: Release E2E workflow + 兩個 skill 改 API 登入
 

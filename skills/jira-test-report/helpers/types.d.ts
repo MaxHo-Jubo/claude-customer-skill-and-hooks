@@ -16,8 +16,10 @@ export type StepResult = {
   step: string;
   /** 測試案例編號（如 'A1.1'） */
   caseId: string;
-  /** 步驟名稱 */
+  /** 步驟名稱（建議中文短名，如「結案頁載入」） */
   name: string;
+  /** 步驟說明（中文長描述，給人看的） */
+  description?: string;
   /** 執行狀態 */
   status: 'PASS' | 'FAIL' | 'SKIP';
   /** 截圖檔名（相對 SCREENSHOT_DIR） */
