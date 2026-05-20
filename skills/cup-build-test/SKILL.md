@@ -475,11 +475,23 @@ await step(page, 'A4.1', '取消 Modal', '...', async (p) => {
 });
 ```
 
+**Cleanup 鐵則**：**同 step 內 `injectEvidence` 之後若還有任何 UI 互動（closeModal / .click / .fill / .selectOption 等），動作前必須 `await clearEvidence(p);`**。`#e2e-evidence-panel` 注入 viewport 右上角 fixed 定位，Modal 寬度大時會 intercept pointer events → Playwright click 60 次 retry 全被擋 → 30 秒 timeout（功能本身沒 bug，人工點得下去）。實戰案例：ERPD-11841 A8 step injectEvidence 後直接 closeModal → staging 100% 重現 timeout，補 clearEvidence 後 PASS。詳見 jira-test-report SKILL.md v2.4.5。
+
+```javascript
+await step(page, 'A8', '...', '...', async (p) => {
+  await clearEvidence(p);          // step 開頭清前一輪
+  // ...check + injectEvidence(...)
+  await clearEvidence(p);          // ← 鐵則：closeModal 前必清
+  await closeModal(p);
+});
+```
+
 **自我檢核清單（產出 cjs 前過一次）**：
 
 - [ ] 每個斷言 step 都有 `throw new Error(...)` 條件式（不是 silent 比對）
 - [ ] 純資料 step 已用 (a)/(b)/(c) 之一補上 UI 證據
 - [ ] 每個斷言 step 都有 `injectEvidence(p, {...})` 呼叫
+- [ ] **同 step 內 `injectEvidence` 之後若還有 UI 動作（closeModal / click / fill / selectOption），動作前有 `clearEvidence(p)`**（Cleanup 鐵則）
 - [ ] 連續斷言 step 之間 evidence overlay 已 cleanup 或被覆寫
 - [ ] error message 含「實測 vs 預期」對比，不只「失敗」
 

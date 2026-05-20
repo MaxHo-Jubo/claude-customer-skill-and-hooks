@@ -34,6 +34,16 @@ context: fork
 
 違反紀律的徵兆：輸出變長、出現 schema 沒定義的 heading、開始講「我發現」「值得注意的是」。看到就停下。
 
+## 每週觀察項目
+
+近期對工作環境/設定做的調整，需連續數週觀察成效。執行 STEP 04 時走一遍本清單，逐項在週報「每週觀察項目現況」回報；項目穩定後可從本清單移除或內化為固定設定。
+
+### big-read-guard hook（2026-05-20 加入）
+- **內容**：PreToolUse hook（`~/.claude/hooks/big-read-guard.sh`），整檔 Read ≥ 800 行的檔案時 deny 一次並提示先用 smart_outline；每個檔案每 session 只攔一次，重送同一 Read 即放行。
+- **觀察重點**：觸發是否過於頻繁（吵）、門檻 800 是否需調高、是否真的減少「整檔 dump 大檔」的情形。
+- **調整點**：`big-read-guard.sh` 的 `THRESHOLD`。
+- **狀態**：觀察中。
+
 ## 執行步驟
 
 ### STEP 00: 前置檢查 — Atlassian MCP 連線（只在完整流程執行）
@@ -201,7 +211,7 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 
 ### STEP 04: 週報彙整與模式提取
 
-綜合 STEP 01 / 01.5 / 02 / 03 結果，產出結構化週報：
+綜合 STEP 01 / 01.5 / 02 / 03 結果，並走一遍上方「每週觀察項目」清單，產出結構化週報：
 
 ```
 ## 週報（{起始日} ~ {結束日}）
@@ -219,6 +229,9 @@ find ~/.claude/projects/*/memory/ -name "*.md" -mtime -{days} -type f 2>/dev/nul
 
 ### 反覆出現的模式
 - {出現 2+ 次的工作流程或行為模式}
+
+### 每週觀察項目現況
+- {逐項：項目名 → 本週觀察到的現況/數據 → 建議（繼續觀察 / 調整 / 移除）；清單為空則寫「無」}
 
 ### 建議提取為 Skill / Subagent / MCP Server
 - {反覆執行的流程} → 依據判斷標準建議最適合的形式：
