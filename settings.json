@@ -378,6 +378,17 @@
             "statusMessage": "Checking R15 syntax compatibility..."
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bash /Users/maxhero/.claude/hooks/big-read-guard.sh",
+            "timeout": 3000,
+            "statusMessage": "Checking large-file read..."
+          }
+        ]
       }
     ]
   },

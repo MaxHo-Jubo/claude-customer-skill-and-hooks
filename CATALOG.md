@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-19（cup-build-test v1.2.0 / jira-test-report v2.4.0 — 落實斷言截圖三合一規範 + evidence helper；helpers/login.cjs 改用 `loginInContext` 主流程保留 host-only cookies）
+> 上次更新：2026-05-20（statusline 新增 live agent sessions / 新增 big-read-guard PreToolUse Read hook / cup-build-test + jira-test-report 共用 orgGuard helper / weekly-review v1.7.0）
 
 ---
 
@@ -75,7 +75,7 @@
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
-#### `/weekly-review` — 每週工作回顧（v1.2.0）
+#### `/weekly-review` — 每週工作回顧（v1.7.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -402,6 +402,7 @@
 |---------|------|------|
 | `Grep\|Glob\|Bash` | `gitnexus-hook.ts` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
+| `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷 |
 | `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 
 ### PostToolUse

@@ -59,22 +59,28 @@ Claude Code 沒有內建 per-session token 統計（dashboard 只有日級）。
 
 每個 assistant turn 的 JSONL 物件結構：
 - `.timestamp`：ISO 8601
-- `.message.usage`：四個 token 欄位
+- `.message.id`：API 回應 ID，**同一 turn 唯一**
+- `.message.usage`：四個 token 欄位（同一 turn 的多行共用同一份 usage）
 - `.message.content[]`：array，內含 `tool_use` 物件（`.name` / `.input`）
 
-跑這段 jq 把每 turn 攤平成 JSON array（**工具名要去前綴**：`mcp__<plugin>__<server>__<tool>` → `<tool>`，用 split `__` 取最後段最簡單，不要用 regex 因 plugin/server 名可能含底線）：
+> ⚠️ **必須依 `message.id` 去重。** Claude Code 會把單一 assistant turn 拆成多行 JSONL（每個 tool_use / 串流片段一行），這些行共用同一個 `message.id` 與同一份 `message.usage`。若不去重直接 sum，token 與成本會以「每 turn 平均行數」倍率高估（實測約 2.8×）。
+
+跑這段 jq：依 `message.id` 分組，usage 取每組第一筆（同組相同），tools/files 跨組內所有行收集（**工具名要去前綴**：`mcp__<plugin>__<server>__<tool>` → `<tool>`，用 split `__` 取最後段，不要用 regex 因 plugin/server 名可能含底線）：
 ```bash
-jq -s '[.[] | select(.type == "assistant") | {
-  ts: .timestamp,
-  in: (.message.usage.input_tokens // 0),
-  cc: (.message.usage.cache_creation_input_tokens // 0),
-  cr: (.message.usage.cache_read_input_tokens // 0),
-  out: (.message.usage.output_tokens // 0),
-  tools: [.message.content[]? | select(.type == "tool_use") |
-          .name | if startswith("mcp__") then split("__") | .[-1] else . end],
-  files: [.message.content[]? | select(.type == "tool_use") |
-          (.input.file_path // .input.path // .input.notebook_path // empty)]
-}]' "$TRANSCRIPT" > /tmp/token-analyze-turns.json
+jq -s '[.[] | select(.type == "assistant")]
+  | group_by(.message.id)
+  | [ .[] | {
+      ts: .[0].timestamp,
+      in: (.[0].message.usage.input_tokens // 0),
+      cc: (.[0].message.usage.cache_creation_input_tokens // 0),
+      cr: (.[0].message.usage.cache_read_input_tokens // 0),
+      out: (.[0].message.usage.output_tokens // 0),
+      tools: [ .[].message.content[]? | select(.type == "tool_use")
+               | .name | if startswith("mcp__") then split("__") | .[-1] else . end ],
+      files: [ .[].message.content[]? | select(.type == "tool_use")
+               | (.input.file_path // .input.path // .input.notebook_path // empty) ]
+    } ]
+  | sort_by(.ts)' "$TRANSCRIPT" > /tmp/token-analyze-turns.json
 ```
 
 ### STEP 03: 計算成本（Opus 4.x 定價）

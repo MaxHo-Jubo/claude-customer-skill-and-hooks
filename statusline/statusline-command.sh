@@ -529,6 +529,47 @@ else
     cfg_hooks=$(echo "$cfg_data" | jq -r '.hooks // 0' 2>/dev/null)
 fi
 
+# ── Live agent sessions (cached 3s) ─────────────────────
+# 來源：claude agents --json (v2.1.145+)；舊版指令不存在則安靜略過。
+# 統計同帳號下其他 session 的 busy / idle 計數，排除當前 session。
+sess_busy=0
+sess_idle=0
+sess_total=0
+sess_cache="/tmp/claude/statusline-agents.json"
+mkdir -p /tmp/claude 2>/dev/null
+
+sess_refresh=true
+if [ -f "$sess_cache" ]; then
+    sess_age=$(( $(date +%s) - $(stat -f %m "$sess_cache" 2>/dev/null || echo 0) ))
+    [ "$sess_age" -lt 3 ] && sess_refresh=false
+fi
+
+if $sess_refresh; then
+    # STEP 01: 跑 claude agents --json，失敗（舊版/no CLI）就略過
+    sess_data=$(claude agents --json 2>/dev/null)
+    if [ -n "$sess_data" ] && [ "$sess_data" != "null" ]; then
+        # STEP 02: 取當前 session_id 以排除自己
+        curr_sid=$(echo "$input" | jq -r '.session_id // .sessionId // empty' 2>/dev/null)
+        # STEP 03: 統計其他 sessions 的 busy / idle 數量
+        sess_summary=$(echo "$sess_data" | jq --arg sid "$curr_sid" -c '
+            map(select(.sessionId != $sid)) | {
+                total: length,
+                busy: (map(select(.status == "busy")) | length),
+                idle: (map(select(.status == "idle")) | length)
+            }
+        ' 2>/dev/null)
+        if [ -n "$sess_summary" ] && [ "$sess_summary" != "null" ]; then
+            echo "$sess_summary" > "$sess_cache" 2>/dev/null
+        fi
+    fi
+fi
+
+if [ -f "$sess_cache" ]; then
+    sess_total=$(jq -r '.total // 0' "$sess_cache" 2>/dev/null || echo 0)
+    sess_busy=$(jq -r '.busy // 0' "$sess_cache" 2>/dev/null || echo 0)
+    sess_idle=$(jq -r '.idle // 0' "$sess_cache" 2>/dev/null || echo 0)
+fi
+
 # ── LINE 2: Account │ Session name │ Model │ Context │ Session │ Thinking ──
 line2=""
 
@@ -577,10 +618,24 @@ if [ -n "$t_tools" ]; then
     line3+="${cyan}◐${reset} ${white}${t_tools}${reset}"
 fi
 
-# agent 數量
+# agent 數量（當前 session 內的 subagent）
 if [ "$t_agents" -gt 0 ] 2>/dev/null; then
     [ -n "$line3" ] && line3+="${sep}"
     line3+="${green}⚡${t_agents} agents${reset}"
+fi
+
+# 其他 live sessions（busy 黃色提醒 / idle dim）
+if [ "$sess_total" -gt 0 ] 2>/dev/null; then
+    [ -n "$line3" ] && line3+="${sep}"
+    sess_seg=""
+    if [ "$sess_busy" -gt 0 ] 2>/dev/null; then
+        sess_seg+="${yellow}⚙ ${sess_busy} busy${reset}"
+    fi
+    if [ "$sess_idle" -gt 0 ] 2>/dev/null; then
+        [ -n "$sess_seg" ] && sess_seg+=" "
+        sess_seg+="${dim}⏸ ${sess_idle} idle${reset}"
+    fi
+    line3+="${sess_seg}"
 fi
 
 # config counts

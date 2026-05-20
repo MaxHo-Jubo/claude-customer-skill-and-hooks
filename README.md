@@ -66,7 +66,7 @@
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.2.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步） |
+| weekly-review | `/weekly-review` | 1.7.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步） |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
@@ -102,6 +102,7 @@
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.ts` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
+| PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
 | PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
@@ -190,6 +191,8 @@
 | [@kamranahmedse/claude-statusline](https://github.com/kamranahmedse/claude-statusline) | OAuth rate limits 進度條（5h / 7d / extra） |
 | [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud) | 概念參考：transcript 解析（工具統計、agent 狀態、todo 進度、config counts、session name） |
 
+> **2026-05-20 新增**：Live agent sessions 區塊 — 透過 `claude agents --json`（v2.1.145+）統計同帳號下其他 session 的 busy/idle 數量並顯示於 LINE 3，3 秒快取；舊版 CLI 不存在時安靜略過。
+
 ## GitNexus — 程式碼知識圖譜
 
 [GitNexus](https://github.com/abhigyanpatwari/GitNexus)（v1.2.8）是圖譜驅動的程式碼智慧工具，為 AI agent 提供 codebase 的結構化索引與查詢能力。
@@ -255,6 +258,20 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-20: statusline live agent sessions + big-read-guard hook + orgGuard helper
+
+**StatusLine 更新：**
+- `statusline-command.sh`：LINE 3 新增 Live agent sessions 區塊 — 透過 `claude agents --json`（v2.1.145+）統計同帳號下其他 session 的 busy/idle 數量；busy 用黃色 ⚙、idle 用淡色 ⏸；排除當前 session；3 秒快取（`/tmp/claude/statusline-agents.json`）；舊版 CLI 不存在時安靜略過
+
+**Hooks 新增：**
+- `hooks/big-read-guard.sh` — PreToolUse Read matcher：當目標檔行數 ≥ 門檻、且未指定 `offset/limit` 時 deny 一次並提示改用 `smart_outline`；同檔每 session 只擋一次（重送即放行，等於一個減速丘）；fail-open 失敗不阻斷
+
+**Skills helpers 新增：**
+- `cup-build-test` / `jira-test-report` 共用 `helpers/orgGuard.cjs` — 機構切換（`switchOrg` / `currentOrg` / `ensureOrg`）；跑特定 case 前切換至非預設機構，跑完於 finally 切回；預設機構為 `compal`（仁寶長照機構）
+
+**Skills 版本號更新：**
+- `weekly-review` v1.2.0 → **v1.7.0**：累計多輪內容微調（步驟細化、輸出格式）
 
 ### 2026-05-19: 斷言截圖三合一規範 + loginInContext + evidence helper
 
