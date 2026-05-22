@@ -259,6 +259,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-05-22: CLAUDE.md POST-COMMIT-REVIEW 更新 — 因應 v2.1.147 /simplify 改名
+
+**CLAUDE.md 規則更新：**
+- POST-COMMIT-REVIEW 步驟 2：`/simplify` 已於 Claude Code v2.1.147 改名為 `/code-review`（僅報告 correctness bug，不再整理程式碼），改用 `code-simplifier:code-simplifier` agent（原行為的直接替代）
+- 步驟 4 備註文字更新（移除「不跑 simplify 面向」說明，不再需要）
+- on-self-fix trigger 對應更新為 `code-simplifier/review`
+
 ### 2026-05-20: statusline live agent sessions + big-read-guard hook + orgGuard helper
 
 **StatusLine 更新：**

@@ -633,9 +633,12 @@ auto memory ──→ weekly-review（整理 + skill 錯誤分析）
 health（獨立稽核，無外部依賴）
 
 post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 Claude）
-  STEP 1: /simplify → amend commit（有修改時）
-  STEP 2: /pr-review-toolkit:review-pr（不含 simplify 面向）→ 自動修正 80+ issue
-  STEP 3: osascript macOS 通知
+  STEP 1: eslint → amend commit（有錯誤時）
+  STEP 2: code-simplifier:code-simplifier agent → amend commit（有修改時）
+  STEP 3: pr-reviewer agent（lite）→ CODE-REVIEW-RULE.md 合規，CRITICAL 自動修正
+  STEP 4: /pr-review-toolkit:review-pr → 自動修正 Critical/Important issue
+  STEP 5: /gitnexus-impact-analysis（資訊性，不自動修改）
+  STEP 6: osascript macOS 通知
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
 
 pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
