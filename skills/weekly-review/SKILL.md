@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.7.0
+version: 1.8.0
 context: fork
 ---
 
@@ -93,15 +93,55 @@ weekly-review 需要 Atlassian MCP 來撈本週 Jira 活動（STEP 01.5）。請
 - 不 degrade 為「跳過 Jira 繼續跑」（使用者明確要求擋下）
 - 認證問題屬於 session-level 環境問題，由使用者處理
 
-### STEP 01: Git 工作摘要
+### STEP 01: Git 工作摘要（透過 multi-repo-commit-scanner subagent 平行掃描）
 
-收集指定天數內所有專案的 commit 紀錄，按專案分組。
+收集指定天數內所有專案的 commit 紀錄，按專案分組。**用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo，主 agent 等聚合**（取代過去逐 repo 序列跑 `git log`）。
 
-```bash
-# 對每個已知專案目錄執行，只抓使用者自己的 commit
-# 必須用 --all 掃所有 branch，否則 feature branch 上的 commit 會遺漏
-git log --all --since="7 days ago" --oneline --no-merges --author="$(git config user.name)"
+**呼叫方式：**
+
 ```
+Agent(
+  description: "Scan commits for weekly-review",
+  subagent_type: "multi-repo-commit-scanner",
+  prompt: """
+    repos:
+      - /Users/maxhero/Documents/Compal/luna-web/frontend
+      - /Users/maxhero/Documents/Compal/luna-web/backend
+      - /Users/maxhero/Documents/Compal/luna-RN-HomeCareStaff/HomeCareStaffRN
+      - /Users/maxhero/Documents/Compal/luna-RN-DayCareStaff/DayCareStaff
+      - /Users/maxhero/Documents/erpv3_web_frontend
+      - /Users/maxhero/Documents/erpv3_web_backend
+      - /Users/maxhero/Documents/projects/claude-customer-skill-and-hooks
+    days: 7
+    parallel: 8
+  """
+)
+```
+
+> **規則仍然成立**：`--all` 必開（feature branch commit 不可漏）、`--no-merges`、按 `git config user.name` 過濾。這些規則固化在 agent 內，主 agent 不需重複指定。
+
+**Subagent 回傳結構**（JSON）：
+
+```json
+{
+  "repos": [
+    { "repo": "...", "name": "frontend", "total": 17, "by_type": {...},
+      "jira_ids": ["ERPD-11870"], "commits": [...] }
+  ],
+  "summary": {
+    "total_repos": 8,
+    "total_commits": 68,
+    "all_jira_ids": ["ERPD-11870", "LVB-7963", ...],
+    "by_type_aggregate": {"feat": 25, "fix": 28, ...}
+  }
+}
+```
+
+**主 agent 後續處理：**
+
+1. 解析 JSON 組裝成下方輸出格式
+2. `summary.all_jira_ids` 直接餵給 STEP 01.5（免再 regex 提取）
+3. 任一 repo 有 `error` 欄位 → 在週報「統計」段落附註提示
 
 輸出格式：
 
@@ -435,7 +475,9 @@ Context 格式：skill:{name} / hook:{name} / {file-path} / unknown
 ## Subagent 執行策略
 
 ```
-STEP 01~04: 主 agent 順序執行（週報產出）
+STEP 01 (Subagent: multi-repo-commit-scanner) ← 內部 8 repo 平行掃 git log
+  ↓ 主 agent 等聚合 JSON
+STEP 01.5 ~ 04: 主 agent 順序執行（Jira / observation / auto memory / 週報產出）
   ↓ 使用者確認
 STEP 05: 主 agent 執行（記憶整理）
   ↓ 使用者確認
@@ -445,6 +487,15 @@ STEP 07 (Subagent C, 可多個) ← 每個 skill 一個 subagent，平行
   ↓ 全部完成
 主 agent 彙整結果，等待使用者逐項確認修補
 ```
+
+**Subagent 一覽**：
+
+| Subagent | 用於 | 平行度 |
+|----------|------|--------|
+| `multi-repo-commit-scanner` | STEP 01 | 8 repo 同時掃（agent 內部） |
+| Subagent A（錯誤分析） | STEP 06 | 與 B 平行 |
+| Subagent B（amendment 追蹤） | STEP 08 | 與 A 平行 |
+| Subagent C（修補建議，N 個） | STEP 07 | 每個 skill 一個，平行 |
 
 ## 注意事項
 

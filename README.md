@@ -28,6 +28,7 @@
 ├── scripts/               # 輔助 scripts
 ├── agents/                # 自訂 agent 定義檔
 │   ├── pr-reviewer.md     # Code review agent（lite/full 雙模式）
+│   ├── multi-repo-commit-scanner.md  # 多 repo 平行 commit 掃描器（weekly-review STEP 01）
 │   └── README-pr-reviewer.md  # pr-reviewer 設計文件（非 agent）
 ├── statusline/            # 自訂狀態列腳本
 │   ├── statusline-command.sh
@@ -66,7 +67,7 @@
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.7.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步） |
+| weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
@@ -119,11 +120,10 @@
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
 | pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent） |
+| multi-repo-commit-scanner | haiku | 1.0.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計。用於 weekly-review STEP 01 |
 
-- **位置**：`~/.claude/agents/pr-reviewer.md`
-- **觸發方式**：POST-COMMIT-REVIEW 自動觸發（lite）或手動指定 PR（full）
-- **工具**：Read、Grep、Glob、Bash、Agent
-- **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent）
+- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：POST-COMMIT-REVIEW 自動 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；說明文件：`agents/README-pr-reviewer.md`
+- **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8
 
 ## Plugins & MCP Servers
 
@@ -258,6 +258,24 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-22: weekly-review v1.8.0 + multi-repo-commit-scanner agent
+
+**新 agent：`agents/multi-repo-commit-scanner.md`（v1.0.0，model: haiku）**
+- 輸入：repo 清單 + days（選填 author / parallel）
+- 內部用 Bash `&` 背景 job + `wait -n` 平行掃多 repo 的 git log，並用 jq 聚合
+- 輸出：每 repo commits + 提取的 Jira IDs（regex `\[([A-Z]+-[0-9]+)\]`）+ 按 type 統計
+- 故障隔離：任一 repo 失敗寫 `error` 欄位、不中斷其他
+
+**weekly-review v1.7.0 → v1.8.0：**
+- STEP 01 改為呼叫 `multi-repo-commit-scanner` agent，由其內部平行 8 repo 同時掃，取代過去主 agent 逐 repo 序列跑 `git log`
+- `summary.all_jira_ids` 直餵 STEP 01.5，免再 regex 提取
+- Subagent 執行策略圖更新，新增 subagent 一覽表
+
+**CLAUDE.md 新增 3 條規則：**
+- `CORE-PRINCIPLES.no-fallback-after-root-cause`：治本同 PR 不再加防護性 fallback（silent fallback 比 crash 更糟）
+- `TOOL-USAGE.upstream-trace`：斷言「沒有 X 防線」前先追呼叫鏈上游
+- `CODE-STYLE.extract-shared-helper`：同概念判斷出現 2+ 檔案立刻抽 helper
 
 ### 2026-05-22: jira-test-report v2.5.5 — AI.MD v4 結構化（剩餘 prose 段落）
 

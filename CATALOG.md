@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-22（jira-test-report v2.5.5 — AI.MD v4 結構化剩餘 prose 段落，token -220 / -1.9%）
+> 上次更新：2026-05-22（weekly-review v1.8.0 + multi-repo-commit-scanner agent — STEP 01 改用平行 8 repo 掃描；CLAUDE.md 新增 3 條規則）
 
 ---
 
@@ -77,12 +77,12 @@
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
-#### `/weekly-review` — 每週工作回顧（v1.7.0）
+#### `/weekly-review` — 每週工作回顧（v1.8.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
 - **功能**（8 步驟）：
-  1. Git 工作摘要（按專案分組）
+  1. Git 工作摘要（按專案分組）— **v1.8.0 起改用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo**，主 agent 等聚合 JSON 後組裝週報
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
   4. 週報彙整與模式提取（含 Skill/Subagent/MCP Server 建議；MCP Server 建議判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式）
@@ -462,6 +462,7 @@
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
 | pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告 |
+| multi-repo-commit-scanner | haiku | 1.0.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計 |
 
 ### pr-reviewer — Code Review Agent（v1.0.0）
 
@@ -475,6 +476,23 @@
 - **檔案過濾**：排除 `*.md`、`*.json`、`*.yml`、`*.yaml`
 - **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
 - **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent）
+
+### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.0.0）
+
+- **位置**：`~/.claude/agents/multi-repo-commit-scanner.md`
+- **模型**：haiku（輕量任務，Bash + jq 為主）
+- **工具**：Bash、Read
+- **輸入**：
+  - `repos`（必填）：git repo 路徑清單
+  - `days`（必填）：往回掃幾天
+  - `author`（選填）：commit 作者，預設每 repo 用 `git config user.name`
+  - `parallel`（選填）：並行度，預設 8
+- **輸出**：JSON 結構 — `repos[]`（每 repo 的 commits、jira_ids、by_type、total）+ `summary`（total_repos / total_commits / all_jira_ids / by_type_aggregate）
+- **平行機制**：Bash `&` 背景 job + `wait -n` 控並發；單一 Bash call 內完成 N repo 掃描與 jq 聚合
+- **規則固化**：`--all` 必開（feature branch commit 不漏）/ `--no-merges` / Jira ID regex `\[([A-Z]+-[0-9]+)\]` / type 解析 conventional commit
+- **故障隔離**：任一 repo 失敗寫 `error` 欄位、不中斷其他 repo
+- **觸發方式**：weekly-review STEP 01 自動呼叫（取代過去主 agent 逐 repo 序列跑 `git log`）
+- **不在範圍**：不解析 commit body / 不對 Jira API 查詢（那是 weekly-review STEP 01.5 做）/ 不寫週報（只回 JSON，主 agent 自己組裝）
 
 ---
 

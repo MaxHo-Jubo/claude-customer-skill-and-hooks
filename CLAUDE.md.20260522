@@ -54,6 +54,7 @@ CORE-PRINCIPLES:
   pragmatism: 解決真實問題；理論vs實務衝突→理論讓步
   simplicity: >3層縮排→重構；一個函式只做一件事，做完就回傳
   root-cause: 找根因後修復；不接受臨時修補；Senior Developer 標準
+  no-fallback-after-root-cause: 治本同 PR 不再加「防護性 fallback」當雙保險；silent fallback（`?? defaultValue`）比 crash 更糟，會掩蓋未來 regression 並把 crash 換成隱性資料錯誤。怕未來 regression 用 type system / unit test / runtime assertion + throw，不要 silent fallback。NULL-SAFETY 只適用「來源就是可能 null/undefined」，不適用「治本後 shape 已收斂的值」
 
 CODE-REVIEW-OUTPUT:
   format: 【品味評分】🟢/🟡/🔴→【量化評分】→【致命問題】→【改進方向】
@@ -97,6 +98,7 @@ CODE-STYLE:
   comment-accuracy: 修改程式碼時同步更新對應註解；刪除已無對應程式碼的舊註解；拼寫與邏輯一致
   global-mutation: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
   anti-overengineering: 先寫最簡單能動版本→再考慮抽象 | 修改前 grep 全檔確認使用點 | 改完跑一次
+  extract-shared-helper: 同一個概念性判斷/驗證邏輯出現在 2+ 個檔案時，第一次就抽具名共用 helper（如 `isValidLocation`）放對應 utility 檔，所有呼叫點統一引用；不要「先 inline、之後再說」。Inline 重複是 fail-open 類 bug 的溫床，各處邏輯易分歧（一處檢查空值、另一處不檢查 → 行為不一致）
 
 </rules>
 
@@ -159,6 +161,7 @@ TOOL-USAGE:
   search-first: 涉及既有程式碼修改前，先 grep/Read 確認使用點，不要憑記憶
   cross-verify: 工具結果與上下文/已知事實矛盾時（如文件引用某路徑但搜尋回空），用第二種工具（ls/find/Bash）交叉驗證再下結論
   edit-tool: 同檔案重複 pattern 修改用 replace_all（避免 context-mismatch error）；single occurrence 才用 old_string/new_string
+  upstream-trace: 斷言「沒有 X 檢查/攔截/防線」前，先找當前函式/頁面的所有進入點（誰呼叫它、誰 navigate 過來），往呼叫鏈上游至少追一層；當前檔案內找不到不代表流程中沒有，上游進入點可能早就做過該檢查。grep 進入點 + 讀上游守衛邏輯，是斷言「無防線」的前置必要動作
   rationale: 4.7 預設依賴 reasoning 較少呼叫工具，需明確要求
 
 POST-COMMIT-REVIEW:
