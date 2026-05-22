@@ -1,7 +1,7 @@
 ---
 name: jira-test-report
 description: "對 Jira issue 跑 Playwright E2E 測試，自動截圖並 inline 上傳到 issue comment（截圖直接顯示在留言中，非附件清單）。當使用者提到 /jira-test-report、「跑測試報告」、「驗收測試上 Jira」、「截圖到 Jira」、「自動化測試 + Jira」、想對某個 issue 跑驗收測試並把結果留在 Jira 時觸發。"
-version: 2.4.0
+version: 2.5.5
 ---
 
 # Jira E2E 測試報告（含 inline 截圖）
