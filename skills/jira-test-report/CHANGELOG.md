@@ -2,6 +2,38 @@
 
 版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / 流程行為、MINOR=新增 helper / 模式 / 階段步驟、PATCH=修 bug 或文件更新。
 
+## v2.5.5 — 2026-05-22（PATCH：剩餘 prose 段落 AI.MD v4 結構化，token -220）
+
+**變更**：5 個 prose 重災區轉 structured labels（套 AI.MD v4：attention splitting / zero-inference labels / semantic anchoring）。
+
+| Priority | 段落 | 改造 |
+|---|---|---|
+| P1 | S8.1-S8.5 publish 流程 | `PATCH-LIST` / `PUBLISH-VERIFY-GREP` / `DUAL-ENV-URLS` / `FIXTURE-STRATEGY` / `HARDCODE-DEFAULT` / `JSON-MAP-FALLBACK` / `MISSING-ENV-GUARD` / `PUBLISH-PIPELINE`（10 step inline） |
+| P2 | 進度紀錄機制 | `RATE-LIMIT-STRATEGY` / `PROGRESS-WRITE` / `RESUME-FSM` / `PROGRESS-WRITER` / `EXPLICIT-RESUME` |
+| P3 | 模式 1 步驟 5 | `SCREENSHOT-TEMP` / `INTERACTIVE-TOKEN-RULE` / `INTERACTIVE-PROGRESS-WRITE` |
+| P4 | 步驟 0.5 進度檔偵測 | `RESUME-DETECT-FSM`（decision tree + prompt-block） |
+| P5 | 步驟 6 / 7 共用後段 | `UPLOAD-FLOW` / `COMMENT-FLOW` |
+
+**成果**：
+
+- 行數 821 → 865（+44）— structured「一規則一行」必然展開
+- **Bytes 46935 → 46052（-883），Token ~11733 → ~11513（-220，-1.9%）** — 移除 prose 冗餘（人類解釋「為什麼/避免」）抵銷行數增長
+- 共 29 個 structured label blocks（v2.4.7 既有 + v2.5.5 新增）
+
+**設計取捨**：
+
+- AI.MD v4 的核心 paradox：行數 up（每規則拿完整 attention）+ token down（短英文 label + 刪 prose 冗餘）
+- S8.5 PUBLISH-PIPELINE 第一版用子欄展開（41 行）→ 壓回 inline 風格（16 行），每 step 仍獨立 line 保 attention，子欄只在 step-3 多細節時保留
+
+**anchor 保護紀律**（避免破壞既有 cjs 對 SKILL.md 的引用）：
+
+- 所有 H3 步驟標題（`### 步驟 S3` / `S3.5` / `S3.6`）保留 — templates/skeleton.cjs 5 處 + snippets 3 檔頭引用
+- 所有 H4 子標題（`#### S8.1` ~ `#### S8.5`）保留 — SKILL.md 自己跨段引用（PATCH-LIST.patch-1、publish-前/後 等）
+- structured label 名稱加在 H3/H4 標題下面，不取代標題
+- 驗證：S3 / S3.5 / S3.6 / S8.1 / S8.5 / 共用後段 cross-ref 全部命中
+
+**未做**：multi-model 驗證（AI.MD v4 Phase 6）— 此次屬 PATCH 局部 reformat，未跑 8 道測題 multi-model 驗證；下次跑 cjs 時實測 compliance 即可（同 v2.4.7 做法）
+
 ## v2.5.4 — 2026-05-22（PATCH：失敗處理抽到 docs/troubleshooting.md，SKILL.md 再瘦 -35 行）
 
 **變更**：

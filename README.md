@@ -60,7 +60,7 @@
 | jira | `/jira` | 1.1.0 | Jira Issue 管理，自動從 branch 識別 issue |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
-| jira-test-report | `/jira-test-report` | 2.5.4 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md` |
+| jira-test-report | `/jira-test-report` | 2.5.5 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md`；v2.5.5 套 AI.MD v4：5 個 prose 重災區轉 structured labels（共 29 個 label blocks），token -220（-1.9%） |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
@@ -258,6 +258,15 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-22: jira-test-report v2.5.5 — AI.MD v4 結構化（剩餘 prose 段落）
+
+**SKILL.md 細部優化（v2.5.5，PATCH）：**
+- 5 個 prose 重災區套 AI.MD v4（attention splitting / zero-inference labels / semantic anchoring）：S8.1-S8.5 publish 流程、進度紀錄機制、模式 1 步驟 5、步驟 0.5 進度檔偵測、步驟 6/7 共用後段
+- 共 29 個 structured label blocks（v2.4.7 既有 + v2.5.5 新增）
+- **行數**：821 → 865（+44，「一規則一行」必然展開）
+- **Token**：~11733 → ~11513（**-220，-1.9%**）— 短英文 label + 刪 prose 冗餘抵銷行數增長
+- anchor 保護：所有 H3 步驟標題（S3/S3.5/S3.6）與 H4 子標題（S8.1-S8.5）保留，cjs/snippets 跨段引用不受影響
 
 ### 2026-05-22: jira-test-report v2.5.4 — SKILL.md 大規模拆分重整
 

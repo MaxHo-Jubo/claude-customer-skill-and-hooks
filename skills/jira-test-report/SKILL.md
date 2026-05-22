@@ -31,9 +31,13 @@ version: 2.4.0
 
 ## 進度紀錄機制（rate limit 與 cross-session resume）
 
-跑測試 + 上傳 + 發 comment 三階段都吃 token，**跑到一半 rate limit 時若閒置等待 reset 反而最貴** — Anthropic 是 5 小時滾動視窗，session 閒置會讓 prompt cache（5 分鐘 TTL）過期，恢復時整個 SKILL.md 與 cjs / 測試步驟都得重讀，瞬間燒幾萬 token 重建 cache。
-
-正確策略：**rate limit 一到就 `/clear` 開新 session**，下次用 `--resume` 旗標續跑。
+```
+RATE-LIMIT-STRATEGY:
+  context: Anthropic 5h 滾動視窗 + 5min prompt cache TTL
+  banned: 閒置等待 reset → cache 過期 → 恢復時重讀 SKILL.md + cjs / 測試步驟 瞬間燒幾萬 token 重建
+  action: rate limit 命中 → /clear 開新 session → 下次 --resume 續跑
+  three-phase-cost: 跑測試 + 上傳 + 發 comment 三階段都吃 token
+```
 
 ### progress.md 結構
 
@@ -48,36 +52,43 @@ version: 2.4.0
 
 ### 寫入時機
 
-- **Phase A 開始前**：建檔，所有 step 列為 `[ ]` 未勾選（從測試步驟清單推得）
-- **Phase A 每跑完一個 step**：對應條目從 `[ ]` 改 `[x]`，填 status / screenshot / run at
-- **Phase B 每張上傳完**：對應條目改 `[x]`，記下 attachment id
-- **Phase C comment 發完**：對應條目改 `[x]`
+```
+PROGRESS-WRITE:
+  pre-phase-A: 建檔，所有 step 列為 [ ] 未勾選（從測試步驟清單推得）
+  during-phase-A: 每跑完一 step → 條目 [ ] → [x]，填 status / screenshot / run at
+  during-phase-B: 每張上傳完 → 條目 [x] + 記 attachment id
+  during-phase-C: comment 發完 → 條目 [x]
+```
 
 ### 續跑模式（`--resume`）
 
-帶 `--resume` 旗標啟動時：
-1. 進入**步驟 0.5**：讀 `.claude/{ISSUE_KEY}-progress.md`
-2. **Phase A 仍有 `[ ]`** → 從第一個未勾選 step 續跑
-3. **Phase A 全 `[x]` + Phase B 仍有 `[ ]`** → 跳過 Phase A 直接補上傳
-4. **Phase A、B 都全 `[x]` + Phase C 仍 `[ ]`** → 直接發 comment
-5. **三 Phase 全 `[x]`** → 提示使用者「已完成，無事可做」
+```
+RESUME-FSM:
+  trigger: --resume 旗標啟動
+  state-1-load: 進入步驟 0.5 → 讀 .claude/{ISSUE_KEY}-progress.md
+  state-2-phase-A-incomplete: Phase A 仍有 [ ] → 從第一個未勾選 step 續跑
+  state-3-phase-A-done: Phase A 全 [x] + Phase B 仍有 [ ] → 跳過 A 直接補上傳
+  state-4-phase-B-done: A/B 都全 [x] + Phase C 仍 [ ] → 直接發 comment
+  state-5-all-done: 三 Phase 全 [x] → 提示「已完成，無事可做」
+```
 
 ### 模式對應
 
-| 模式 | progress.md 寫入端 |
-|---|---|
-| 互動模式 | 主 context（Edit 工具）每 step 結束時更新 |
-| 腳本模式 | cjs 內 `step()` wrapper 用 `updateProgressMd()` 函式（同 cup-build-test 設計，見步驟 S3 cjs 範例）|
-
-Phase B / Phase C 不論模式都由主 context Edit。
+```
+PROGRESS-WRITER:
+  互動模式: 主 context（Edit 工具）每 step 結束時更新
+  腳本模式: cjs 內 step() wrapper 用 updateProgressMd()（同 cup-build-test 設計，見 S3 cjs 範例）
+  phase-B/C: 不論模式都由主 context Edit
+```
 
 ### 為什麼要顯式 `--resume` 旗標
 
-避免兩種誤觸發：
-1. **舊 progress.md 殘留**（上次失敗忘了清，新需求被誤判為續跑）
-2. **同 issue 不同測試範圍**（測試步驟 .md 改了，舊 progress 過時）
-
-無 `--resume` 旗標但偵測到 progress.md 存在時，**步驟 0.5 問使用者**（不自動決定）。
+```
+EXPLICIT-RESUME:
+  avoid-1: 舊 progress.md 殘留（上次失敗忘了清，新需求被誤判續跑）
+  avoid-2: 同 issue 不同測試範圍（測試步驟 .md 改了，舊 progress 過時）
+  fallback: 無 --resume 旗標但偵測到 progress.md 存在 → 步驟 0.5 問使用者（不自動決定）
+```
 
 ## 共用先決條件（先確認，缺哪項先補哪項）
 
@@ -107,27 +118,29 @@ Phase B / Phase C 不論模式都由主 context Edit。
 
 ## 步驟 0.5：進度檔偵測（cross-session resume）
 
-**模式 1、2 都跑此步驟**，在 issue key 確定後（步驟 1 / S1 之後）執行：
+```
+RESUME-DETECT-FSM:
+  timing: 在 issue key 確定後（步驟 1 / S1 之後），模式 1、2 都跑
+  check: .claude/{ISSUE_KEY}-progress.md 是否存在
 
-1. 檢查 `.claude/{ISSUE_KEY}-progress.md` 是否存在
-2. **不存在** → 走完整流程（建檔在跑測試前）
-3. **存在 + 帶 `--resume` 旗標** → 進入續跑：
-   - 讀 progress.md，依 Phase A/B/C 各自的勾選狀態決定從哪裡接
-   - Phase A 用 `RESUME_FROM_IDX={N}` 環境變數傳給 cjs（腳本模式）；互動模式則由主 context 跳過已 `[x]` 的 step
-4. **存在但無 `--resume` 旗標** → **問使用者**：
+  state-not-exist: 走完整流程（建檔在跑測試前）
+  state-exist-with-resume: 進入續跑（refer RESUME-FSM）
+    interactive: 主 context 跳過已 [x] 的 step
+    script: 用 RESUME_FROM_IDX={N} env 傳給 cjs
+  state-exist-no-resume: 問使用者三選一（不自動決定，refer prompt-block）
 
-   ```
-   ⚠️  偵測到既有進度檔：.claude/ERPD-XXXX-progress.md
-       最後更新：2026-05-08 14:45
-       Phase A: 5 / 8 step 完成
-       Phase B: 5 / 5 上傳完成
-       Phase C: 尚未發 comment
+prompt-block: |
+  ⚠️  偵測到既有進度檔：.claude/ERPD-XXXX-progress.md
+      最後更新：2026-05-08 14:45
+      Phase A: 5 / 8 step 完成
+      Phase B: 5 / 5 上傳完成
+      Phase C: 尚未發 comment
 
-   選擇：
-     [1] 續跑（等同 --resume）
-     [2] 刪除舊檔，重跑完整流程
-     [3] 中止，我要手動檢查
-   ```
+  選擇：
+    [1] 續跑（等同 --resume）
+    [2] 刪除舊檔，重跑完整流程
+    [3] 中止，我要手動檢查
+```
 
 ---
 
@@ -161,27 +174,31 @@ local dev 與 CI 都統一走 API 登入：
 
 ### 步驟 5：跑測試 + 截圖
 
-依測試步驟逐項操作，每步存截圖到專案根目錄下 **暫存資料夾**（不能在 frontend 之外，Playwright MCP 有 root 限制）：
+依測試步驟逐項操作，每步存截圖到專案根目錄下暫存資料夾（不能在 frontend 之外，Playwright MCP 有 root 限制）：
 
 ```
-rm -rf {ISSUE_KEY}-temp       # 自 v2.4.1 起強制：清除上一次 FAIL/重跑留下的 stale 截圖
-mkdir -p {ISSUE_KEY}-temp
-filename: {ISSUE_KEY}-temp/01-xxx.png, 02-xxx.png, ...
+SCREENSHOT-TEMP:
+  pre-run: rm -rf {ISSUE_KEY}-temp（v2.4.1+ 強制清空；--resume 例外）
+  mkdir: mkdir -p {ISSUE_KEY}-temp
+  filename: {ISSUE_KEY}-temp/{流水號-2位}-{語意描述}.png
+  why-clean: step 改名（如 04-A4-鄧 → 04-A4-陳）會留兩版本污染 Phase B 上傳
+  resume-exception: --resume 模式依 progress.md 跳過已完成 step，不要清 temp
 ```
 
-命名規則：`{流水號}-{語意描述}.png`，流水號保 2 位數方便 sort。
+```
+INTERACTIVE-TOKEN-RULE:
+  rule: 互動模式必遵守 token 節省鐵則
+  banned-1: browser_take_screenshot 不指定 filename → 回 base64 進 context（5K-20K+ tokens / 張）
+  banned-2: 對同個畫面重複 snapshot
+  how: browser_snapshot 用 depth 限制 a11y tree 層級，或用 filename 存檔不入 context
+```
 
-**為什麼跑前必清空**：step 命名若在不同 run 之間改名（例如 `04-A4-下拉搜尋鄧候選.png` 改 `04-A4-下拉搜尋陳候選.png`），temp dir 會同時留兩個版本。Phase B 上傳前若沒手動過濾，會把 stale 截圖一起傳到 Jira，造成 inline comment 與舊截圖混淆。`--resume` 模式例外，依 progress.md 跳過已完成 step（不要清 temp）。
-
-**Token 節省鐵則**（互動模式必遵守）：
-- `browser_take_screenshot` **必須**指定 `filename` 參數，否則回 base64 進 context（單張可吃 5,000–20,000+ tokens）
-- `browser_snapshot` 用 `depth` 參數限制 a11y tree 層級，或用 `filename` 存檔不入 context
-- 不要對同個畫面重複 snapshot
-
-**Progress.md 寫入（cross-session resume）**：
-- 跑測試前先建 `.claude/{ISSUE_KEY}-progress.md`，把所有測試步驟列為 `[ ]`
-- 每跑完一個 step（截完圖後），用 Edit 工具把對應條目改 `[x]` 並填 Status / Screenshot / Run at
-- `--resume` 模式下：先讀 progress.md，跳過所有已 `[x]` 的 step，從第一個 `[ ]` 開始
+```
+INTERACTIVE-PROGRESS-WRITE:
+  pre-run: 建 .claude/{ISSUE_KEY}-progress.md，所有測試步驟列為 [ ]
+  per-step: 截完圖後用 Edit 工具改 [x] + 填 Status / Screenshot / Run at
+  resume: 讀 progress.md，跳過所有已 [x] 的 step，從第一個 [ ] 開始
+```
 
 ### 步驟 6–9：見「共用後段」
 
@@ -515,10 +532,21 @@ cat .claude/{ISSUE_KEY}-temp/{variant}/_results.json
 
 ### 步驟 6：批量上傳到 Jira
 
-從 `.env.local` 讀 `ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE` 組 Basic auth：
+```
+UPLOAD-FLOW:
+  auth: Basic（從 .env.local 讀 ATLASSIAN_EMAIL / ATLASSIAN_API_TOKEN / ATLASSIAN_SITE 組）
+  endpoint: POST https://{site}/rest/api/3/issue/{issueKey}/attachments
+  headers: Authorization=Basic <auth> | X-Atlassian-Token=no-check
+  body: FormData(file=Blob[png], filename=screenshot.png)
+  iterate: 逐張 upload，記下回傳 attachment id
+  note: attachment id 留作確認用；inline 顯示只用 filename
+  phase-B-write: 每張上傳成功 → Edit progress.md Phase B 條目 [x] + 記 attachment id
+  resume-behavior: --resume → 跳過 Phase B 已 [x] 的截圖（避免重複 attachment）
+```
+
+範例 code（node fetch + FormData）：
 
 ```javascript
-// node fetch + FormData
 const auth = Buffer.from(`${process.env.ATLASSIAN_EMAIL}:${process.env.ATLASSIAN_API_TOKEN}`).toString('base64');
 const site = process.env.ATLASSIAN_SITE;   // e.g. jubo-health.atlassian.net
 const fd = new FormData();
@@ -530,17 +558,23 @@ await fetch(`https://${site}/rest/api/3/issue/${issueKey}/attachments`, {
 });
 ```
 
-逐張 upload，記下回傳的 attachment id（之後用來確認；inline 顯示其實只用 filename）。
-
-**Phase B progress 寫入**：
-- 每張上傳成功後，立刻 Edit `progress.md` 把 Phase B 區塊對應條目改 `[x]` 並記下 attachment id
-- `--resume` 模式下：先讀 progress.md，跳過 Phase B 已 `[x]` 的截圖，避免重複上傳產生重複 attachment
-
 ### 步驟 7：發 inline comment（**核心 know-how**）
 
-**關鍵**：MCP `addCommentToJiraIssue` 走 ADF v3，attachment ID 不能直接當 media id（會回 `ATTACHMENT_VALIDATION_ERROR`）。
+```
+COMMENT-FLOW:
+  core-knowhow: MCP addCommentToJiraIssue 走 ADF v3，attachment ID 不能直接當 media id → ATTACHMENT_VALIDATION_ERROR
+  correct: REST API v2 + wiki markup → 後端自動把 !filename! 轉成正確 ADF mediaSingle node（含真正 media UUID）
+  endpoint: POST https://{ATLASSIAN_SITE}/rest/api/2/issue/{issueKey}/comment
+  headers: Authorization=Basic <auth> | Content-Type=application/json
+  body: JSON.stringify({ body: wiki })   # wiki = wiki markup 字串
+  banned: REST v3（不接受 wiki）
+  wiki-syntax: 見 docs/wiki-markup.md；comment 結構見 docs/comment-template.md
+  script-mode-extra: comment 加 執行時間 / variant(r15 vs r18) / console error 數(_results.json.consoleErrors.length) / fail step error
+  phase-C-write: comment POST 成功 → Edit progress.md Phase C [ ] → [x] + 記 comment id
+  resume-behavior: Phase C 已 [x] = 上次發過 → 預設 append 新 comment（避免覆蓋人工修改）；或 PUT 覆蓋（依使用者意圖）
+```
 
-**正確做法**：用 REST API v2 + wiki markup，後端會自動把 `!filename!` 轉成正確的 ADF mediaSingle node（含真正的 media UUID）。
+範例 code（wiki markup body + REST v2 POST）：
 
 ```javascript
 const wiki = [
@@ -566,50 +600,40 @@ await fetch(`https://${process.env.ATLASSIAN_SITE}/rest/api/2/issue/${issueKey}/
 });
 ```
 
-注意：
-- 一定要 **REST v2**（v3 不接受 wiki），endpoint 是 `/rest/api/2/issue/{key}/comment`
-- `!filename.png|width=900!` 中 width 視截圖比例調整（一般 800-900 看得清）
-- 表格用 `|| header || header ||` + `| cell | cell |`
-- 分隔線 `----`
-- 標題 `h2.` `h3.`（注意空格）
-- 粗體 `*text*`
-
-**腳本模式**的 comment 額外建議加上：
-- 執行時間 / variant（r15 vs r18）
-- console error 數量（從 `_results.json.consoleErrors.length`）
-- fail step 的 error 訊息
-
-**Phase C progress 寫入**：
-- comment POST 成功後，立刻 Edit `progress.md` Phase C 從 `[ ]` 改 `[x]`，記下 comment id
-- `--resume` 模式下：若 Phase C 已 `[x]` 表示上次已發過 — 此時應改 PUT comment（覆蓋）或 append 新 comment（依使用者意圖選一），**預設 append** 避免覆蓋人工修改
-
 ### 步驟 8：publish 到 release-tests（腳本模式強制）
 
 腳本模式跑完 Phase A/B/C 後，**強制執行**將 cjs 轉成 release-tests 形態（讓 GitHub Actions release-e2e workflow 能跑）。互動模式不適用（未產 cjs）。
 
 #### S8.1 機械改動清單（v2.4.4+ 大幅簡化）
 
-把 `.claude/{ISSUE_KEY}-test.cjs` 複製到 `<repo-root>/e2e/release-tests/{ISSUE_KEY}.cjs`，因為 S3 骨架已全面 helpers 化，**publish 時實質只剩 1 點機械改動**：
+```
+PATCH-LIST:
+  copy: .claude/{ISSUE_KEY}-test.cjs → <repo-root>/e2e/release-tests/{ISSUE_KEY}.cjs
+  patch-count: 1（v2.4.4+ 骨架全面 helpers 化後）
+  patch-1:
+    target: HELPERS_DIR fallback
+    from: path.join(os.homedir(), '.claude/skills/jira-test-report/helpers')
+    to: path.join(__dirname, '_helpers')   # vendor 副本，release-tests 自帶
+  pre-handled-by-skeleton: [chromium-require, SCREENSHOT_DIR, env-local-load, progress-silent, 檔頭格式, step-中文化]
+```
 
-| # | 項目 | 從 | 到 |
-|---|---|---|---|
-| 1 | HELPERS_DIR fallback | `path.join(os.homedir(), '.claude/skills/jira-test-report/helpers')` | `path.join(__dirname, '_helpers')`（vendor 副本，release-tests 自帶） |
+骨架已預先處理的 6 項（為何不再需要 publish 時手動改）：
 
-其餘原本機械改動（chromium require、SCREENSHOT_DIR、.env.local 載入、progress.md silent、檔頭格式、step 中文化）**已由骨架預先處理**：
-
-| 原 # | 原項目 | 為何不再需要 |
+| 原 # | 項目 | 為何不再需要 |
 |---|---|---|
 | 2 | chromium require | 骨架不直接 require playwright，全由 `launchBrowser` 從 helpers 內 node_modules 拿 |
 | 3 | SCREENSHOT_DIR | `parseEnv` 自動處理 `SCREENSHOT_BASE_DIR` env var（v0.4.0+），CI 設 `SCREENSHOT_BASE_DIR=.` 即可 |
-| 4 | .env.local 自動載入 | 骨架本來就不寫此邏輯（依 release-tests/README 規範由 shell 預先 `set -a; source .env.local; set +a`） |
+| 4 | .env.local 自動載入 | 骨架不寫此邏輯（依 release-tests/README 規範由 shell 預先 `set -a; source .env.local; set +a`） |
 | 5 | progress.md 寫入 | `createStepRunner` 內部已 silent（`progressPath` 對應檔案不存在時 noop） |
-| 6 | 檔頭格式 | 骨架已為 LVB-7963 風格（root cause / 修正 / 驗證情境 / 用法 / 前置 / exit codes 6 段） |
-| 7 | step 中文化 | 骨架已用 5 參數中文版 `step(page, caseId, '中文短名', '中文長描述', async (p) => {...})` |
+| 6 | 檔頭格式 | 骨架已為 LVB-7963 風格 6 段（root cause / 修正 / 驗證情境 / 用法 / 前置 / exit codes） |
+| 7 | step 中文化 | 骨架已用 5 參數中文版簽名 |
 
-**publish 後仍應 grep 一次自我檢查**：
-
-- `grep "step(page," <release-tests>/{KEY}.cjs` 確認所有呼叫都是 5 參數（caseId + 中文短名 + 中文長描述 + fn），非中文 / 4 參數需補
-- `grep "injectEvidence\|expandSelectAsListbox\|clearEvidence" <release-tests>/{KEY}.cjs` 確認斷言 step 都注入 evidence（三合一規範）
+```
+PUBLISH-VERIFY-GREP:
+  grep-1: step(page, → 全 5 參數（caseId + 中文短名 + 中文長描述 + fn）；非中文 / 4 參數需補
+  grep-2: injectEvidence|expandSelectAsListbox|clearEvidence → 斷言 step 都有注入 evidence（三合一規範）
+  target: <release-tests>/{KEY}.cjs
+```
 
 #### S8.2 範本 require 區塊（v2.4.4+ 對齊 S3 骨架完整 helpers 列表）
 
@@ -636,22 +660,28 @@ const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.jo
 | 時機 | URL 來源 | 驗證對象 | 命令 |
 |---|---|---|---|
 | **publish 前** | localhost dev server | 當前 feature branch 含 commit | 從 `.claude/` 跑：`BASE_URL=http://localhost:3000 node .claude/{ISSUE_KEY}-test.cjs` |
-| **publish 後（每次改 cjs）** | release-tests 內位置 + staging URL | release-tests 環境 wiring 正確 + staging 已部署該功能 | 從 `frontend/` 跑：`set -a; source .env.local; set +a; BASE_URL=$STAGING_URL node ../e2e/release-tests/{ISSUE_KEY}.cjs` |
-
-**`.env.local` 同時宣告兩組 URL**：
+| **publish 後（每次改 cjs）** | release-tests 位置 + staging URL | release-tests 環境 wiring 正確 + staging 已部署該功能 | 從 `frontend/` 跑：`set -a; source .env.local; set +a; BASE_URL=$STAGING_URL node ../e2e/release-tests/{ISSUE_KEY}.cjs` |
 
 ```
-BASE_URL=http://localhost:3000          # local dev server
-STAGING_URL=https://lunastaging.compal-health.com   # staging（release-e2e workflow 同源）
+DUAL-ENV-URLS:
+  declare-in: .env.local（兩組同時宣告）
+  BASE_URL: http://localhost:3000           # local dev server
+  STAGING_URL: https://lunastaging.compal-health.com   # staging (release-e2e workflow 同源)
+  switch-by: BASE_URL=$STAGING_URL 前綴覆寫（不需改 cjs）
+  ci-naming: 對齊 secrets.E2E_STAGING_URL
+  skip-staging-when: feature branch 尚未 merge 進 master / staging 未部署該 commit
+  skip-action: 標註「Staging 驗證待 staging 部署該 commit 後再跑」
 ```
-
-切換僅靠 `BASE_URL=$STAGING_URL` 前綴覆寫，不需改 cjs；對齊 CI 端 `secrets.E2E_STAGING_URL` 命名語義。
-
-**何時跳過 staging 驗證**：當前 feature branch 尚未 merge 進 master / staging 未部署該 commit → 跳過，標註「Staging 驗證待 staging 部署該 commit 後再跑」。
 
 #### S8.4 測試 fixture 管理（CASE_ID / DAYCARE_CASE_ID 等業務輸入）
 
-某些 cjs 需要業務 fixture（如 LVB-7963 需「已結案個案 ID」）。**推薦：hardcode staging 預設值 + env 可覆寫**。
+```
+FIXTURE-STRATEGY:
+  primary: hardcode-staging-default + env-override
+  fallback: github-variables-json-map
+  applies-to: cjs 需要業務 fixture（如 LVB-7963 需「已結案個案 ID」）
+  guard: 缺必填 env 必 exit 4（MISSING_ENV，對齊 LVB-7963 exit code 規範）
+```
 
 ##### 主推：Hardcode default + env override
 
@@ -668,24 +698,31 @@ process.env.CASE_ID = process.env.CASE_ID || STAGING_CASE_ID;
 process.env.DAYCARE_CASE_ID = process.env.DAYCARE_CASE_ID || STAGING_DAYCARE_CASE_ID;
 ```
 
-**優點：**
-- cjs = 自帶測試規格，看 cjs 就知道測哪個個案（不必跨檔 trace Variables / yml）
-- 新增 cjs 只需 1 個 PR（不必再開第 2 個 PR 設 Variable）
-- 本地測試仍可 env override 走自己 dev db 個案
-- 個案 id 過期時 `git blame` 找得到當初是誰加的
-
-**適用前提：**
-- 個案 uuid 不含個資（純機器生成 id）— luna 符合，可進 git
-- staging db 不常重建、fixture 穩定
+```
+HARDCODE-DEFAULT:
+  pros:
+    - cjs = 自帶測試規格（看 cjs 即知測哪個個案，不必跨檔 trace Variables / yml）
+    - 新增 cjs 只需 1 PR（不必再開第 2 PR 設 Variable）
+    - 本地仍可 env override 走自己 dev db 個案
+    - 個案 id 過期時 git blame 找得到當初是誰加的
+  applies-when:
+    - 個案 uuid 不含個資（純機器生成 id）— luna 符合
+    - staging db 不常重建、fixture 穩定
+```
 
 ##### Fallback：GitHub Variables JSON map（hardcode 不適用時）
 
-如果公司政策禁止任何測試資料 commit 進 git，改用 GitHub Variables：
+```
+JSON-MAP-FALLBACK:
+  applies-when: 公司政策禁止測試資料 commit 進 git
+  storage: GitHub Variables 名為 RELEASE_TEST_FIXTURES，value 為 JSON map
+  key: issue key（如 LVB-7963）；value: env map（如 { CASE_ID, DAYCARE_CASE_ID }）
+  ci-decode: release-e2e.yml matrix step 用 jq export 為 $GITHUB_ENV
+  local-decode: .env.local 用 generic 名（如 CASE_ID=abc123）
+  cjs-side: 只讀 generic env，本地與 CI 程式碼一致
+```
 
-| 來源 | 寫法 | 範例 |
-|---|---|---|
-| 本地 `.env.local` | generic 名 | `CASE_ID=abc123` |
-| GitHub Variables | JSON map 集中 | 見下方 |
+範例 JSON map：
 
 ```
 Name: RELEASE_TEST_FIXTURES
@@ -697,7 +734,7 @@ Value:
 }
 ```
 
-`release-e2e.yml` matrix step 用 `jq` 解析：
+workflow yml 解碼片段：
 
 ```yaml
 - name: Load fixtures for ${{ matrix.issue }}
@@ -709,11 +746,14 @@ Value:
     echo "$FIXTURES" | jq -r --arg k "$ISSUE" '.[$k] // {} | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
 ```
 
-cjs 端只讀 generic env，本地與 CI 程式碼一致。
-
 ##### 缺 fixture 的 guard
 
-兩種方案共用：缺必填 env 必須 exit 4（MISSING_ENV，對齊 LVB-7963 exit code 規範），不跑下去。
+```
+MISSING-ENV-GUARD:
+  shared-by: [hardcode-default, json-map-fallback]
+  rule: 缺必填 env → exit 4（MISSING_ENV）→ 不跑下去
+  hardcode-note: 通常不會 trigger（default 已注入），留著以防有人手動 unset
+```
 
 ```javascript
 if (!process.env.CASE_ID) {
@@ -722,20 +762,24 @@ if (!process.env.CASE_ID) {
 }
 ```
 
-hardcode 方案因為已注入 default，這個 guard 通常不會 trigger，但留著以防有人手動 unset。
-
 #### S8.5 機械步驟（v2.4.4+ 因 helpers 已收斂，步驟精簡）
 
-1. 偵測 repo root：`git rev-parse --show-toplevel`
-2. 確認 `<root>/e2e/release-tests/` 存在且含 `_helpers/`（vendor）；若無 → 中止，提示 release-tests 結構未建立
-3. **確認 `_helpers/` 內必要 cjs 完整**（自 v2.4.1 起，v2.4.4 helpers 列表擴充）：列出當前 cjs require 的 helper（骨架預設用：`env.cjs` / `step.cjs` / `modal.cjs` / `browser.cjs` / `report.cjs` / `evidence.cjs`），對每個 helper 檢查 `<root>/e2e/release-tests/_helpers/<helper>.cjs` 是否存在。**若缺**，跑 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh --force` 一次性同步（master `cup-build-test/helpers/` → 所有 mirrors 含 release-tests）。注意 `_helpers/` 即使只含 `node_modules/` 而沒有任何 cjs 檔也是合法狀態（首次 publish 時常見），不要因此中止流程
-4. `cp .claude/{ISSUE_KEY}-test.cjs <root>/e2e/release-tests/{ISSUE_KEY}.cjs`
-5. 套用 S8.1 第 1 點機械改動（用 Edit 工具改 `HELPERS_DIR` fallback：`os.homedir() + '.claude/skills/jira-test-report/helpers'` → `path.join(__dirname, '_helpers')`，順帶把不再需要的 `const os = require('os')` 移除）
-6. 若 cjs 需 fixture：確認 STAGING 預設值已 hardcode 在 cjs（S8.4 主推方案），CI 端不需設 Variable；若用 Fallback 方案則更新 `RELEASE_TEST_FIXTURES` Variable 並補進 `.env.local`
-7. grep 自我檢查：`step(page,` 全 5 參數中文版；斷言 step 都有 `injectEvidence`（三合一）
-8. 跑 S8.3「publish 前」local 驗證 1 次（當前 branch 應含 feature commit）
-9. 若 staging 已部署 → 跑 S8.3「publish 後」staging 驗證；若未部署 → 標註待 staging 後驗證
-10. 提示使用者：「PR 開出 / push 後可手動觸發 release-e2e workflow 對 staging 跑」
+```
+PUBLISH-PIPELINE:
+  step-1-detect-root: git rev-parse --show-toplevel
+  step-2-check-release-tests: <root>/e2e/release-tests/ 含 _helpers/(vendor) | on-missing: abort+提示「結構未建立」
+  step-3-check-helpers:
+    list: [env.cjs, step.cjs, modal.cjs, browser.cjs, report.cjs, evidence.cjs]
+    on-missing: ~/.claude/skills/cup-build-test/scripts/sync-helpers.sh --force（master → 所有 mirrors）
+    legal-state: _helpers/ 只含 node_modules/ 沒 cjs 也合法（首次 publish 常見），不中止
+  step-4-copy: cp .claude/{ISSUE_KEY}-test.cjs <root>/e2e/release-tests/{ISSUE_KEY}.cjs
+  step-5-patch: 套 S8.1 PATCH-LIST.patch-1（Edit 工具）| extra: 移除 const os = require('os')
+  step-6-fixture: 若 cjs 需 fixture → primary: S8.4 HARDCODE-DEFAULT | fallback: S8.4 JSON-MAP-FALLBACK
+  step-7-grep-check: 套 S8.1 PUBLISH-VERIFY-GREP
+  step-8-verify-local: 套 S8.3 publish-前（pre-condition: 當前 branch 應含 feature commit）
+  step-9-verify-staging: staging 已部署 → 套 S8.3 publish-後 | 未部署 → 標註「待 staging 部署該 commit 後再驗」
+  step-10-prompt-user: 「PR 開出 / push 後可手動觸發 release-e2e workflow 對 staging 跑」
+```
 
 ### 步驟 9：清理
 
@@ -814,8 +858,8 @@ token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要
 
 **最近版本**（詳細見 CHANGELOG.md）：
 
+- **v2.5.5**（2026-05-22）— 剩餘 prose 段落 AI.MD v4 結構化（P1-P5），token -220
 - **v2.5.4**（2026-05-22）— 失敗處理抽到 `docs/troubleshooting.md`，SKILL.md 再瘦 -35 行
 - **v2.5.3**（2026-05-22）— Wiki Markup 速查 + Comment 範本抽到 `docs/`，SKILL.md 再瘦 -20 行
 - **v2.5.2**（2026-05-22）— S3.5 / S3.6 範例 cjs 抽到 `templates/snippets/`，SKILL.md 再瘦 -115 行
 - **v2.5.1**（2026-05-22）— progress.md 範本 + .env.local 範例抽到 `templates/`，SKILL.md 再瘦 -35 行
-- **v2.5.0**（2026-05-22）— S3 cjs 骨架抽到 `templates/skeleton.cjs`，SKILL.md 瘦身 -128 行
