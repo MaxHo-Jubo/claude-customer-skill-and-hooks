@@ -37,37 +37,14 @@ version: 2.4.0
 
 ### progress.md 結構
 
-`.claude/{ISSUE_KEY}-progress.md`，由 skill 在「跑測試前」建檔：
+`.claude/{ISSUE_KEY}-progress.md`，由 skill 在「跑測試前」建檔。完整範本見 [`templates/progress.template.md`](./templates/progress.template.md)（v2.5.1+ 抽出）。
 
-```markdown
-## Test Run Progress — ERPD-XXXX
+**結構摘要**：
 
-Mode: script  (or interactive)
-Variant: r18
-Started: 2026-05-08 14:00
-Last update: 2026-05-08 14:45
-
-### Phase A: 跑測試
-- [x] 01 page-loaded
-  - Status: PASS
-  - Screenshot: .claude/ERPD-XXXX-temp/r18/01-page-loaded.png
-  - Run at: 2026-05-08 14:23
-- [x] 02 click-add
-  - Status: PASS
-  - Screenshot: .claude/ERPD-XXXX-temp/r18/02-click-add.png
-  - Run at: 2026-05-08 14:24
-- [ ] 03 fill-form   ← 下次 --resume 從這裡接
-- [ ] 04 submit
-- [ ] 05 verify
-
-### Phase B: Jira 截圖上傳
-- [x] 01-page-loaded.png → attachment id 12345
-- [x] 02-click-add.png → attachment id 12346
-- [ ] 03-fill-form.png    （尚未跑到，暫不 upload）
-
-### Phase C: Jira inline comment
-- [ ] comment posted    （所有 step 跑完才發）
-```
+- **Header**：`Mode` / `Variant` / `Started` / `Last update`
+- **Phase A：跑測試** — step 條目 `[x]/[ ]` + `Status` + `Screenshot` path + `Run at`
+- **Phase B：Jira 截圖上傳** — 每張截圖一條，記下 attachment id
+- **Phase C：Jira inline comment** — 1 條，所有 step 跑完才發
 
 ### 寫入時機
 
@@ -118,23 +95,11 @@ Phase B / Phase C 不論模式都由主 context Edit。
 
 ### `.env.local` 完整範例
 
-```
-# --- E2E 登入 ---
-BASE_URL=http://localhost:3000                              # local dev server
-STAGING_URL=https://lunastaging.compal-health.com          # staging（release-e2e workflow 同源）
-E2E_ACCOUNT=<帳號>
-E2E_PASSWORD=<密碼>
-E2E_TYPE=e
+完整範本見 [`templates/env.local.example`](./templates/env.local.example)（v2.5.1+ 抽出），包含三組必要 keys：
 
-# --- Jira API（jira-test-report skill 用）---
-ATLASSIAN_EMAIL=<your-email@example.com>
-ATLASSIAN_API_TOKEN=<從 id.atlassian.com 申請；於 YYYY-MM-DD 到期>
-ATLASSIAN_SITE=jubo-health.atlassian.net
-
-# --- 業務 fixture（依 cjs 需求補；本地與 CI generic 名稱對齊）---
-# CASE_ID=<已結案居服個案 id；LVB-7963 用>
-# DAYCARE_CASE_ID=<已結案日照個案 id；LVB-7963 B 區用>
-```
+- **E2E 登入**：`BASE_URL` / `STAGING_URL` / `E2E_ACCOUNT` / `E2E_PASSWORD` / `E2E_TYPE`
+- **Jira API**：`ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE`
+- **業務 fixture**：依 cjs 需求補（如 `CASE_ID` / `DAYCARE_CASE_ID`），CI 端用 generic 名稱對齊本地
 
 `.gitignore` 必含 `.env.local`，缺則 append。skill 執行時用 dotenv 或簡易 parser 讀入 `process.env`，**禁止**把 token / 密碼寫入任何 commit 進 git 的檔案。
 
@@ -278,179 +243,53 @@ npx playwright install chromium   # 共用 ~/Library/Caches/ms-playwright/
 
 ---
 
-**腳本骨架**（自 v2.4.4 起全面 helpers 化，對齊 LVB-7963 風格）：
+#### 產 cjs 流程（v2.5.0+ skeleton 已抽到 templates/skeleton.cjs）
 
-```javascript
-// .claude/{ISSUE_KEY}-test.cjs
-// @ts-check
-// {ISSUE_KEY} {一句話描述} 回歸測試腳本
-//
-// 此檔由 /jira-test-report skill 階段 S3 自動產出，共用邏輯由 jira-test-report/helpers
-// 提供（env / step / modal / browser / report / evidence），修 bug 或加新功能優先改 helpers/。
-//
-// Root cause（見 frontend/.claude/{ISSUE_KEY}.md）：
-//   {root cause 一兩行摘要}
-//
-// 修正：
-//   - {file path}：{修正摘要}
-//
-// 驗證情境：
-//   - {頁面路徑}
-//   - 預期：{預期結果}
-//
-// 用法（不需 npm install playwright，helpers/ 已自帶）：
-//   .claude/ 階段（skill 產出後本機驗證）：
-//     node .claude/{ISSUE_KEY}-test.cjs
-//   release-tests 階段（publish 後本機對 staging 驗證）：
-//     cd frontend
-//     set -a; source .env.local; set +a
-//     BASE_URL=$STAGING_URL node ../e2e/release-tests/{ISSUE_KEY}.cjs
-//
-// 環境變數：
-//   HEADLESS=false               看畫面 debug
-//   STOP_ON_FAIL=true            遇 FAIL 即停
-//   ONLY=A1.1                    只跑指定 step
-//   RESUME_FROM=A3.1             從指定 step 接續
-//   CUP_HELPERS_DIR=<path>       覆寫 helpers 路徑（預設 ~/.claude/skills/jira-test-report/helpers）
-//
-// 前置：
-//   1. API 登入用 env：BASE_URL / E2E_ACCOUNT / E2E_PASSWORD / E2E_TYPE
-//      本地走 .env.local（set -a; source .env.local），CI 走 GitHub Secrets
-//   2. {fixture env var}（如 CASE_ID）已 hardcode staging default，可 env 覆寫
-//
-// Exit codes：
-//   0 = 全 PASS / 1 = 有 FAIL / 3 = AUTH_EXPIRED / 4 = MISSING_ENV
+骨架原檔：`~/.claude/skills/jira-test-report/templates/skeleton.cjs`（v2.4.4 風格、~170 行、含 placeholder 字串供替換）
 
-const path = require('path');
-const os = require('os');
-
-// STEP 01: 載入 helpers（.claude/ 階段預設指向 jira-test-report skill；publish 到 release-tests 後改指 _helpers vendor）
-const HELPERS_DIR = process.env.CUP_HELPERS_DIR
-  || path.join(os.homedir(), '.claude/skills/jira-test-report/helpers');
-
-const { parseEnv } = require(path.join(HELPERS_DIR, 'env.cjs'));
-const { createStepRunner } = require(path.join(HELPERS_DIR, 'step.cjs'));
-const { waitAndDismissOnEntry, ensureCleanState } = require(path.join(HELPERS_DIR, 'modal.cjs'));
-const { launchBrowser, attachConsoleCollector } = require(path.join(HELPERS_DIR, 'browser.cjs'));
-const { writeResultsJson, printSummary, exitCodeForResults } = require(path.join(HELPERS_DIR, 'report.cjs'));
-const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
-
-// STEP 01.05: Staging fixture（hardcode 預設值，本地驗證可 env 覆寫）
-//   {fixture 來源說明 — 例：「已結案」狀態個案，於 staging 環境穩定存在；過期請 PR 更新}
-const STAGING_CASE_ID = '<paste-staging-case-id>';
-process.env.CASE_ID = process.env.CASE_ID || STAGING_CASE_ID;
-
-// STEP 02: 解析環境變數（parseEnv 統一處理 BASE_URL / HEADLESS / SCREENSHOT_DIR / PROGRESS_PATH / login 等）
-const env = parseEnv({
-  issueKey: '{ISSUE_KEY}',
-  entryPath: '/path/to/entry/{caseId}',   // {caseId} placeholder 會自動代入 process.env.CASE_ID
-});
-
-// STEP 03: 共用 selector 與預期值定義（依測試情境填）
-// 例：
-// const MODAL_OPEN_SEL = '.modal.in, .modal.show';        // R15 .in + R18 .show 雙覆蓋
-// const EXPECTED_OPTIONS = ['選項 A', '選項 B'];
-
-(async () => {
-  // STEP 01: 環境準備 & 開瀏覽器
-  require('fs').mkdirSync(env.screenshotDir, { recursive: true });
-  // 開瀏覽器 + API 登入：launchBrowser 內部走 loginInContext，cookies 直接進 context jar
-  //   含 host-only token cookie + x-request-from: web header（見 S3 準則「登入用 launchBrowser」）
-  //   啟動第一行應印 `[login] OK 200 — N cookies: token,lunastaging.sid`
-  const { browser, page } = await launchBrowser({
-    headless: env.headless,
-    login: env.login,
-  });
-
-  /** @type {string[]} */
-  const consoleErrors = [];
-  attachConsoleCollector(page, consoleErrors);
-
-  // STEP 02: 建立 step runner（5 參數中文化簽名、自動截圖、progress.md 寫入、ONLY / RESUME_FROM 過濾）
-  const { step, skipStep, waitStable, getResults } = createStepRunner({
-    screenshotDir: env.screenshotDir,
-    progressPath: env.progressPath,
-    only: env.only,
-    resumeFrom: env.resumeFrom,
-    stopOnFail: env.stopOnFail,
-  });
-
-  try {
-    // ========================================================================
-    // A. {場景一名稱}
-    // ========================================================================
-
-    // STEP 03: 進入頁面（waitUntil 一律 'domcontentloaded'，禁 'networkidle'，見 S3 準則）
-    await page.goto(env.baseUrl + env.entryPath, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await waitStable(page, 1000);
-
-    // STEP 03.01: AUTH_EXPIRED fail-fast — token 失效不要拖到 step 才爆
-    if (/\/login/.test(page.url())) {
-      console.error(`AUTH_EXPIRED: redirected to ${page.url()}.`);
-      process.exit(3);
-    }
-
-    // STEP 03.02: dismiss 公告 modal（helpers 內建多輪重試捕捉晚到 modal）
-    await waitAndDismissOnEntry(page);
-
-    // === 測試步驟區塊（依 test plan 填充）===
-    // step 呼叫一律 5 參數中文版（v2.3.2+ 強制）：
-    //   step(page, caseId, '中文短名', '中文長描述', async (p) => {...})
-    // 每個斷言 step 必須三合一：程式邏輯 throw + 真實 UI 操作或視覺變更 + injectEvidence overlay（見 S3.5）
-
-    await step(page, 'A1.1', '頁面載入', '進入入口頁，等關鍵 anchor 渲染', async (p) => {
-      // STEP 01: 真實 UI 等待
-      await p.waitForSelector('.your-anchor-selector', { timeout: 15000 });
-      await waitStable(p, 500);
-      // STEP 02: evidence — 標頁面狀態
-      const ok = await p.locator('.your-anchor-selector').first().isVisible();
-      await injectEvidence(p, {
-        title: 'A1.1 頁面載入',
-        actual: { url: p.url(), anchorVisible: ok },
-        conclusion: ok ? '頁面已渲染' : '頁面未渲染',
-        ok,
-      });
-    });
-
-    // 範例：純資料斷言 step 用 expandSelectAsListbox 補 UI 證據（規範 (a)）
-    // await step(page, 'A2.1', '驗證下拉完整列表', '把 select 強制 size=N 展開為 listbox，肉眼可數所有 option', async (p) => {
-    //   await clearEvidence(p);
-    //   const selectLocator = p.locator('select.form-control').first();
-    //   await expandSelectAsListbox(selectLocator);
-    //   const actual = await selectLocator.evaluate((el) =>
-    //     Array.from(/** @type {HTMLSelectElement} */ (el).options).map((o) => (o.textContent || '').trim()));
-    //   const missing = EXPECTED_OPTIONS.filter((e) => !actual.includes(e));
-    //   await injectEvidence(p, {
-    //     title: `A2.1 完整 ${actual.length} 項`,
-    //     actual, expected: EXPECTED_OPTIONS,
-    //     conclusion: missing.length === 0 ? '完全覆蓋' : `缺少 ${JSON.stringify(missing)}`,
-    //     ok: missing.length === 0,
-    //   });
-    //   if (missing.length > 0) {
-    //     throw new Error(`下拉缺少：${JSON.stringify(missing)}`);
-    //   }
-    // });
-
-    // === 測試步驟區塊結束 ===
-  } finally {
-    // STEP 05: 收尾 — 寫 _results.json + 印 summary + 關 browser + 回 exit code
-    const results = getResults();
-    writeResultsJson(env.screenshotDir, {
-      issueKey: env.issueKey,
-      variant: env.variant,
-      baseUrl: env.baseUrl,
-      results,
-      consoleErrors,
-    });
-    printSummary(results, consoleErrors);
-    await browser.close();
-    process.exit(exitCodeForResults(results));
-  }
-})().catch((err) => {
-  console.error('FATAL:', err);
-  process.exit(1);
-});
 ```
+GEN-CJS-PIPELINE:
+  step-1-read: 用 Read 工具讀 ~/.claude/skills/jira-test-report/templates/skeleton.cjs
+  step-2-substitute: 依下方 PLACEHOLDER 替換清單做字串替換
+  step-3-fill-steps: 在 try{} 區塊「=== 測試步驟區塊（依 test plan 填充）===」與「=== 測試步驟區塊結束 ===」之間依 test plan 加 step()，遵守寫腳本準則 + S3.5 三合一 + S3.6 機構切換（若 case 屬非 compal）
+  step-4-write: 用 Write 工具寫到 .claude/{ISSUE_KEY}-test.cjs
+  mandatory: 必須先 Read templates/skeleton.cjs，禁止從記憶寫骨架
+  why-mandatory: 容易漏 helpers require / parseEnv / progress 寫入 / finally 收尾，且 Opus 4.7 預設較少 spawn tool call 容易跳過 Read
+  verify-high-risk: grep -E '<paste-staging-case-id>|\{ISSUE_KEY\}' .claude/{ISSUE_KEY}-test.cjs 應 0 命中（這兩個沒替換會直接讓執行失敗：staging fixture 不對 / progress.md 路徑錯）
+  verify-low-risk: grep -E '\{[一-龥]' .claude/{ISSUE_KEY}-test.cjs 應 0 命中（中文 placeholder 都該已替換，如 `{一句話描述}` / `{場景一名稱}` 等）
+  note: '{caseId}' 是 parseEnv runtime 佔位（entryPath 內由 process.env.CASE_ID 代入），**不需替換**；JS 物件解構如 `{ parseEnv }` 也不在 verify 範圍
+  banned: 從記憶寫骨架 / 跳過 Read templates/skeleton.cjs / 漏掉骨架預設的 helpers require 任一項
+```
+
+##### PLACEHOLDER 替換清單
+
+| Placeholder | 來源 | 範例 |
+|---|---|---|
+| `{ISSUE_KEY}` | branch / Jira issue key | `LVB-7963` |
+| `{一句話描述}` | test plan 標題 | `結案原因下拉選項驗證` |
+| `{root cause 一兩行摘要}` | `.claude/{ISSUE_KEY}.md` Root cause 段 | `R18 enum 漏 4 項 (9/10/11/12)` |
+| `{file path}` + `{修正摘要}` | issue 對應 PR diff（可多筆） | `src/.../CaseClose.tsx：補 enum 9-12` |
+| `{頁面路徑}` + `{預期結果}` | test plan「驗證情境」 | `/homecareCaseClose/{caseId}`、`完整 14 項可選` |
+| `{fixture env var}` | cjs 需要的業務 fixture | `CASE_ID` / `DAYCARE_CASE_ID` |
+| `<paste-staging-case-id>` | staging 穩定 fixture（S8.4 規範） | `a3f2c891-...` |
+| `'/path/to/entry/{caseId}'` | entryPath，**保留 `{caseId}` runtime 佔位**（由 parseEnv 自動代入 `process.env.CASE_ID`） | `'/homecareCaseClose/{caseId}'` |
+| `{fixture 來源說明}` | fixture 性質一句話 | `「已結案」狀態居服個案，staging 穩定存在` |
+| `{場景一名稱}` | test plan A 區場景名 | `下拉選項驗證` |
+
+##### 步驟區塊填充
+
+骨架預留三處示範供參考：
+- 入口 step `A1.1 頁面載入` — 示範三合一寫法（`waitForSelector` + `isVisible` + `injectEvidence`）
+- 註解區範例 `A2.1` — 純資料斷言用 `expandSelectAsListbox` 補 UI 證據（規範 (a)）
+- finally 區 — 已包好 `writeResultsJson` / `printSummary` / `exitCodeForResults`
+
+依 test plan 在 `=== 測試步驟區塊 ===` section 之間加 step()。遵守下方「寫腳本準則」+ S3.5 三合一規範 + S3.6 機構切換（若 case 屬非 compal）。
+
+##### 維護 skeleton.cjs
+
+- 修 `templates/skeleton.cjs` 要同步更新本段 PLACEHOLDER 清單
+- 新增的 placeholder 一律 `{ }` 包起（或 `<…>` 形式如 `<paste-staging-case-id>`）讓 grep 可命中未替換位置
+- 改動需在 CHANGELOG 記版本
 
 **寫腳本準則**（AI-parsing 結構化，v2.4.7+；每條 rule + why + how/banned，歷史 context 保留作 reason）：
 
@@ -555,57 +394,9 @@ LVB-7963 A3.2~A3.4 是反面教材：「必要選項皆存在」「完整 14 項
 const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
 ```
 
-**LVB-7963 範本重構（示範三合一）**：
-
-```javascript
-// A3.2 必要選項皆可選取 — 程式邏輯 + UI 逐一選取 + evidence
-await step(page, 'A3.2', '必要選項皆可選取', '逐一在下拉中選取 4 個必要選項（value 9/10/11/12），確認 UI 接受', async (p) => {
-  const selectLocator = p.locator(MODAL_SELECT_SEL).first();
-  const requiredValues = ['9', '10', '11', '12'];
-  // STEP 01: 真實 UI 操作 — 逐一 selectOption（不只是 DOM 存在，UI 可選才算）
-  for (const v of requiredValues) {
-    await selectLocator.selectOption(v);
-    await waitStable(p, 150);
-  }
-  // STEP 02: 程式邏輯斷言
-  const missing = findMissingOptions(actualOptions, REQUIRED_NEW_OPTIONS);
-  // STEP 03: evidence overlay（不論 pass / fail 都注入）
-  await injectEvidence(p, {
-    title: 'A3.2 必要選項皆可選取',
-    actual: actualOptions.filter((o) => REQUIRED_NEW_OPTIONS.includes(o)),
-    expected: REQUIRED_NEW_OPTIONS,
-    conclusion: missing.length === 0
-      ? `4 個必要選項皆出現於下拉且 UI 可選（已逐一 selectOption 驗證）`
-      : `缺少 ${missing.length} 項：${JSON.stringify(missing)}`,
-    ok: missing.length === 0,
-  });
-  if (missing.length > 0) {
-    throw new Error(`結案原因下拉缺少必要選項：${JSON.stringify(missing)}`);
-  }
-});
-
-// A3.3 完整 14 項皆存在 — 把 select 展開成 listbox 視覺呈現（用 evidence.cjs::expandSelectAsListbox）
-await step(page, 'A3.3', '完整 14 項列表展示', '將 select 強制展開為 listbox 視覺呈現 14 項，搭配 evidence 標示比對結果', async (p) => {
-  // STEP 01: 真實 UI 變更 — helper 一行搞定（內部就是 s.size = s.options.length + 樣式）
-  const selectLocator = p.locator(MODAL_SELECT_SEL).first();
-  await expandSelectAsListbox(selectLocator);
-  // STEP 02: 程式邏輯斷言
-  const missing = findMissingOptions(actualOptions, EXPECTED_FULL_ORDER);
-  // STEP 03: evidence
-  await injectEvidence(p, {
-    title: `A3.3 完整 ${actualOptions.length} 項`,
-    actual: actualOptions,
-    expected: EXPECTED_FULL_ORDER,
-    conclusion: missing.length === 0
-      ? `實測 ${actualOptions.length} 項 / 預期 ${EXPECTED_FULL_ORDER.length} 項，完全覆蓋`
-      : `缺少 ${missing.length} 項：${JSON.stringify(missing)}`,
-    ok: missing.length === 0 && actualOptions.length === EXPECTED_FULL_ORDER.length,
-  });
-  if (missing.length > 0) {
-    throw new Error(`結案原因下拉缺少完整選項：${JSON.stringify(missing)}`);
-  }
-});
-```
+**LVB-7963 範本重構（示範三合一）**：範例 cjs 見 [`templates/snippets/three-in-one.cjs`](./templates/snippets/three-in-one.cjs)（v2.5.2+ 抽出），含 A3.2 / A3.3 兩個 step：
+- **A3.2**：純資料斷言用 (b) 逐一 `selectOption` 補 UI 證據（必要選項皆可選取）
+- **A3.3**：純資料斷言用 (a) `expandSelectAsListbox` 強制 listbox 展開（完整 14 項視覺呈現）
 
 **Cleanup 鐵則**（自 v2.4.5 起強制，AI-parsing 結構化 v2.4.7+）：
 
@@ -618,27 +409,9 @@ CLEANUP-EVIDENCE-BEFORE-UI:
   inverse-evidence: 同 cjs A4 / A7 PASS 因 closeModal 在 injectEvidence「之前」執行，順序不同沒踩到
 ```
 
-正確 pattern 範例：
-
-```javascript
-// case 1: step 結尾要 closeModal — injectEvidence 後、closeModal 前 clearEvidence
-await step(page, 'A8', '重開selectedCase為空', '...', async (p) => {
-  await clearEvidence(p);              // step 開頭清前一輪
-  await openModalAndCheck(p);
-  await injectEvidence(p, { ... });    // 注入證據
-  if (failed) { throw new Error(...); }
-  await clearEvidence(p);              // ← 鐵則：closeModal 前必清
-  await closeModal(p);
-});
-
-// case 2: step 結尾要 cancel modal — 同理
-await step(page, 'A4.1', '取消 Modal 不送出', '...', async (p) => {
-  await clearEvidence(p);
-  const cancelBtn = p.locator(MODAL_FOOTER_BTN_SEL).filter({ hasText: /取消|cancel/i }).first();
-  await cancelBtn.click();
-  await p.waitForSelector(MODAL_OPEN_SEL, { state: 'hidden', timeout: 5000 });
-});
-```
+正確 pattern 範例見 [`templates/snippets/cleanup-evidence.cjs`](./templates/snippets/cleanup-evidence.cjs)（v2.5.2+ 抽出），含兩個 case：
+- **case 1**：step 結尾要 `closeModal` — `injectEvidence` 後、`closeModal` 前 `clearEvidence`
+- **case 2**：step 結尾要 cancel modal — 同理（step 開頭 `clearEvidence` 清前一輪即可）
 
 **Code review grep**（產出 cjs 後跑一次）：
 
@@ -692,61 +465,12 @@ SWITCH-ORG-PIPELINE:
   step-6-assert: currentOrg(page) === expectedDisplay，不符 throw
 ```
 
-**cjs 整合範本**（推薦：A0 / Z9 step 結構讓切換動作也進 evidence）：
+**cjs 整合範本**：範例 cjs 見 [`templates/snippets/org-switch.cjs`](./templates/snippets/org-switch.cjs)（v2.5.2+ 抽出），兩種寫法依需要選一：
 
-```javascript
-const { switchOrg, DEFAULT_ORG } = require(path.join(HELPERS_DIR, 'orgGuard.cjs'));
+- **推薦版**：A0 / Z9 step 結構，切換動作也進 evidence；finally 區用 try/catch 包，避免切回失敗中斷收尾
+- **簡化版**：不註冊成 step、純前後切換（無 evidence overlay）
 
-// 該 issue 的 case_id 屬於豐原醫院機構
-const REQUIRED_ORG = {
-  keyword: '豐原',
-  expectedDisplay: '衛生福利部豐原醫院附設居家長照機構',
-};
-
-(async () => {
-  const { browser, page } = await launchBrowser({ ... });
-  try {
-    // ... goto + waitAndDismissOnEntry ...
-
-    // A0: 切換到測試機構
-    await step(page, 'A0', '切換到測試機構',
-      `從預設 compal 切換到豐原醫院機構（${REQUIRED_ORG.expectedDisplay}），準備跑該機構的測試`,
-      async (p) => {
-        const r = await switchOrg(p, REQUIRED_ORG);
-        await injectEvidence(p, {
-          title: 'A0 切換到測試機構',
-          actual: r,
-          expected: { after: REQUIRED_ORG.expectedDisplay },
-          conclusion: r.switched ? `切換成功：${r.before} → ${r.after}` : `已是目標機構，無需切換`,
-          ok: true,
-        });
-      });
-
-    // A1-AN: 正常測試步驟
-    // ...
-
-  } finally {
-    // Z9: 切回預設機構（finally 強制執行，即使中間 step fail）
-    try {
-      await switchOrg(page, DEFAULT_ORG);
-    } catch (e) {
-      console.error('[orgGuard] 切回預設機構失敗：', e.message, '— 請手動切回避免後續測試污染');
-    }
-    // ... writeResultsJson + browser.close + exit ...
-  }
-})();
-```
-
-**簡化版**（不註冊成 step、純前後切換）：
-
-```javascript
-await switchOrg(page, REQUIRED_ORG);
-try {
-  // 測試 step
-} finally {
-  await switchOrg(page, DEFAULT_ORG);
-}
-```
+REQUIRED_ORG 寫法：`keyword` 帶 internal code（如 `'compal'`）或顯示名片段（如 `'豐原'`，要過濾結果唯一）；`expectedDisplay` 是切後右上角 `.list-dropdown-text` 真正顯示文字。
 
 **自我檢核**：
 
@@ -1030,104 +754,49 @@ token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要
 
 ## Wiki Markup 速查
 
-| 功能 | 語法 |
-|------|------|
-| h2 標題 | `h2. 文字` |
-| h3 標題 | `h3. 文字` |
-| 粗體 | `*文字*` |
-| 斜體 | `_文字_` |
-| 行內 code | `{{code}}` |
-| Code block | `{code:javascript}...{code}` |
-| 引用 | `bq. 文字` |
-| 分隔線 | `----` |
-| 圖片 inline | `!filename.png\|width=900!` |
-| 表頭 | `\|\| col1 \|\| col2 \|\|` |
-| 表格 | `\| cell \| cell \|` |
-| 連結 | `[文字\|https://url]` |
-| 編號清單 | `# item` |
-| 項目清單 | `* item` |
+完整語法表見 [`docs/wiki-markup.md`](./docs/wiki-markup.md)（v2.5.3+ 抽出）。
+
+**最常用**：`h2. 標題` / `h3. 標題` / `*粗體*` / `----` 分隔線 / `!file.png|width=900!` inline 截圖 / `|| header ||` 表頭 + `| cell |` 表格。
+
+**關鍵紀律**：
+
+- endpoint 必須 **REST v2**（v3 不接受 wiki）：`/rest/api/2/issue/{key}/comment`
+- 標題 `h2.` / `h3.` 後面**要有空格**才生效
+- Code block `{code}...{code}` 內部不解析任何字串
 
 ## Comment 結構建議
 
-```
-h2. 自動化測試結果（環境/方法）
-摘要一行：環境 + 結果 + 模式（互動/腳本）
+完整範本（含區塊說明、腳本模式建議補充、簡化範例）見 [`docs/comment-template.md`](./docs/comment-template.md)（v2.5.3+ 抽出）。
 
-----
+**標準骨架**：
 
-h3. 1. {步驟標題}
-{說明 + 預期行為}
-!{螢幕截圖}|width=900!
-
-h3. 2. {下一步}
-...
-
-----
-
-h3. 邏輯驗證表
-|| 條件 || 預期 || 實測 ||
-| ... | ... | ✅ |
-
-----
-
-h3. 結論
-通過/失敗 + 重點觀察
-```
+1. `h2.` 摘要一行（環境 + 結果 + 模式）
+2. `----` 分隔
+3. 各 step `h3. N. 步驟標題` + 說明 + `!filename|width=900!` inline 截圖
+4. `----` 分隔
+5. `h3. 邏輯驗證表`（純資料斷言整合，可選）
+6. `----` 分隔
+7. `h3. 結論`（通過 / 失敗 + 重點觀察）
 
 ## 失敗處理
 
-AI-parsing 結構化（v2.4.7+）：每個 symptom 對應一個 action / why。
+完整 symptom 清單（含 `cause` / `why` / `banned` / `note` 細節）見 [`docs/troubleshooting.md`](./docs/troubleshooting.md)（v2.5.4+ 抽出）。
 
-```
-LOGIN-4xx:
-  symptom: API 登入回 4xx
-  action: 密碼錯 / account 鎖 → 驗證 .env.local 內容（不要在對話貼密碼）
+**速查表**（symptom → 一行 action，常見錯誤掃這裡）：
 
-LOGIN-5xx:
-  symptom: API 登入回 5xx
-  action: 後端問題 → retry 一次 → 仍失敗則中止
-
-UPLOAD-401:
-  symptom: attachment upload 回 401
-  action: token 失效 → 重新驗證
-
-COMMENT-ATTACHMENT-VALIDATION:
-  symptom: Comment POST 400 ATTACHMENT_VALIDATION_ERROR
-  cause: 誤用 v3 ADF + attachment id
-  action: 改回 v2 wiki（/rest/api/2/issue/{key}/comment + wiki markup body）
-
-SCREENSHOT-ACCESS-DENIED:
-  symptom: 互動模式截圖 access denied
-  cause: Playwright MCP 限制只能存到專案根目錄之內
-  action: filename 改寫進 frontend/.playwright-mcp/ 或 frontend/ 內，不可寫 ~/Desktop / /tmp
-
-SESSION-EXPIRED:
-  symptom: 跑到一半被導回 /login
-  why: API 登入 stateless 每跑都重取，不該發生
-  if-still-happens: 後端 session 失效時間 < cjs 跑完時間 → 縮短測試或登入 API 加 keep-alive 邏輯
-
-PLAYWRIGHT-MODULE-MISSING:
-  symptom: 腳本模式 "Cannot find module 'playwright'"
-  action: cd ~/.claude/skills/jira-test-report/helpers && npm install && npx playwright install chromium
-  note: .claude/ 階段預設 require jira-test-report/helpers
-
-SELECTOR-NOT-FOUND:
-  symptom: 腳本模式 selector 找不到（特別 R18 升級後）
-  action: HEADLESS=false 重跑看實際畫面 → 調整 selector
-
-RATE-LIMIT:
-  symptom: 跑到一半 rate limit
-  banned: 閒置等待（5 分鐘 prompt cache 過期，恢復時燒幾萬 token 重建 cache）
-  action: 當前 step 跑完後 /clear → 新 session 用 /jira-test-report --resume 從 progress.md 接續（Phase A/B/C 自動接力）
-
-RESUME-NO-PROGRESS:
-  symptom: --resume 但 progress.md 不存在
-  action: 提示使用者「尚未跑過，無進度可續，請去掉 --resume 旗標」
-
-PROGRESS-ISSUE-MISMATCH:
-  symptom: progress.md 存在但 issue key 不符
-  action: 中止，提示「進度檔屬於別的 issue」
-```
+| Symptom | 一行 Action |
+|---|---|
+| `LOGIN-4xx` | 驗證 `.env.local`（不要在對話貼密碼） |
+| `LOGIN-5xx` | retry 一次 → 仍失敗中止 |
+| `UPLOAD-401` | token 失效 → 重新驗證 |
+| `COMMENT-ATTACHMENT-VALIDATION` | 改回 v2 wiki（誤用 v3 ADF + attachment id） |
+| `SCREENSHOT-ACCESS-DENIED` | filename 改寫進 `frontend/` 內（MCP 限制） |
+| `SESSION-EXPIRED` | 不該發生；若有則縮短測試或加 keep-alive |
+| `PLAYWRIGHT-MODULE-MISSING` | `cd helpers && npm install && npx playwright install chromium` |
+| `SELECTOR-NOT-FOUND` | `HEADLESS=false` 重跑看實際畫面 |
+| `RATE-LIMIT` | 不要閒置等待；`/clear` 後 `--resume` 從 progress.md 接續 |
+| `RESUME-NO-PROGRESS` | 提示「尚未跑過，去掉 `--resume`」 |
+| `PROGRESS-ISSUE-MISMATCH` | 中止，提示「進度檔屬於別的 issue」 |
 
 ## 參考做法（記憶提示）
 
@@ -1141,275 +810,12 @@ PROGRESS-ISSUE-MISMATCH:
 
 ## Changelog
 
-版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / 流程行為、MINOR=新增 helper / 模式 / 階段步驟、PATCH=修 bug 或文件更新。
-
-### v2.4.7 — 2026-05-20（PATCH：規則性段落 AI.MD v4 結構化，prose bullets → structured labels）
-
-**變更**（局部 reformat，無新規則 / 新 helper / 流程行為變更）：
-
-四個規則性段落從 prose bullets 改為 AI-parsing structured labels（套 AI.MD v4 方法論：每條 rule + why + how/banned，attention 不被 dense prose 切散；歷史 context 保留作 `why` / `case` 子欄）。Code 範例、changelog、API 速查表、Wiki Markup 速查、共用先決條件等其他段落**原樣保留**。
-
-| 段落 | 行為 |
-|---|---|
-| S3「寫腳本準則」12 條 | prose bullets → 12 個 structured rule blocks（STEP-PER-ASSERTION / SELECTOR-PRIORITY / LOCATOR-CHAIN / WAIT-STRATEGY / MUTATION-SAFETY / EDIT-STATE-DETECTION / THIRD-PARTY-SELECTOR / LOGIN / GOTO-WAIT / STEP-CHINESE / ASSERTION-EVIDENCE / HELPERS-ONLY） |
-| S3.5「Cleanup 鐵則」prose | 改 `CLEANUP-EVIDENCE-BEFORE-UI` block（rule / triggers / why / case / inverse-evidence）；code 範例 + grep + 自我檢核 checklist 保留 |
-| S3.6「何時用 + 切換邏輯」 | `USE-WHEN` / `SKIP-WHEN` + `SWITCH-ORG-PIPELINE`（step-1 ~ step-6）；cjs 整合範本 code + 自我檢核 checklist 保留 |
-| 失敗處理 11 條 | prose bullets → 11 個 symptom/action/why block（LOGIN-4xx / LOGIN-5xx / UPLOAD-401 / COMMENT-ATTACHMENT-VALIDATION / SCREENSHOT-ACCESS-DENIED / SESSION-EXPIRED / PLAYWRIGHT-MODULE-MISSING / SELECTOR-NOT-FOUND / RATE-LIMIT / RESUME-NO-PROGRESS / PROGRESS-ISSUE-MISMATCH） |
-
-**設計動機**（AI.MD v4 理論支撐）：
-
-- **Attention splitting**：dense prose 多條規則用 `|` / 句號黏在一行時，模型 attention 分散，部分規則 weight 降到近零。獨立 line + label 讓每條規則拿到完整 attention
-- **Zero-inference labels**：`rule:` / `why:` / `banned:` / `how:` 等 label 直接宣告語意，免去模型從 prose context 推論
-- **Semantic anchoring**：`LOGIN:` / `GOTO-WAIT:` / `CLEANUP-EVIDENCE-BEFORE-UI:` 等 ALL-CAPS 標題 = 可被 user prompt 直接 hash 命中的 anchor
-
-**範圍邊界**（沒做的部分）：
-
-- code 範例（S3 骨架、S3.5/S3.6 cjs 範本、wiki markup 範例）：完整 copy-paste 可執行，不該結構化打散
-- API 速查表 / Wiki Markup 速查 / 共用先決條件：已是 structured table，AI.MD 化反而冗餘
-- Changelog（v2.4.6 以前歷史）：時序紀錄，給人讀的
-- multi-model 完整驗證（AI.MD v4 Phase 6）：此次屬 PATCH 局部 reformat，未跑 8 道測題 multi-model 驗證；下次跑 cjs 時實測 compliance 即可
-
-**影響範圍**：
-
-- 既有 cjs：不受影響（rule 內容未變，只變呈現形式）
-- 新產出 cjs：AI 跟 skill 時規則命中率預期提升（特別是長對話 / 多輪 context 場景）
-- 同步：cup-build-test SKILL.md 對應段落可比照 reformat（後續另起 PR）
-
-### v2.4.6 — 2026-05-20（新增 orgGuard.cjs helper：機構切換 + 例外 case 支援）
-
-**新增**：
-
-- **新 helper `orgGuard.cjs`**：提供 `switchOrg(page, { keyword, expectedDisplay, waitMs })` / `currentOrg(page)` / `DEFAULT_ORG` 三個 API。jira-test-report 例外 case 屬於非預設機構（如豐原醫院、台南御宇）時，A1 前切過去、finally 切回 `compal`（仁寶長照機構），避免污染後續測試
-- **新增步驟 S3.6「機構切換」段**：何時要用、helper API、切換邏輯、cjs 整合範本（A0 / Z9 step 結構 + 簡化版）、自我檢核 5 點
-- **Helpers 速查表加 `orgGuard.cjs` 一行**
-- **S8.2 範本 require 區塊加註解**：例外 case 才 require `orgGuard`，多數 cjs 不需要
-
-**設計動機**：
-
-- 帳號 `adm_max_ho` 為通用最高權限可切換機構帳號，預設機構 `仁寶長照機構` (internal code `compal`)；少部分 bug 只在特定機構特定 case_id 可重現
-- 之前若手動切換到別機構後忘了切回，下次跑 LVB-7977 / ERPD-11841 等預設機構 cjs 會撈不到 case 或撈到別機構的 case，產生誤判
-- helper 強制切後斷言 `expectedDisplay`，比手動點 dropdown 穩定；切後自動 `goto /case/` 避踩到 `/` 路由的 SSO redirect 雪坑
-
-**切換邏輯關鍵設計**（解決兩個雪坑）：
-
-1. **dropdown 顯示文字與右上角顯示文字是兩套 mapping**：dropdown 選項 `仁寶躍虎 (compal)`，但切後右上角顯示 `仁寶長照機構`。helper 不靠 substring 比對 dropdown text，而是優先用「endsWith `(${keyword})`」精準匹配 internal code（多筆過濾結果也能挑對）；fallback 才是「過濾結果唯一」分支（支援 `keyword='豐原'` 這種顯示名片段）
-2. **切換後預設導向 `/` 會 SSO redirect 到 icaretest115**：helper 切後強制 `goto /case/` protected route，前端讀 token cookie 正常通過
-
-**Smoke 驗證**：
-
-`/tmp/orgguard-smoke.cjs` round-trip 全綠：
-- Smoke 1 `currentOrg` → `仁寶長照機構`
-- Smoke 2 `switchOrg(DEFAULT_ORG)` 已在預設 → noop（`switched: false`）
-- Smoke 3 `switchOrg({ keyword: '豐原', ... })` → 切換成功（唯一過濾分支）
-- Smoke 4 `switchOrg(DEFAULT_ORG)` → 切回成功（endsWith `(compal)` 多筆分支）
-
-**影響範圍**：
-
-- 新產出 cjs：屬於非預設機構的 issue 強制套用 S3.6（A0 切換 / Z9 切回）
-- 既有 cjs（LVB-7977 / ERPD-11841 等預設機構 case）：不受影響，繼續用 `compal` 機構跑
-- 對應 memory 候選：可加 `feedback_org_switch_required_for_non_compal_cases.md` 記錄機構切換時機（後續）
-
-### v2.4.5 — 2026-05-20（ERPD-11841 staging 實戰回饋：injectEvidence 後 UI 互動前必須 clearEvidence）
-
-**新增**：
-
-- **S3.5 Cleanup 鐵則升級**：同一 step 內 `injectEvidence` 之後若還有任何 UI 互動（closeModal / .click / .fill / .selectOption 等），動作前必須 `await clearEvidence(p);`。從「下個 step 開頭 / cancel modal 前」軟性建議升級為硬性規則
-- 加 ERPD-11841 A8 實戰範例：原 step 結尾 `injectEvidence → closeModal` 順序在 staging 100% 重現 `Timeout 30000ms exceeded`，error log `<div>… from <div id="e2e-evidence-panel">… subtree intercepts pointer events`；同 cjs A4 / A7 PASS 因 closeModal 在 injectEvidence「之前」
-- 加 Code review grep 指令：`grep -A 20 'injectEvidence' <cjs> | grep -E 'closeModal|\.click\(|\.fill\(|\.selectOption\('`
-- 自我檢核清單加一條（v2.4.5+ 鐵則）：「同 step 內 injectEvidence 之後若還有 UI 動作，動作前有 clearEvidence」
-
-**設計動機**：
-
-`#e2e-evidence-panel` 由 `evidence.cjs::injectEvidence` 注入 viewport 右上角 `position: fixed`，Modal 寬度大時會剛好覆蓋 modal-header 右上角的 close button，Playwright 60 次 retry 全被 pointer-events 攔截。功能本身沒 bug（人工點得下去），但腳本自己擋自己，是「腳本 bug 看起來像功能 bug」的典型雪坑。
-
-ERPD-11841 staging 跑 A8 9 step 中 1 個 FAIL 30 秒就是這個原因。修法是 `closeModal` 前一行加 `await clearEvidence(p);`，從 47s elapsed FAIL 變 16s 全 PASS。
-
-**影響範圍**：
-
-- 已修：`e2e/release-tests/ERPD-11841.cjs:529` + `.claude/ERPD-11841-test.cjs:534`
-- 新產 cjs：強制套用 S3.5 Cleanup 鐵則
-- 既有 cjs：grep `injectEvidence` 後緊接 UI 動作但中間沒 clearEvidence 的 step，回頭補上
-- 對應 memory：`feedback_clear_evidence_before_ui_action.md`
-
-### v2.4.4 — 2026-05-19（LVB-7963 風格 codify + helpers 全面化 + 雙 skill 獨立）
-
-**新增**：
-
-- **S3 腳本骨架全面 helpers 化**：require 整套 `env.cjs` / `step.cjs` / `modal.cjs` / `browser.cjs` / `report.cjs` / `evidence.cjs`，cjs 主體只放測試 step 邏輯。不再 inline 寫 `step()` runner、`updateProgressMd`、`injectEvidence`、`writeResultsJson`、`fs.writeFileSync(_results.json)`、console error 收集等已有 helper 的程式碼
-- **檔頭格式對齊 LVB-7963 6 段**：(1) 一句話描述 (2) Root cause (3) 修正 (4) 驗證情境 (5) 用法 / 環境變數 / 前置 (6) Exit codes（0/1/3/4）
-- **S3.5 evidence overlay 改 require `evidence.cjs`**：不再 inline 30+ 行 `injectEvidence` 函式；列出 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox` 三個 API 用途
-- **S3 寫腳本準則加「helpers 全面化禁止 inline 重複」條**：明確禁止在 cjs 重複實作已 helper 化的功能
-- **進階用法段重寫為「Helpers 架構與 API 速查」**：列出 7 個 helper 的 API 簽名與用途；標註修 helper 走 master + sync-helpers.sh
-- **S8.1 機械改動從 7 點縮為 1 點**：只剩 `HELPERS_DIR` fallback 從 `~/.claude/skills/jira-test-report/helpers` 改 `path.join(__dirname, '_helpers')`；附表列出原 6 點為何不再需要
-- **S8.2 require 區塊對齊 S3 完整 helpers 列表**：6 個 require 一次補齊
-- **S8.5 機械步驟對齊新流程**：第 3 點 helpers 完整性檢查改為跑 `sync-helpers.sh --force` 一次性同步；第 5 點改動量從 6 點縮為 1 點；第 7 點新增 `grep injectEvidence` 自我檢查
-- **失敗處理段 npm install 路徑**：從 `cup-build-test/helpers` 改為 `jira-test-report/helpers`（兩個 skill 獨立可運作）
-
-**helpers 變化（反向同步補齊 master）**：
-
-- `cup-build-test/helpers/evidence.cjs` 新增（先前只在 `e2e/release-tests/_helpers/`，回灌 master）：提供 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox` 三個三合一規範必備 API
-- `cup-build-test/helpers/env.cjs` 更新到 release-tests 端 v0.4.0：新增 `SCREENSHOT_BASE_DIR` env var（給 CI 設 `.` 避開 hidden dir glob）、`SCREENSHOT_DIR` 完全覆寫、拿掉冗餘 variant 子目錄層
-- `cup-build-test/helpers/step.cjs` 更新到 release-tests 端 v0.4.0：`createStepRunner` 5 參數中文簽名 + `sanitizeForFilename` helper（保留 unicode 中文檔名）
-- `cup-build-test/helpers/types.d.ts` 更新：`StepResult` 加 `description?: string`
-- `sync-helpers.sh --force` 已把上述 4 個檔案推到 jira-test-report mirror 與 release-tests vendor，三邊一致
-
-**設計動機**：
-
-- LVB-7963 是 release-tests 第一個完整 helpers 化的腳本（520 行，cjs 主體只剩測試邏輯），但即將被刪除。先前 skill 範本仍是 v2.0 inline 寫法（LVB-7977 為證，562 行內含 100+ 行重複 helper 邏輯），新產出的 cjs 都未對齊 LVB-7963 風格
-- evidence.cjs 只在 release-tests/_helpers/ 沒同步回 master，導致 .claude/ 階段腳本無法 require → 每個 cjs 都得 inline 30+ 行 injectEvidence，違反 v2.4.0 三合一規範要求
-- 使用者明確要求「兩個 skill（cup-build-test / jira-test-report）獨立不互相依賴」：兩邊各自完整 helpers，透過 sync-helpers.sh 保持同步
-
-**影響範圍**：
-
-- **新產出 cjs**：強制套用新骨架（S3 + S3.5 + S8.1/S8.2/S8.5），平均行數從 ~560 行縮到 ~280 行
-- **既有 cjs**（v2.4.3 以前）：LVB-7977 / ERPD-11841 等下次回歸時建議改寫對齊；LVB-7963 即將刪除，其風格已 codify
-- **helpers master 版本建議 bump 0.3.0 → 0.4.0**：因新增 evidence.cjs + env.cjs 行為變更（破壞性需 caller 對齊新 SCREENSHOT_BASE_DIR 預設）
-
-### v2.4.3 — 2026-05-19（ERPD-11841 實戰回饋第 2 輪：禁用 authStateFromApi，登入改 launchBrowser({ login })）
-
-**新增**：
-
-- S3 寫腳本準則加「**登入用 `launchBrowser({ login: loginParamsFromEnv() })`，禁止 `authStateFromApi` + `storageState`**」：luna staging `token` cookie 是 host-only，storageState 序列化會漏，且 `authStateFromApi` 沒帶 `x-request-from: web` header，後端根本不發 token cookie
-- S3 骨架範本（main 開場 + S8.2 require 區塊）改用 `launchBrowser` + `loginParamsFromEnv`，移除手動 `chromium.launch` + `newContext({ storageState })` + 拋棄 `authStateFromApi`
-- 本機驗證指標：腳本啟動第一行應印出 `[login] OK 200 — N cookies: token,lunastaging.sid`，**`token` 必須在 cookie 列表中**，否則進頁面後會被 SSO redirect 到 `icaretest*`
-
-**設計動機**：ERPD-11841 在 GitHub Actions 跑 staging timeout 後本機重現，瀏覽器 `title="Loading https://icaretest115.compal-health.com/?q=ic"` 揭露真因 — 不是 wait condition，是 token cookie 沒拿到 → SSO redirect 卡死。v2.4.2 改 `domcontentloaded` 治標、v2.4.3 改 `launchBrowser({ login })` 治本。
-
-**影響範圍**：
-
-- 新產出 cjs 強制套用（S3 骨架已改）
-- 既有 cjs `grep authStateFromApi` 應全清為 `launchBrowser({ login })`：ERPD-11841（已修）；LVB-7963 / LVB-7977 早就用 `launchBrowser` 不需動
-- skill 互動模式段（約 193 行）的 `helpers/login.cjs::authStateFromApi` 引用建議下個版本一併更新為 `loginInContext`
-
-### v2.4.2 — 2026-05-19（ERPD-11841 實戰回饋：禁用 networkidle + AUTH_EXPIRED fail-fast）
-
-**新增**：
-
-- S3 寫腳本準則加「**`page.goto` waitUntil 一律用 `'domcontentloaded'`，禁止 `'networkidle'`**」：luna staging R18 SPA 背景 GA4/polling 持續，networkidle 30 秒 timeout
-- S3 骨架範本第 440 行同步改 `domcontentloaded`，並補上 `AUTH_EXPIRED` fail-fast block（對齊 LVB-7963.cjs 既有慣例）
-
-**設計動機**：ERPD-11841 在 GitHub Actions release-tests workflow 跑 staging 時 `page.goto('/supervisorVisitRecord', { waitUntil: 'networkidle' })` 30 秒 timeout 直接 fail。同寫法 LVB-7963 `/homecareCaseClose` 過得了是因為該頁 polling 較少，networkidle 在 SPA 上行為不穩定不可靠。
-
-**影響範圍**：
-
-- 新產出 cjs 強制套用（S3 骨架已改）
-- 既有 cjs 應逐步回頭把 `networkidle` 換成 `domcontentloaded`：ERPD-11841（已修）、LVB-7963（暫時還能過但建議下次回歸時換掉）
-
-### v2.4.1 — 2026-05-19（LVB-7977 實戰回饋：DOM-driven 判斷 + _helpers 完整性檢查 + 跑前清空 temp）
-
-**新增**：
-
-- S3 寫腳本準則加「**判斷進入子頁/編輯狀態預設 DOM-driven**」：SPA inline 編輯 URL 通常不變，靠 URL diff 判斷會永遠 false。改靠 DOM 訊號（表單欄位 / 按鈕 / typeahead mount）。luna FE r15/r18 多數頁面屬此模式但少數會 push history state，第一次寫腳本時 `HEADLESS=false` 觀察一次再決定
-- S3 寫腳本準則加「**第三方元件 selector 寫前先 grep 實際版本**」：react-bootstrap-typeahead v1.x 用 `.bootstrap-typeahead`，v4+ 改 `.rbt-`，差異大；寫死 selector 前先查 `node_modules/<lib>/lib/*.js` 或 `package.json`
-- S8.5 機械步驟第 3 點：**確認 `_helpers/` 內必要 cjs 完整**，缺則自動 cp from `~/.claude/skills/cup-build-test/helpers/`。空 `_helpers/`（只含 node_modules）為首次 publish 常見狀態，不應中止流程
-- 步驟 5 / S4 開頭加 `rm -rf .claude/{ISSUE_KEY}-temp` 跑前清空（`--resume` 模式例外）：避免 step 改名留下 stale 截圖污染 Phase B 上傳
-
-**設計動機**：LVB-7977 實戰踩到三個坑 — (1) A2 用 `url !== originalUrl` 判斷進入編輯頁永遠 false（luna 點編輯 URL 不變）；(2) TYPEAHEAD selector 用 v4+ `.rbt-*` 但 react_15 是 v1.x `.bootstrap-typeahead`，找不到任何元素；(3) Phase B 上傳前 temp dir 留有「A4 鄧 → 改成 A4 陳」兩個版本的截圖，未手動刪會混淆 Jira inline comment。
-
-### v2.4.0 — 2026-05-19（斷言截圖三合一規範：程式邏輯 + 真實頁面操作 + evidence overlay）
-
-**變更**：
-
-- 新增 **S3.5 斷言截圖三合一規範**（強制）：每個 step 必須同時具備
-  1. 程式邏輯斷言（throw new Error 含實測 vs 預期對比）
-  2. 真實頁面操作或視覺變更（DOM 至少一處可截圖識別的變化）
-  3. 斷言結論可視化（evidence overlay 注入右上角）
-- 純資料比對 step（截圖前後雷同）視為 anti-pattern，強制用以下方式之一補回頁面證據：
-  - (a) 強制 native 元素展開呈現（如 `<select>.size = N` 變 listbox）
-  - (b) 逐項真實 UI 互動（如 `selectLocator.selectOption()` 逐選驗證）
-  - (c) DOM highlight + 標號 outline / badge
-- 提供 `injectEvidence(p, {...})` 標準格式 helper 範例（inline 在 cjs，可選擇抽到 _helpers/evidence.cjs）
-- 提供 LVB-7963 A3.2 / A3.3 範本重構（必要選項用 (b) 逐一 selectOption、完整 14 項用 (a) listbox 展開）
-- 提供 cleanup pattern（cancel modal 前移除 evidence overlay）
-- 提供 self-check 5 點清單（每個 step throw / UI 證據 / evidence / cleanup / 對比訊息）
-
-**設計動機**：LVB-7963 實戰發現 A3.2~A3.4 三步截圖完全雷同（純對 JS 陣列做 includes 比對 + 順序比對），非工程 stakeholder 看 Jira inline comment 與 GitHub Actions artifact 無法判讀斷言依據，等同沒測。三合一規範強制每個斷言 step 都同時驗證程式邏輯與 UI 行為，截圖內可見斷言結論。
-
-**影響範圍**：
-- 新產出 cjs 強制套用（S3 寫腳本準則 + S3.5 規範）
-- 既有 cjs（LVB-7963 / CUP-180 / ERPD-11841）建議下次回歸時逐步補上 evidence overlay；LVB-7963 為首要範例改造目標
-- S8.5 機械步驟可加第 9 點：grep `injectEvidence` 確認斷言 step 都有注入（未來版本補）
-
-### v2.3.2 — 2026-05-19（產出 release-tests cjs 強制中文化 step 呼叫）
-
-**變更**：
-
-- S3「寫腳本準則」加一條「step 呼叫中文化」：所有產出 cjs 一律用 5 參數中文版簽名 `step(page, caseId, '中文短名', '中文長描述', async (p) => {...})`
-- S3 腳本骨架的 `step()` inline 函式改為支援 4 參數新版 + 2 參數 legacy 向後相容；截圖檔名改為 `{idx}-{caseId}-{中文短名}.png`，sanitize 改保留 unicode（中文不被替換成 `-`）
-- S3 腳本骨架的「測試步驟區塊」範例改用 5 參數中文版示範
-- S8.1 機械改動清單加第 7 點：publish 到 release-tests 時 grep `step(page,` 確認所有呼叫已中文化，未中文化要補
-- 設計動機：release-e2e workflow 跑完後，使用者在 GitHub Actions Job summary / artifact `_results.json` / 截圖檔名 / Jira inline comment 都吃 `name` / `description`，中文化讓非技術 stakeholder 看 workflow 結果就能理解每步在做什麼；對齊 LVB-7963 已落地的 `_helpers/step.cjs createStepRunner` 5 參數簽名規範
-
-**helpers 變化**：
-
-- `e2e/release-tests/_helpers/step.cjs` `createStepRunner` 已於 LVB-7963 commit 提供 5 參數簽名向後相容（typeof 判斷第 4 個 arg 是 function 或 string）
-- `e2e/release-tests/_helpers/types.d.ts` `StepResult` 加 `description?: string`
-- jira-test-report skill helpers/ 透過 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh` 同步即跟進
-
-### v2.3.1 — 2026-05-18（fixture 管理改推 hardcode default）
-
-**變更**：
-
-- S8.4 fixture 管理主推方案改為 **hardcode staging default + `process.env` 覆寫**（JSON map 移至 Fallback 段）
-- 設計動機：luna 個案 uuid 不含個資，hardcode 進 cjs 比 GitHub Variables 設定簡單、新增 cjs 不需要二段 PR、cjs 自帶測試規格不必跨檔 trace
-- JSON map 保留作為「公司政策禁止個案 id 進 git」時的 fallback 方案
-
-### v2.3.0 — 2026-05-18（步驟 8 publish 到 release-tests 強制 + 雙環境驗證 + fixture 管理）
-
-**變更**：
-
-- 步驟 8「publish 到 release-tests」從「選用」改強制執行（只腳本模式適用）
-- 新增 **S8.1 機械改動清單**：6 點對齊（HELPERS_DIR、chromium 路徑、SCREENSHOT_DIR、env.local 載入、progress.md silent、檔頭註解）
-- 新增 **S8.2 範本 require 區塊**：可直接複製對齊 LVB-7963 風格
-- 新增 **S8.3 驗證時機**：Local + Staging 雙環境
-  - `.env.local` 同時宣告 `BASE_URL`（dev）與 `STAGING_URL`（staging）
-  - 切換靠 `BASE_URL=$STAGING_URL` 前綴，不需改 cjs
-  - 對齊 CI `secrets.E2E_STAGING_URL` 語義
-- 新增 **S8.4 fixture 管理**：CASE_ID / DAYCARE_CASE_ID 等業務輸入
-  - 推薦 GitHub Variables 用 **JSON map `RELEASE_TEST_FIXTURES`**（key=issue, value=env map）
-  - workflow matrix step 用 `jq` export 為 env，cjs 完全不知 issue key
-  - 缺 fixture exit code 4（MISSING_ENV，對齊 LVB-7963）
-- 新增 **S8.5 機械步驟**：8 步驟清單從偵測 repo root 到提示使用者觸發 workflow
-
-**設計動機**：先前 release-tests publish 是選用、僅留指針到 cup-build-test，導致 ERPD-11841 手動補 6 點機械改動才能上 release-tests。把這些抽出來、加上雙環境驗證紀律與 fixture 統一管理規範
-
-### v2.2.0 — 2026-05-18（Atlassian credentials 改存 .env.local）
-
-**變更**：
-
-- Atlassian email / API token / site 一律改存 `.env.local`（keys：`ATLASSIAN_EMAIL` / `ATLASSIAN_API_TOKEN` / `ATLASSIAN_SITE`），**不再從對話索取**
-- 新增「`.env.local` 完整範例」段，列出 E2E + Atlassian 兩組必要 keys
-- 步驟 2 / 步驟 S2 / 步驟 6 / 步驟 7 / 步驟 10 全部改為從 `process.env` 讀
-- 步驟 10「撤銷 token」改為選用 — token 持續複用，rotate 時才撤銷
-- `.gitignore` 必含 `.env.local`（之前已有，文字加強）
-
-**設計動機**：避免每次跑都要使用者貼 token，省 round trip；同時把 secret 集中在 gitignored 檔，降低不小心 commit 風險
-
-### v2.1.0 — 2026-05-14（與 cup-build-test 共用 helpers）
-
-**新增**：
-
-- 引入 cup-build-test helpers 共用機制：`~/.claude/skills/jira-test-report/helpers/` 從 cup-build-test sync 而來（用 `~/.claude/skills/cup-build-test/scripts/sync-helpers.sh`）
-- 步驟 S3 加「進階用法：引用 cup-build-test helpers」段，建議 cjs 引用：
-  - `waitAndDismissOnEntry / dismissAnnouncement`（公告 modal 集中處理）
-  - `ensureCleanState`（mutation step 入口防禦性 cleanup）
-  - `confirmYes / confirmNo`（「是/否」「確認/取消」二次確認對話統一處理）
-- 既有 cjs 不強制升級，新產 cjs 推薦用 helpers
-
-**設計動機**：cup-build-test v1.1.0 累積的 luna 系統 modal handling 修正（CUP-179 / CUP-180 實戰），抽 helper 共用避免兩個 skill 重複維護。修一處兩個 skill 受益。
-
-**helpers/ 版本**：跟 cup-build-test/helpers/ 0.2.0 一致（透過 sync-helpers.sh 同步）
-
-### v2.0.0 — 2026-05-08（progress.md cross-session resume）
-
-**新增**：
-
-- 模式 1 互動模式（Playwright MCP）+ 模式 2 腳本模式（生成 .cjs + node 執行）並存
-- progress.md 跨 session resume 機制（rate limit 預備）
-- `--resume` 旗標 + 顯式要求機制
-- Phase A/B/C 分段紀錄（跑測試 / Jira 上傳 / inline comment）
-- Wiki Markup inline 截圖機制（comment 要用 v2 wiki 才能 inline，v3 ADF 不行）
-- attachment 上傳走 v3 endpoint
-- 互動模式截圖必指定 filename（避免 base64 入 context）
-
-**首發案例**：ERPD-11841（2026-05-04，互動模式）、CUP-80（2026-05-07，腳本模式首發）
+歷史變更紀錄已抽到 [./CHANGELOG.md](./CHANGELOG.md)（v2.0.0 起的完整版本歷史）。
+
+**最近版本**（詳細見 CHANGELOG.md）：
+
+- **v2.5.4**（2026-05-22）— 失敗處理抽到 `docs/troubleshooting.md`，SKILL.md 再瘦 -35 行
+- **v2.5.3**（2026-05-22）— Wiki Markup 速查 + Comment 範本抽到 `docs/`，SKILL.md 再瘦 -20 行
+- **v2.5.2**（2026-05-22）— S3.5 / S3.6 範例 cjs 抽到 `templates/snippets/`，SKILL.md 再瘦 -115 行
+- **v2.5.1**（2026-05-22）— progress.md 範本 + .env.local 範例抽到 `templates/`，SKILL.md 再瘦 -35 行
+- **v2.5.0**（2026-05-22）— S3 cjs 骨架抽到 `templates/skeleton.cjs`，SKILL.md 瘦身 -128 行

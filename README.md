@@ -60,7 +60,7 @@
 | jira | `/jira` | 1.1.0 | Jira Issue 管理，自動從 branch 識別 issue |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
-| jira-test-report | `/jira-test-report` | 2.4.0 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」+ evidence helper（每 step 程式斷言 / UI 變更 / overlay 注入結論） |
+| jira-test-report | `/jira-test-report` | 2.5.4 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md` |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
@@ -258,6 +258,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-22: jira-test-report v2.5.4 — SKILL.md 大規模拆分重整
+
+**jira-test-report 結構重整（v2.5.0 ~ v2.5.4）：**
+- SKILL.md 1415 → 821 行（**-42% 瘦身**），抽出「字典型」內容到專屬目錄
+- 新增 `docs/` 目錄：`troubleshooting.md`（11 symptom 完整診斷）、`wiki-markup.md`（Jira Wiki 語法）、`comment-template.md`
+- 新增 `templates/` 目錄：`env.local.example`、`progress.template.md`、`skeleton.cjs`、`snippets/`
+- 新增 `CHANGELOG.md`：從 v2.5.0 起維護版本歷程
 
 ### 2026-05-22: CLAUDE.md POST-COMMIT-REVIEW 更新 — 因應 v2.1.147 /simplify 改名
 

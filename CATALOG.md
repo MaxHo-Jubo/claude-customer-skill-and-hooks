@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-20（statusline 新增 live agent sessions / 新增 big-read-guard PreToolUse Read hook / cup-build-test + jira-test-report 共用 orgGuard helper / weekly-review v1.7.0）
+> 上次更新：2026-05-22（jira-test-report v2.5.4 — SKILL.md -42% 瘦身 + docs/ + templates/ + CHANGELOG.md 結構重整）
 
 ---
 
@@ -62,15 +62,16 @@
   - 產出結構化驗收報告
 - **依賴**：Atlassian MCP、git repository
 
-#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.4.0）
+#### `/jira-test-report` — Jira issue Playwright 測試報告（v2.5.4）
 
-- **位置**：`~/.claude/skills/jira-test-report/SKILL.md`（含 `helpers/` 子目錄）
+- **位置**：`~/.claude/skills/jira-test-report/SKILL.md`（含 `helpers/`、`docs/`、`templates/` 子目錄；`CHANGELOG.md`）
 - **用法**：`/jira-test-report`、`/jira-test-report {ISSUE_KEY}`、`/jira-test-report --resume`
 - **功能**：
   - 對 Jira issue 跑 Playwright E2E 測試
   - 自動截圖並以 inline 形式上傳到 issue comment（直接顯示在留言中，非附件清單）
   - 支援 `progress.md` 機制：中斷後可 `--resume` 從上次斷點繼續
-  - **v2.4.0 新增**：落實「斷言截圖三合一規範」（程式斷言 throw / UI 視覺變更 / evidence overlay 注入結論，三者缺一不可）；`.env.local` 完整範例補上 Atlassian API token + 業務 fixture 變數對照；`helpers/login.cjs::loginInContext` 主流程保留 host-only cookies
+  - **v2.4.0**：落實「斷言截圖三合一規範」（程式斷言 throw / UI 視覺變更 / evidence overlay 注入結論，三者缺一不可）；`helpers/login.cjs::loginInContext` 保留 host-only cookies
+  - **v2.5.x 結構重整**：SKILL.md 1415 → 821 行（-42%）；抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template.md/skeleton.cjs/snippets/）；新增 CHANGELOG.md
   - **v2.2.0 起**：登入流程改用 API（`.env.local`），移除互動式 MCP 登入；步驟 8 可選 publish 到業務 repo `e2e/release-tests/`
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
