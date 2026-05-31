@@ -52,7 +52,7 @@
 
 ---
 
-## Skills 一覽（28 個自訂 skill）
+## Skills 一覽（29 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -67,7 +67,7 @@
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo |
+| weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
@@ -82,6 +82,7 @@
 | r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
 | cup-build-test | `/cup-build-test` | 1.2.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
+| translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
 
 ### 無 slash command 的 Skills
 
@@ -120,10 +121,10 @@
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
 | pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent） |
-| multi-repo-commit-scanner | haiku | 1.0.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計。用於 weekly-review STEP 01 |
+| multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計；v1.1.0 支援 `path`/`label`/`pathspec` 物件形式，可將 monorepo 依子目錄拆成多個 bucket（如 luna_web 拆 FE/BE）。用於 weekly-review STEP 01 |
 
 - **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：POST-COMMIT-REVIEW 自動 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；說明文件：`agents/README-pr-reviewer.md`
-- **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8
+- **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8；v1.1.0 起 repo 可用物件形式帶 `pathspec` 拆 monorepo 子目錄（橫跨子目錄的 full-stack commit 各 bucket 皆計入，不去重）
 
 ## Plugins & MCP Servers
 
@@ -258,6 +259,20 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-05-31: multi-repo-commit-scanner v1.1.0（pathspec 拆分）+ 修正 weekly-review repo 路徑漂移 + 新增 translate skill 文件
+
+**`agents/multi-repo-commit-scanner.md` v1.0.0 → v1.1.0：**
+- `scan_one` 新增 `label`/`pathspec` 兩參數；輸入 `repos` 支援物件形式 `{path, label, pathspec}`
+- `pathspec` 非空時 `git log` append `-- <pathspec>`，把同一個 monorepo 依子目錄拆成多個 bucket（如 luna_web 的 `frontend/` 與 `backend/`）
+- 橫跨多子目錄的 full-stack commit 會同時計入各 bucket（不去重，與既有 `--all` 重複行為一致）
+
+**`skills/weekly-review/SKILL.md` STEP 01 repo 清單修正：**
+- 修正 6 個漂移路徑：命名 kebab→snake（`luna-web`→`luna_web`）、erpv3 補回 `Compal/` 中間層、RN 移除多餘內層、luna_web 不再誤當兩個獨立 repo
+- luna_web 改用 pathspec 拆 FE/BE 兩 bucket（單一 git repo，列兩條路徑會重複計算）
+- 補回遺漏的 `luna_RN_FamilyMember`（家屬App）與新增 `erpv3_web_frontend_sidea`，共 9 entry（8 實體 repo），`parallel` 8→9
+
+**文件：** README/CATALOG 補登 `translate-claude-code-releases` skill（v1.0.0，上 session 新增但未登錄）
 
 ### 2026-05-22: weekly-review v1.8.0 + multi-repo-commit-scanner agent
 

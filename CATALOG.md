@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-22（weekly-review v1.8.0 + multi-repo-commit-scanner agent — STEP 01 改用平行 8 repo 掃描；CLAUDE.md 新增 3 條規則）
+> 上次更新：2026-05-31（multi-repo-commit-scanner v1.1.0 pathspec 拆分；weekly-review STEP 01 修正 repo 路徑漂移 + luna_web 拆 FE/BE + 補家屬App/sidea；新增 translate-claude-code-releases skill 文件）
 
 ---
 
@@ -82,7 +82,7 @@
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
 - **功能**（8 步驟）：
-  1. Git 工作摘要（按專案分組）— **v1.8.0 起改用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo**，主 agent 等聚合 JSON 後組裝週報
+  1. Git 工作摘要（按專案分組）— **v1.8.0 起改用 `multi-repo-commit-scanner` agent 平行掃描**（8 實體 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE），主 agent 等聚合 JSON 後組裝週報
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
   4. 週報彙整與模式提取（含 Skill/Subagent/MCP Server 建議；MCP Server 建議判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式）
@@ -350,6 +350,19 @@
 - **evals**：`evals/evals.json` 5 案例（slash 觸發、自然語、自訂檔名、負面、跨 session）
 - **依賴**：jq、awk、本機 transcript JSONL（`~/.claude/projects/<escaped-cwd>/<uuid>.jsonl`）
 
+#### `/translate-claude-code-releases` — Claude Code Release 翻譯（v1.0.0）
+
+- **位置**：`~/.claude/skills/translate-claude-code-releases/SKILL.md`
+- **用法**：`/translate-claude-code-releases [version]`、「翻譯 release」、「claude code 更新了什麼」、「翻譯 changelog」
+- **功能**：
+  - 帶版本號 → 翻該版起到最新；不帶 → 從 `last-version.txt` 記錄的版本之後續翻到最新
+  - `fetch-range.sh` 用 `gh` API 抓 release notes 範圍（回傳 FROM/TO/COUNT/MODE/RAW 元資料），寫入 `raw.md`
+  - dispatch sonnet subagent 翻譯：技術術語/產品名保留原文，用詞自然精準
+  - 產出 `output/releases-zh-<from>-to-<to>.md`，更新 `last-version.txt`
+- **bundled scripts**：`fetch-range.sh`（抓取 + 範圍計算，三種模式：指定版本 / 續翻 / 單版）
+- **runtime 產物**（不進 repo）：`raw.md`、`last-version.txt`、`output/*.md`
+- **依賴**：`gh` CLI（GitHub releases API）、sonnet subagent
+
 ---
 
 ### GitNexus 知識圖譜類
@@ -462,7 +475,7 @@
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
 | pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告 |
-| multi-repo-commit-scanner | haiku | 1.0.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計 |
+| multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計；v1.1.0 支援 pathspec 物件形式拆 monorepo 子目錄 |
 
 ### pr-reviewer — Code Review Agent（v1.0.0）
 
@@ -477,18 +490,21 @@
 - **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
 - **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent）
 
-### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.0.0）
+### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.1.0）
 
 - **位置**：`~/.claude/agents/multi-repo-commit-scanner.md`
 - **模型**：haiku（輕量任務，Bash + jq 為主）
 - **工具**：Bash、Read
 - **輸入**：
-  - `repos`（必填）：git repo 路徑清單
+  - `repos`（必填）：git repo 清單，每筆可為
+    - 純路徑字串 → `name` = basename，掃整個 repo
+    - 物件 `{path, label, pathspec}` → `label` 自訂顯示名、`pathspec` 限定子目錄（monorepo 拆 bucket 用）
   - `days`（必填）：往回掃幾天
   - `author`（選填）：commit 作者，預設每 repo 用 `git config user.name`
   - `parallel`（選填）：並行度，預設 8
-- **輸出**：JSON 結構 — `repos[]`（每 repo 的 commits、jira_ids、by_type、total）+ `summary`（total_repos / total_commits / all_jira_ids / by_type_aggregate）
+- **輸出**：JSON 結構 — `repos[]`（每 repo/bucket 的 commits、jira_ids、by_type、total）+ `summary`（total_repos / total_commits / all_jira_ids / by_type_aggregate）
 - **平行機制**：Bash `&` 背景 job + `wait -n` 控並發；單一 Bash call 內完成 N repo 掃描與 jq 聚合
+- **pathspec 拆分（v1.1.0）**：物件帶 `pathspec` 時 `git log` append `-- <pathspec>`，把同一 git repo 依子目錄拆成多個 bucket（如 luna_web 的 `frontend/` 與 `backend/`）；橫跨多子目錄的 full-stack commit 同時計入各 bucket（不去重）
 - **規則固化**：`--all` 必開（feature branch commit 不漏）/ `--no-merges` / Jira ID regex `\[([A-Z]+-[0-9]+)\]` / type 解析 conventional commit
 - **故障隔離**：任一 repo 失敗寫 `error` 欄位、不中斷其他 repo
 - **觸發方式**：weekly-review STEP 01 自動呼叫（取代過去主 agent 逐 repo 序列跑 `git log`）

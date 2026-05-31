@@ -202,6 +202,18 @@
           "(update|revise|更新|修改).*(CLAUDE\\.md|claude md)"
         ]
       }
+    },
+    "translate-claude-code-releases": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": ["translate-claude-code-releases", "翻譯 release", "翻譯更新", "翻譯 changelog", "release notes", "更新內容"],
+        "intentPatterns": [
+          "(翻譯|translate).*(release|更新|changelog|版本|更新內容)",
+          "claude\\s*code.*(更新|更新了什麼|新版|版本)",
+          "(翻譯|看).*claude\\s*code.*(更新|release)"
+        ]
+      }
     }
   }
 }

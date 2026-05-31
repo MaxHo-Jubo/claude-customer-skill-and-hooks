@@ -105,15 +105,22 @@ Agent(
   subagent_type: "multi-repo-commit-scanner",
   prompt: """
     repos:
-      - /Users/maxhero/Documents/Compal/luna-web/frontend
-      - /Users/maxhero/Documents/Compal/luna-web/backend
-      - /Users/maxhero/Documents/Compal/luna-RN-HomeCareStaff/HomeCareStaffRN
-      - /Users/maxhero/Documents/Compal/luna-RN-DayCareStaff/DayCareStaff
-      - /Users/maxhero/Documents/erpv3_web_frontend
-      - /Users/maxhero/Documents/erpv3_web_backend
+      # luna_web 為單一 git repo，FE/BE 是子目錄 → 用 pathspec 拆兩個 bucket（不可列兩條路徑，會重複計算）
+      - path: /Users/maxhero/Documents/Compal/luna_web
+        label: luna_web-FE
+        pathspec: frontend/
+      - path: /Users/maxhero/Documents/Compal/luna_web
+        label: luna_web-BE
+        pathspec: backend/
+      - /Users/maxhero/Documents/Compal/luna_RN_HomeCareStaff
+      - /Users/maxhero/Documents/Compal/luna_RN_DayCareStaff
+      - /Users/maxhero/Documents/Compal/luna_RN_FamilyMember
+      - /Users/maxhero/Documents/Compal/erpv3_web_frontend
+      - /Users/maxhero/Documents/Compal/erpv3_web_backend
+      - /Users/maxhero/Documents/Compal/erpv3_web_frontend_sidea
       - /Users/maxhero/Documents/projects/claude-customer-skill-and-hooks
     days: 7
-    parallel: 8
+    parallel: 9
   """
 )
 ```

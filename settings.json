@@ -253,6 +253,7 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "model": "opus[1m]",
   "skillOverrides": {
     "ai-md": "user-invocable-only",
     "daily-review": "user-invocable-only",
@@ -429,6 +430,5 @@
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "remoteControlAtStartup": false,
-  "skipAutoPermissionPrompt": true,
-  "model": "opus[1m]"
+  "skipAutoPermissionPrompt": true
 }
