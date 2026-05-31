@@ -1,0 +1,4 @@
+# translate-claude-code-releases runtime 產物（每次執行的暫存狀態，不進 repo）
+raw.md
+last-version.txt
+output/*.md
