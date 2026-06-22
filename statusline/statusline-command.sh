@@ -230,13 +230,17 @@ pct_remaining=$(( 100 - pct_used ))
 # transcript 路徑（用於取得工具/agent/todo 資料）
 transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
 
-# effort 等級：從 settings.json 的 effortLevel 取得（無設定則 unset）
-effort_level="unset"
-settings_path="$HOME/.claude/settings.json"
-if [ -f "$settings_path" ]; then
-    effort_val=$(jq -r '.effortLevel // empty' "$settings_path" 2>/dev/null)
-    [ -n "$effort_val" ] && effort_level="$effort_val"
+# effort 等級：優先讀 input JSON 的 .effort.level（session runtime，反映 /effort 即時切換），
+# fallback 到 settings.json 的 effortLevel（靜態設定），都沒有則 unset
+effort_level=$(echo "$input" | jq -r '.effort.level // empty' 2>/dev/null)
+if [ -z "$effort_level" ]; then
+    settings_path="$HOME/.claude/settings.json"
+    if [ -f "$settings_path" ]; then
+        effort_val=$(jq -r '.effortLevel // empty' "$settings_path" 2>/dev/null)
+        [ -n "$effort_val" ] && effort_level="$effort_val"
+    fi
 fi
+[ -z "$effort_level" ] && effort_level="unset"
 
 # ── LINE 1: Dir (branch*) ──
 cwd=$(echo "$input" | jq -r '.cwd // .workspace.current_dir // ""')
