@@ -52,7 +52,7 @@
 
 ---
 
-## Skills 一覽（29 個自訂 skill）
+## Skills 一覽（25 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -84,15 +84,6 @@
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
 
-### 無 slash command 的 Skills
-
-| Skill | 用途 |
-|-------|------|
-| gitnexus-exploring | 用 GitNexus 知識圖譜導航不熟悉的程式碼 |
-| gitnexus-debugging | 用 GitNexus 追蹤呼叫鏈除錯 |
-| gitnexus-impact-analysis | 用 GitNexus 分析修改的影響範圍 |
-| gitnexus-refactoring | 用 GitNexus 規劃安全的重構 |
-
 > **載入狀態**：`ai-md` / `daily-review` / `humanizer-zh-tw` / `upgrade-to-status` 設為 `user-invocable-only`（不主動推薦，只在使用者輸入 slash command 時觸發）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
 
 ## Hooks 一覽
@@ -102,7 +93,6 @@
 | SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
 | SessionStart | 啟動 session | —（空 matcher） | `context-mode/sessionstart.mjs` | context-mode 初始化 |
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
-| PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.ts` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
 | PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
@@ -120,10 +110,10 @@
 
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
-| pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent） |
+| pr-reviewer | sonnet | 1.2.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent）；v1.2.0 新增「慣例優先原則」（風格類規則須先 grep 統計既有慣例才判定 issue）+ full 模式自動 post review 到 GitHub PR |
 | multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計；v1.1.0 支援 `path`/`label`/`pathspec` 物件形式，可將 monorepo 依子目錄拆成多個 bucket（如 luna_web 拆 FE/BE）。用於 weekly-review STEP 01 |
 
-- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：POST-COMMIT-REVIEW 自動 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；說明文件：`agents/README-pr-reviewer.md`
+- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：POST-COMMIT-REVIEW 自動 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；v1.2.0 起 full 模式自動 post review 到 GitHub PR（依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE）；說明文件：`agents/README-pr-reviewer.md`
 - **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8；v1.1.0 起 repo 可用物件形式帶 `pathspec` 拆 monorepo 子目錄（橫跨子目錄的 full-stack commit 各 bucket 皆計入，不去重）
 
 ## Plugins & MCP Servers
@@ -134,7 +124,7 @@
 |------|------|------|
 | Plugins（啟用） | 14 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、claude-hud、pr-review-toolkit、claude-mem、playwright |
 | Plugins（停用） | 4 | github、everything-claude-code、document-skills、superpowers |
-| MCP Servers | 2 | pr-watcher、gitnexus（獨立於 plugins 的 MCP Server 設定） |
+| MCP Servers | 2 | pr-watcher、codebase-memory-mcp（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
 
@@ -143,7 +133,7 @@
 | Server | 類型 | 用途 |
 |--------|------|------|
 | pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
-| gitnexus | stdio | 程式碼知識圖譜 MCP Server（`gitnexus mcp`） |
+| codebase-memory-mcp | stdio | 程式碼知識圖譜／語意搜尋 MCP Server（取代 GitNexus）；提供 `search_graph`/`search_code`/`trace_path`/`index_repository` 等工具 |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
@@ -194,22 +184,6 @@
 
 > **2026-05-20 新增**：Live agent sessions 區塊 — 透過 `claude agents --json`（v2.1.145+）統計同帳號下其他 session 的 busy/idle 數量並顯示於 LINE 3，3 秒快取；舊版 CLI 不存在時安靜略過。
 
-## GitNexus — 程式碼知識圖譜
-
-[GitNexus](https://github.com/abhigyanpatwari/GitNexus)（v1.2.8）是圖譜驅動的程式碼智慧工具，為 AI agent 提供 codebase 的結構化索引與查詢能力。
-
-- **安裝**：`npm install -g gitnexus`
-- **建立索引**：在專案目錄執行 `npx gitnexus analyze`，產生 `.gitnexus/` 索引
-- **整合方式**：MCP Server（`gitnexus mcp`）+ PreToolUse hook（`gitnexus-hook.ts`）在 Grep/Glob/Bash 執行前自動注入圖譜上下文
-- **搭配的 Skills**：
-
-| Skill | 用途 |
-|-------|------|
-| gitnexus-exploring | 用知識圖譜導航不熟悉的 codebase，追蹤執行流程 |
-| gitnexus-debugging | 從錯誤訊息追蹤呼叫鏈，定位 root cause |
-| gitnexus-impact-analysis | 修改前分析 blast radius（d=1 必壞 / d=2 可能 / d=3 需測試） |
-| gitnexus-refactoring | 用依賴圖規劃安全的 rename、extract、split 重構 |
-
 ## claude-mem 繁體中文化（11.0.0）
 
 詳見 [`claude-mem-customize-TC/README.md`](claude-mem-customize-TC/README.md)。
@@ -236,10 +210,10 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 | Agents | `~/.claude/agents/` |
 | Rules | `~/.claude/rules/`（common + typescript） |
 | Hooks 設定 | `~/.claude/settings.json` → `hooks` |
-| Hook 腳本 | `~/.claude/hooks/`（含 `hook-error-wrapper.sh`、`gitnexus/gitnexus-hook.ts`） |
+| Hook 腳本 | `~/.claude/hooks/`（含 `hook-error-wrapper.sh`） |
 | 輔助 Scripts | `~/.claude/scripts/`（`.ts`，由 Bun 執行） |
 | StatusLine | `~/.claude/statusline-command.sh` |
-| MCP Servers 設定 | `~/.claude/mcp-servers.json`（2 個獨立 server） |
+| MCP Servers 設定 | `~/.claude/mcp-servers.json`（2 個獨立 server：pr-watcher、codebase-memory-mcp） |
 | 持續學習 | CLAUDE.md `LEARNING` 規則 + auto memory + claude-mem |
 
 ## Opus 4.7 遷移文件
@@ -259,6 +233,33 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-01: GitNexus 全面淘汰 → codebase-memory-mcp + pr-reviewer v1.2.0
+
+**GitNexus 移除（已決議淘汰）：**
+- 刪除 4 個 skill：`gitnexus-exploring`、`gitnexus-debugging`、`gitnexus-impact-analysis`、`gitnexus-refactoring`
+- 刪除 `hooks/gitnexus/`（`gitnexus-hook.cjs`、`gitnexus-hook.ts`）
+- `settings.json`：移除 PreToolUse `Grep|Glob|Bash` matcher 對應的 gitnexus hook 註冊
+- `mcp-servers.json`：移除 `gitnexus` server
+- 移除 README/CATALOG 的獨立「GitNexus — 程式碼知識圖譜」說明區段
+
+**新增 `codebase-memory-mcp` MCP Server（取代 GitNexus）：**
+- `mcp-servers.json` 新增 stdio server（`/Users/maxhero/.local/bin/codebase-memory-mcp`）
+- 提供 `search_graph`/`search_code`/`trace_path`/`index_repository` 等工具，語意搜尋與呼叫鏈分析用途取代 GitNexus
+- CLAUDE.md `TOOL-USAGE` 新增 `graph-first` 規則：已索引專案優先用 `search_graph`/`trace_path` 取代 Grep/手動追呼叫鏈；`trace_path` 對「方法當 callback 傳遞」（React method 綁定當 prop、Redux dispatch）會漏，需 grep 交叉驗證
+- CLAUDE.md `POST-COMMIT-REVIEW` 步驟 5 改用 `codebase-memory-mcp` 的 `trace_path` 做 blast radius 分析（原為 `/gitnexus-impact-analysis`）
+
+**`agents/pr-reviewer.md` v1.0.0 → v1.2.0：**
+- 新增「慣例優先原則」：風格類規則（Magic Number / 變數常數註解 / 函式註解 / STEP 格式 / 部分註解正確性）須先 grep 統計既有慣例（抽樣 3-5 檔）再判定是否標 issue，主流慣例（>50%）一致則不標；安全性、null safety crash、if 大括號、不可變性等非風格類規則不適用此豁免
+- Full 模式：從只輸出 terminal 改為自動 post review 到 GitHub PR（依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE），同時保留 terminal 結構化輸出供 debug
+- `agents/README-pr-reviewer.md` 同步更新
+
+**CLAUDE.md CORE-PRINCIPLES 新增：**
+- `dont-blindly-mirror`：鏡像既有結構/需求參數到新情境前，先驗證來源是否本身是壞做法、新情境是否真對等
+- `write-preserve-comments`：Write 整檔重寫必須保留原註解，commit 前 grep 比對數量
+- `verify-vcs-state`：斷言 PR/commit 已在目標分支前，須驗 origin ancestry
+
+> **一致性提醒**：`skills/cup-build-test/SKILL.md` 仍保留 `--with-gitnexus` 旗標與 `mcp__gitnexus__*` 工具呼叫（階段 0/1），GitNexus MCP 移除後此旗標已失效，需使用者自行決定是否改寫為 `codebase-memory-mcp`（不在本次 STEP 03 文件重產範圍內）。
 
 ### 2026-05-31: multi-repo-commit-scanner v1.1.0（pathspec 拆分）+ 修正 weekly-review repo 路徑漂移 + 新增 translate skill 文件
 

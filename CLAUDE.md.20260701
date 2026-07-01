@@ -55,6 +55,7 @@ CORE-PRINCIPLES:
   simplicity: >3層縮排→重構；一個函式只做一件事，做完就回傳
   root-cause: 找根因後修復；不接受臨時修補；Senior Developer 標準
   no-fallback-after-root-cause: 治本同 PR 不再加「防護性 fallback」當雙保險；silent fallback（`?? defaultValue`）比 crash 更糟，會掩蓋未來 regression 並把 crash 換成隱性資料錯誤。怕未來 regression 用 type system / unit test / runtime assertion + throw，不要 silent fallback。NULL-SAFETY 只適用「來源就是可能 null/undefined」，不適用「治本後 shape 已收斂的值」
+  dont-blindly-mirror: 鏡像既有結構/需求參數到新情境前，先驗證 (a) 被鏡像的來源是否本身就是壞做法（吞錯、silent fallback、`return true` 掩蓋失敗）(b) 新情境的實際流程是否真的對等（既有 UI 中斷點/async 前置/觸發時機）。一致性不該凌駕正確性；機械式對稱複製會擴散 anti-pattern 或偏離需求。需求參數逐情境檢視，不確定就 AskUserQuestion
 
 CODE-REVIEW-OUTPUT:
   format: 【品味評分】🟢/🟡/🔴→【量化評分】→【致命問題】→【改進方向】
@@ -83,19 +84,21 @@ CODE-STYLE:
   file-edit-tool: Edit 工具修改既有檔案；Write 工具建新檔；避免 sed -i（跨平台行為不一致）
   if-braces: 所有控制流 body 加 { }（含單行）；✗ if (x) return; → ✓ if (x) { return; }
   step-comments:
-    encoding: STEP 01 起算，最多4階(STEP 01.01.01.01)
+    encoding: STEP 01 起算，最多4階(STEP 01.01.01.01)；禁止 STEP 00
     format: "STEP XX: 說明文字"（編號後接冒號再接說明）
     examples: "// STEP 01: 初始化參數", "// STEP 01.01: 驗證輸入值"
     nesting: 縮排/邏輯分支→階層+1
     scope: 每個函式獨立從 STEP 01 開始
     placement: 函式內部各階段，不加在函式本身
     react-exception: functional component 內部不需要；成員函式內部邏輯需要
+    insert: 既有 STEP 序列前/中插入新註解→整段往後 +1 重排；禁止用 STEP 00 規避重排；插入序列尾端則直接接續編號
   naming: 區域變數短名稱，全域介面描述性名稱；命名清晰描述用途
   var-comment: 變數/常數皆須註解用途
   func-comment: 函式/方法須註解用途/參數/回傳值；JS/TS 用 JSDoc
   magic-number: 數字常數抽出為具名常數並加用途註解
   null-safety: 空值/undefined 存取必須做防護（optional chaining、guard clause、default value）
   comment-accuracy: 修改程式碼時同步更新對應註解；刪除已無對應程式碼的舊註解；拼寫與邏輯一致
+  write-preserve-comments: Write 整檔重寫既有檔案時必須完整保留所有原註解（檔案層 JSDoc / 函式 JSDoc / @type / STEP 編號）；優先用 Edit 局部替換，必須 Write 時先 Read 完整檔案並用 `git show HEAD:path` 為 baseline；commit 前自己 grep `/\*\*` 數量與 `STEP 0` 出現次數是否與重寫前一致
   global-mutation: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
   anti-overengineering: 先寫最簡單能動版本→再考慮抽象 | 修改前 grep 全檔確認使用點 | 改完跑一次
   extract-shared-helper: 同一個概念性判斷/驗證邏輯出現在 2+ 個檔案時，第一次就抽具名共用 helper（如 `isValidLocation`）放對應 utility 檔，所有呼叫點統一引用；不要「先 inline、之後再說」。Inline 重複是 fail-open 類 bug 的溫床，各處邏輯易分歧（一處檢查空值、另一處不檢查 → 行為不一致）
@@ -162,6 +165,8 @@ TOOL-USAGE:
   cross-verify: 工具結果與上下文/已知事實矛盾時（如文件引用某路徑但搜尋回空），用第二種工具（ls/find/Bash）交叉驗證再下結論
   edit-tool: 同檔案重複 pattern 修改用 replace_all（避免 context-mismatch error）；single occurrence 才用 old_string/new_string
   upstream-trace: 斷言「沒有 X 檢查/攔截/防線」前，先找當前函式/頁面的所有進入點（誰呼叫它、誰 navigate 過來），往呼叫鏈上游至少追一層；當前檔案內找不到不代表流程中沒有，上游進入點可能早就做過該檢查。grep 進入點 + 讀上游守衛邏輯，是斷言「無防線」的前置必要動作
+  verify-vcs-state: 斷言「某 PR/commit/程式碼已在 master/目標分支」前，必須驗 origin/master ancestry（git cat-file / git merge-base --is-ancestor）；working tree 看得到 ≠ 目標分支已有
+  graph-first: 在已建 codebase-memory-mcp 索引的專案（`list_projects` 確認）裡，找 symbol 定義/用法優先用 `search_graph`/`search_code` 取代 Grep；追呼叫鏈/評估改動影響面優先用 `trace_path`(direction, risk_labels) 取代手動追呼叫者。`trace_path` 對「方法當 callback 參照傳遞」（React method 綁定後當 prop 傳出、Redux dispatch 等間接呼叫）會漏，callers 回空不能直接當「無人呼叫」的結論，需再用 grep 交叉驗證後才能斷言安全；專案未索引則直接用 Grep/Glob
   rationale: 4.7 預設依賴 reasoning 較少呼叫工具，需明確要求
 
 POST-COMMIT-REVIEW:
@@ -173,7 +178,7 @@ POST-COMMIT-REVIEW:
     2. 用 Agent tool（subagent_type: code-simplifier:code-simplifier）整理最近修改的程式碼 → 有修改則 amend commit，無修改則繼續下一步
     3. 執行 pr-reviewer agent（lite 模式）→ 逐條比對 CODE-REVIEW-RULE.md，產出 CRITICAL/MINOR/INFO + 品質評分 → 自動修正 CRITICAL issue，不 commit
     4. 執行 /pr-review-toolkit:review-pr code comments errors tests types → 自動修正 Critical/Important issue，不 commit
-    5. 執行 /gitnexus-impact-analysis 對本次 commit 修改的符號分析 blast radius（資訊性輸出，不自動修改）→ repo 未 index 或 gitnexus 不可用則標註「impact 未取得」並跳過 → 揭露遺漏 caller/影響面時回報給使用者由人工決定是否補 commit
+    5. 用 codebase-memory-mcp 對本次 commit 修改的 symbol 執行 blast radius 分析（`git diff` 抓改動函式 → `trace_path`(direction: inbound, risk_labels: true) 逐一查詢；資訊性輸出，不自動修改）→ project 未索引則標註「impact 未取得」並跳過 → 揭露遺漏 caller/影響面時回報給使用者由人工決定是否補 commit；注意 `trace_path` 對「方法當 callback 參照傳遞」（如 React class method 綁定後當 prop 傳出、Redux dispatch）的呼叫模式抓不到，此類 case 需人工用 grep 補查
     6. 執行 osascript 發送 macOS 通知「commit 與 review 完成」
   on-complete: 六步驟全部完成後才算結束，回報結果給使用者
   on-self-fix:
@@ -205,6 +210,5 @@ rules/common/hooks.md → hook types/TodoWrite
 rules/common/agents.md → agent table/parallel execution/multi-perspective
 rules/common/security.md → security checklist/secret management/log safety
 rules/typescript/*.md → TS-specific coding/testing/patterns/hooks/security/React/React Native
-memory/anti-patterns.md → 過度設計反思詳細內容
 
 </ref>

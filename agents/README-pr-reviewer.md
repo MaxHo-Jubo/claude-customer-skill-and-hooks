@@ -47,12 +47,14 @@
   → CRITICAL(≥90) / MINOR(80-89) / INFO(<80) 分類
   → 6 項品質評分（滿分 30）
   → Haiku agent 確認 PR 仍為 OPEN（已 merge/close → 跳過輸出）
-  → 輸出結構化報告
+  → terminal 輸出結構化報告
+  → 自動 post 到 GitHub PR（summary review + inline comments）
 ```
 
 - diff 來源：`gh pr diff <PR_NUMBER>`（PR 輸入統一用 `gh pr view <input> --json number` 取 PR number）
 - token 消耗：高（2 前置 Haiku + 5 Sonnet + N Haiku + 1 後置 Haiku）
 - 檔案過濾：跳過 `*.md`、`*.json`、`*.yml` 的改動
+- post 行為：review event 依 CRITICAL 數量決定（>0 → REQUEST_CHANGES，否則 COMMENT；不自動 APPROVE）；inline comment 走 `gh api repos/.../pulls/<n>/reviews`，無權限或行號超出 hunk 時保留 terminal 輸出並印錯誤
 
 ## 模式切換
 
@@ -197,11 +199,11 @@ pr-reviewer 與 pr-review-toolkit 並行互補：
 
 ## 與 CI workflow 的關係
 
-此 agent 完成後，`claude-code-review.yml` 預計退役。Full 模式覆蓋 CI workflow 的核心功能（5 平行 agent + 信心評分 + 品質評分），差異：
+此 agent 完成後，`claude-code-review.yml` 預計退役。Full 模式覆蓋 CI workflow 的核心功能（5 平行 agent + 信心評分 + 品質評分 + 自動 post review），差異：
 - 不檢查 CLAUDE.md（刻意，見上方說明）
 - 不處理 `@claude` 留言觸發（本機不需要）
 - 不處理 Auto-sync PR 排除（本機不需要）
-- 結果輸出到 terminal，post PR comment 由未來的 `review-pr.sh` 負責
+- 結果同時輸出到 terminal 與 GitHub PR（v1.2.0 起內建 post，不需外部 `review-pr.sh`）
 
 ## 語言規則
 

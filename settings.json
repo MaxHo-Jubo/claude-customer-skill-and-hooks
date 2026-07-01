@@ -359,17 +359,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Grep|Glob|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/gitnexus/gitnexus-hook.ts",
-            "timeout": 8000,
-            "statusMessage": "Enriching with GitNexus graph context..."
-          }
-        ]
-      },
-      {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {

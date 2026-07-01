@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-05-31（multi-repo-commit-scanner v1.1.0 pathspec 拆分；weekly-review STEP 01 修正 repo 路徑漂移 + luna_web 拆 FE/BE + 補家屬App/sidea；新增 translate-claude-code-releases skill 文件）
+> 上次更新：2026-07-01（GitNexus 全面淘汰：4 個 skill + hook + MCP server 移除；新增 codebase-memory-mcp MCP Server 取代；pr-reviewer agent v1.0.0 → v1.2.0）
 
 ---
 
@@ -365,37 +365,6 @@
 
 ---
 
-### GitNexus 知識圖譜類
-
-> 這四個 skill 沒有 slash command，透過 GitNexus API 自動啟用。
-> 需要先執行 `npx gitnexus analyze` 建立索引。
-
-#### gitnexus-exploring — 程式碼導航
-
-- **位置**：`~/.claude/skills/gitnexus-exploring/SKILL.md`
-- **功能**：用知識圖譜理解不熟悉的 codebase、追蹤執行流程與元件關係
-- **API**：`gitnexus_query()`、`gitnexus_context()`
-
-#### gitnexus-debugging — 呼叫鏈除錯
-
-- **位置**：`~/.claude/skills/gitnexus-debugging/SKILL.md`
-- **功能**：從錯誤訊息追蹤呼叫鏈，找到 root cause
-- **API**：`gitnexus_query()`、`gitnexus_context()`、`gitnexus_cypher()`
-
-#### gitnexus-impact-analysis — 影響分析
-
-- **位置**：`~/.claude/skills/gitnexus-impact-analysis/SKILL.md`
-- **功能**：修改前分析 blast radius（d=1 必壞、d=2 可能受影響、d=3 需測試）
-- **API**：`gitnexus_impact()`、`gitnexus_detect_changes()`
-
-#### gitnexus-refactoring — 安全重構
-
-- **位置**：`~/.claude/skills/gitnexus-refactoring/SKILL.md`
-- **功能**：規劃 rename、extract、split 等重構，用依賴圖確保安全
-- **API**：`gitnexus_rename()`、`gitnexus_impact()`、`gitnexus_detect_changes()`
-
----
-
 ## Hooks
 
 ### SessionStart
@@ -415,7 +384,6 @@
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Grep\|Glob\|Bash` | `gitnexus-hook.ts` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
 | `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷 |
 | `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
@@ -474,21 +442,22 @@
 
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
-| pr-reviewer | sonnet | 1.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告 |
+| pr-reviewer | sonnet | 1.2.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告；v1.2.0 新增慣例優先原則 + full 模式自動 post GitHub PR review |
 | multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計；v1.1.0 支援 pathspec 物件形式拆 monorepo 子目錄 |
 
-### pr-reviewer — Code Review Agent（v1.0.0）
+### pr-reviewer — Code Review Agent（v1.2.0）
 
 - **位置**：`~/.claude/agents/pr-reviewer.md`
 - **模型**：sonnet
 - **工具**：Read、Grep、Glob、Bash、Agent
 - **模式**：
   - **Lite（預設）**：單 agent 逐條比對 CODE-REVIEW-RULE.md（17 條規則）+ Haiku 信心評分 → 分類（CRITICAL/MINOR/INFO）+ 品質評分（30 分制）
-  - **Full**：指定 PR 時啟用，5 個平行 Sonnet agent（規則合規 / Shallow Bug Scan / Git Blame 歷史 / PR Comments / Code Comments）+ Haiku 信心評分
+  - **Full**：指定 PR 時啟用，5 個平行 Sonnet agent（規則合規 / Shallow Bug Scan / Git Blame 歷史 / PR Comments / Code Comments）+ Haiku 信心評分；**v1.2.0 起自動 post review 到 GitHub PR**（review event 依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE；inline comment 走 `gh api repos/.../pulls/<n>/reviews`，無權限或行號超出 hunk 時保留 terminal 輸出並印錯誤），terminal 結構化輸出仍保留供 debug
+- **v1.2.0 新增「慣例優先原則」**：風格類規則（Magic Number / 變數常數註解 / 函式註解 / STEP 格式註解 / 部分註解正確性 / Reducer 慣例）標 issue 前，須先 `grep` 統計既有寫法（抽樣 3-5 檔），主流慣例（>50%）一致 → 不標；30-50% 並存 → 可放 INFO；<30% → 可標 MINOR；範本檔強訊號（新增 code 明顯複製既有檔）也視為主流慣例代表。安全性（hardcoded secrets、log 敏感資料）、null safety crash 風險、if 大括號、不可變性、全域變數修改、React/RN 規則等非風格類規則不適用此豁免
 - **觸發方式**：POST-COMMIT-REVIEW 自動觸發（lite）或手動指定 PR（full）
 - **檔案過濾**：排除 `*.md`、`*.json`、`*.yml`、`*.yaml`
 - **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
-- **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent）
+- **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent；v1.2.0 起說明「不需外部 `review-pr.sh`」，因 full 模式已內建 post）
 
 ### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.1.0）
 
@@ -553,7 +522,7 @@
 | Server | 類型 | 用途 |
 |--------|------|------|
 | pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
-| gitnexus | stdio | 程式碼知識圖譜 MCP Server（`gitnexus mcp`） |
+| codebase-memory-mcp | stdio | 程式碼知識圖譜／語意搜尋 MCP Server（取代 GitNexus）；`index_repository`/`search_graph`/`search_code`/`trace_path`/`query_graph`/`get_architecture` 等工具 |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
@@ -644,11 +613,6 @@ jira ←── jira-acceptance（取得需求資料）
       explore-report    spec-to-e2e-test（從 spec 產出 E2E 測試）
       （--to-spec flag）
 
-gitnexus-hook ──→ gitnexus-exploring
-                  gitnexus-debugging
-                  gitnexus-impact-analysis
-                  gitnexus-refactoring
-
 spec-design ──→ plan-and-execute（openspec change + plan.md → 自動執行）
   spec-design:
     Phase 0: openspec explore（自由探索）
@@ -673,11 +637,14 @@ post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 C
   STEP 2: code-simplifier:code-simplifier agent → amend commit（有修改時）
   STEP 3: pr-reviewer agent（lite）→ CODE-REVIEW-RULE.md 合規，CRITICAL 自動修正
   STEP 4: /pr-review-toolkit:review-pr → 自動修正 Critical/Important issue
-  STEP 5: /gitnexus-impact-analysis（資訊性，不自動修改）
+  STEP 5: codebase-memory-mcp trace_path（inbound, risk_labels）→ blast radius 分析（資訊性，不自動修改；未索引則跳過）
   STEP 6: osascript macOS 通知
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
 
 pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
   lite: POST-COMMIT-REVIEW 自動觸發
-  full: 手動指定 PR → 5 平行 Sonnet agents + Haiku 信心評分
+  full: 手動指定 PR → 5 平行 Sonnet agents + Haiku 信心評分 → 自動 post GitHub PR review（v1.2.0）
+
+codebase-memory-mcp ──→ TOOL-USAGE graph-first 規則（已索引專案優先 search_graph/trace_path 取代 Grep/手動追呼叫鏈）
+                      ──→ POST-COMMIT-REVIEW STEP 5（blast radius 分析）
 ```

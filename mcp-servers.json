@@ -6,11 +6,9 @@
       "/Users/maxhero/Documents/projects/pr-watcher-MCP/src/server.ts"
     ]
   },
-  "gitnexus": {
+  "codebase-memory-mcp": {
     "type": "stdio",
-    "command": "/Users/maxhero/.nvm/versions/node/v20.20.0/bin/gitnexus",
-    "args": [
-      "mcp"
-    ]
+    "command": "/Users/maxhero/.local/bin/codebase-memory-mcp",
+    "args": []
   }
 }
