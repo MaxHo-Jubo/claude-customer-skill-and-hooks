@@ -6,7 +6,7 @@ description: >
   「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」、想為 CUP
   項目建立完整測試流程時觸發。不適用於：單一 issue 跑既有測試（用
   /jira-test-report）、純 R15/R18 程式碼比對（用 /r15-r18-verify）。
-version: 1.2.0
+version: 1.3.0
 ---
 
 # CUP 測試建立 skill
@@ -164,7 +164,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 |---|---|
 | `--from-stage N` | 從第 N 階段開始（1-6），跳過前面 |
 | `--issue CUP-XX` | 手動指定 issue（branch 名解析失敗時） |
-| `--with-gitnexus` | 階段 1 加碼用 GitNexus 分析間接依賴 |
+| `--with-graph` | 階段 1 加碼用 codebase-memory-mcp 分析間接依賴（原 `--with-gitnexus`；GitNexus 已於 2026-07-01 淘汰，見 CLAUDE.md TOOL-USAGE:graph-first） |
 | `--focus auto\|equivalence` | 階段 2 test-plan 產出 focus；預設 `auto`（全功能列舉），`equivalence` 專注 R15/R18 行為差異（從 commit 訊息抽取「修正/修復 R18 升級」類字眼） |
 | `--only A1` | 階段 4 只跑特定 prefix |
 | `--resume` | 從 `.claude/{ISSUE_KEY}-progress.md` 第一個未勾選 case 續跑（跳過階段 1-3，省 token） |
@@ -175,25 +175,23 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 
 每次啟動做以下兩件事，**不阻塞流程**：
 
-1. **GitNexus 偵測（用 MCP tool 不是 file system）**：
+1. **codebase-memory-mcp 偵測（用 MCP tool 不是 file system）**（2026-07-01 起：原 GitNexus 已淘汰，索引長期過期且連線不穩，改用 codebase-memory-mcp，詳見 CLAUDE.md TOOL-USAGE:graph-first）：
 
-   GitNexus 是中央化 DB，**不在 repo 內**。用 `test -d .gitnexus/` 是錯的（CUP-180 實戰糾正）。正確流程：
+   呼叫 `mcp__codebase-memory-mcp__list_projects` → 看當前 repo 是否在清單。Project 名稱由絕對路徑推導：`pwd` 結果去掉開頭 `/`、其餘 `/` 換成 `-`（例：`/Users/maxhero/Documents/Compal/luna_web/frontend` → `Users-maxhero-Documents-Compal-luna_web-frontend`）。
 
-   ```
-   呼叫 mcp__gitnexus__list_repos → 看當前 repo（如 luna_web）是否在清單
-   若有 → 讀 gitnexus://repo/{repo_name}/context → 抓 indexed_at 時間戳
-   ```
+   codebase-memory-mcp 有 auto-sync（檔案變動自動更新圖），**不像 GitNexus 需要手動 `analyze` 才更新**，不需要 staleness 檢查這一步。
 
 2. **印提醒**：
 
    ```
-   ⚙️  GitNexus 可選增強
-      - {repo} 已 index（最後更新 YYYY-MM-DD，距今 N 天）
-        ⚠️ N > 7 天視為 stale，建議重新 index 後再用 --with-gitnexus
-        （CUP-180 實戰：luna_web index 4/29，commits 5/7，stale 8 天）
-      - 或：{repo} 未 index，--with-gitnexus 無法用
-      - 啟用：對 skill 加 --with-gitnexus
+   ⚙️  codebase-memory-mcp 可選增強
+      - {repo} 已索引（auto-sync，索引常保新鮮）
+      - 或：{repo} 未索引，--with-graph 無法用（需先跑 mcp__codebase-memory-mcp__index_repository）
+      - 啟用：對 skill 加 --with-graph
       - 不啟用：純 grep 反推，間接依賴需手動補
+      ⚠️ 已知限制（2026-07-01 實測確認）：對「方法當 callback 參照傳遞」（React method
+         綁定後當 prop 傳出、Redux dispatch(actionCreator(...))）這類間接呼叫，
+         trace_path 抓不到 caller，--with-graph 開啟後這類 case 仍需人工 grep 補查
    ```
 
 ---
@@ -247,46 +245,49 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
    - **不列**：i18n key 完整清單、Bootstrap variant 列舉、reducer initState 完整結構、props type interfaces、CSS class 列表
    - 每個 agent 報告**總長 < 1500 字**，超出要先精簡再回
 
-   **若主流程帶 `--with-gitnexus`，每個 subagent prompt 必須加入以下段落**（CUP-179 實戰糾正：原本只有主 context 跑 impact，subagent 用 grep 反推效率低、漏抓 caller）：
+   **若主流程帶 `--with-graph`，每個 subagent prompt 必須加入以下段落**（CUP-179 實戰糾正：原本只有主 context 跑 impact，subagent 用 grep 反推效率低、漏抓 caller；2026-07-01 起改用 codebase-memory-mcp）：
 
    ```
-   **可用工具**：mcp__gitnexus__query / mcp__gitnexus__context / mcp__gitnexus__impact / mcp__gitnexus__cypher
+   **可用工具**：mcp__codebase-memory-mcp__search_graph / mcp__codebase-memory-mcp__trace_path / mcp__codebase-memory-mcp__query_graph（project 參數固定填階段 0 推導出的 project 名）
    **使用時機**：
-     - query(goal="<本 feature 中文名>", query="<關鍵字>") — 找執行流程與相關 symbol，比 grep 涵蓋多
-     - context(name="<symbol>") — 取得單一 symbol 的 360 度視圖（callers/callees/processes）
-     - impact(target="<symbol or file>", direction="upstream") — 找呼叫此 symbol 的所有地方（取代 LSP findReferences）
-   **省 token 紀律**：impact / query 都會列大量項目，**摘要後回報**，不要把 raw JSON 貼回。
+     - search_graph(query="<關鍵字>", project=...) — BM25 全文搜尋找執行流程與相關 symbol，比 grep 涵蓋多
+     - trace_path(function_name="<symbol>", direction="both", project=...) — callers+callees（無獨立 360 度 context 工具，兩個方向合看即等效視圖）
+     - trace_path(function_name="<symbol or file>", direction="inbound", risk_labels=true, project=...) — 找呼叫此 symbol 的所有地方（取代 LSP findReferences）
+     - query_graph(query="<Cypher>", project=...) — 原生支援 Cypher
+   **省 token 紀律**：trace_path / search_graph 都會列大量項目，**摘要後回報**，不要把 raw JSON 貼回。
+   **⚠️ 已知盲區（2026-07-01 實測確認）**：`trace_path` 對「方法當 callback 參照傳遞」（如 `onFetchStart: this.startCsmsFetchingGuard`）與 `dispatch(actionCreator(...))` 這類間接呼叫，callers 會回空陣列，**不能當「無人呼叫」的結論**——luna 前端大量用這種模式，這類 case 需另外用 grep 交叉驗證才能斷言安全。
    ```
 
    - **API agent**：
      - 讀 diff 暫存檔抓 `axios.{get|post|put|delete}` / `fetch(` / `createApi` / RTK Query / `apiSlice`
      - **額外**讀改動 `.tsx`/`.jsx` 中 `import` 的 service 檔（往上追 1 層）→ 列出該 service 的所有 method
      - **額外**主動 ls `frontend/src/apiServer/`、`frontend/src/services/`、`frontend/src/api/` 目錄，找與改動 feature 相關的服務檔讀 → 列出全部 endpoint
-     - 對改動檔案的 export function 用 LSP `findReferences` 找呼叫端（**有 gitnexus 時改用 `impact(target=funcName, direction=upstream)`**，覆蓋率與信心分數都更高）
+     - 對改動檔案的 export function 用 LSP `findReferences` 找呼叫端（**有 --with-graph 時改用 `trace_path(function_name=funcName, direction=inbound, risk_labels=true)`**，覆蓋率與信心分數都更高；但 callback 參照傳遞的呼叫仍抓不到，見上方已知盲區）
    - **UI agent**：
      - 對 `.tsx`/`.jsx` 改動檔案讀檔 → 列出元件、按鈕、表單欄位、modal、tab、route entry
      - **元件 regex 排除**：全大寫常數（`^[A-Z][A-Z_0-9]+$`、長度 > 3 視為 SCREAMING constant，不是元件）
      - 對改動 `pages/` 檔案，讀其 import 找出 entry path（route）
-     - **有 gitnexus 時**：對主元件用 `query(goal="<feature 名>", query="route entry")` 找 React Router 註冊位置
+     - **有 --with-graph 時**：對主元件用 `search_graph(query="<feature 名> route entry")` 找 React Router 註冊位置
    - **Redux agent**：
      - 對 `actions/` `reducers/` `sagas/` `store/` 改動檔案讀檔 → 列出 action type 與副作用、saga effect
      - **luna 慣例**：action type 多為 camelCase 字串如 `'fetchActivityList'`，不是 SCREAMING_SNAKE。subagent 提示要同時抓 camelCase 與 SCREAMING_SNAKE_CASE 兩種
      - 抓 saga 的 `takeLatest(actionType, worker)` 與 `put({ type: ... })` 列副作用流程
-     - **有 gitnexus 時**：對 action creator 函式名用 `context(name="actionName")` 找所有 dispatch 位置
-5. **若 `--with-gitnexus`**：對改動檔案**逐一**收集 importer / caller，併入 coverage。
+     - **有 --with-graph 時**：對 action creator 函式名用 `trace_path(function_name="actionName", direction=both)` 找所有 dispatch 位置——**但 `dispatch(actionName(...))` 是已知盲區，trace_path 大概率抓不到任何 caller，仍需搭配 grep 找 `actionName(` 的呼叫點**
+5. **若 `--with-graph`**：對改動檔案**逐一**收集 importer / caller，併入 coverage。
    - **檔案分類**（CUP-179 實戰新增）：用 `git cat-file -e $(git merge-base master HEAD):<file>` 判斷新增 vs 修改。
-   - **工具選擇**（CUP-179 實戰糾正）：
-     - **React 元件 / TS interface 檔（.tsx / .ts / .jsx）**：`impact(target=<name>)` 對 React 元件多半回 `impactedCount: 0`（CALLS edge 不抓 JSX 元素使用）。**改用 cypher 一次批次查 IMPORTS**：
+   - **首次使用先跑 `mcp__codebase-memory-mcp__get_graph_schema`**（project=當前 repo）確認 File 節點路徑欄位與 IMPORTS 邊的實際 schema，不要憑記憶硬寫 Cypher（已驗證 luna_web-frontend 用 `file_path`，`IMPORTS` 是直接 edge type，其他 repo 若版本不同可能有差）。
+   - **工具選擇**（CUP-179 實戰糾正，2026-07-01 起改用 codebase-memory-mcp）：
+     - **React 元件 / TS interface 檔（.tsx / .ts / .jsx）**：`trace_path(function_name=<name>, direction=inbound)` 對 React 元件多半回空（CALLS edge 不抓 JSX 元素使用）。**改用 query_graph 一次批次查 IMPORTS**：
        ```cypher
-       MATCH (caller:File)-[:CodeRelation {type: 'IMPORTS'}]->(f:File)
-       WHERE f.filePath IN [<改動檔案清單>]
-       RETURN f.filePath AS target, caller.filePath AS importer
-       ORDER BY f.filePath, caller.filePath
+       MATCH (caller:File)-[:IMPORTS]->(f:File)
+       WHERE f.file_path IN [<改動檔案清單>]
+       RETURN f.file_path AS target, caller.file_path AS importer
+       ORDER BY f.file_path, caller.file_path
        ```
-       一次 query 拿到全部 18 檔的 importers，比逐檔 impact() 快、覆蓋率高。
-     - **純函式 / class（.js / saga / reducer）**：用 `impact(target=<funcName>, direction=upstream, maxDepth=2)` 找 CALLS chain。
-     - **SCSS / JSON / .d.ts**：跳過（gitnexus 多半不索引 IMPORTS）。
-   - **批次 cypher 範例輸出**：每個改動檔列出 importer 清單；某 file 沒出現在結果代表「無人 import」（可能是 entry point 或新檔未被引用）。
+       一次 query 拿到全部 18 檔的 importers，比逐檔 trace_path 快、覆蓋率高。
+     - **純函式 / class（.js / saga / reducer）**：用 `trace_path(function_name=<funcName>, direction=inbound, depth=2, risk_labels=true)` 找 CALLS chain。**但 `dispatch(actionCreator(...))` 這類間接呼叫是已知盲區**，callers 空陣列不代表無人呼叫，需 grep 補查。
+     - **SCSS / JSON / .d.ts**：跳過（codebase-memory-mcp 多半不索引這類檔案的 IMPORTS）。
+   - **批次 cypher 範例輸出**：每個改動檔列出 importer 清單；某 file 沒出現在結果代表「無人 import」（可能是 entry point 或新檔未被引用，**也可能是間接呼叫盲區**——兩者都要考慮，不要直接斷言「無人使用」）。
    - 對 importer 數量極多的 type 檔（CUP-179 的 `IReducerState.tsx` 130+ importer），標 `riskLevel: HIGH`，但同步評估「**本次 diff 是新增還是修改既有欄位**」決定 `actualRisk`。純新增 slice → actualRisk: LOW。
    - **逐檔輸出格式**（每個檔案一條，併入 `coverage.indirectDeps`）：
      ```json
@@ -298,9 +299,9 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
        ]
      }
      ```
-   - **省 token**：每檔 impact 結果只保留 d=1（WILL BREAK），d=2 限 3 個樣本；超過寫 `"...and N more"`。
-   - **失敗處置**：`impact` 回 `Target not found`（symbol 名沒命中）改用 file path 當 target 重試；仍失敗則跳過該檔，**不阻擋**主流程。
-   - 18 檔案逐一跑可能耗 30-60s，但比漏 caller 安全。本步驟設計為**完整覆蓋優先**。
+   - **省 token**：每檔 trace_path 結果只保留 d=1（WILL BREAK），d=2 限 3 個樣本；超過寫 `"...and N more"`。
+   - **失敗處置**：`trace_path` 找不到 symbol 時改用 file path 當 target 重試；仍失敗則跳過該檔，**不阻擋**主流程。
+   - 18 檔案逐一跑可能耗 30-60s，但比漏 caller 安全。本步驟設計為**完整覆蓋優先**，但完整覆蓋是「工具能力範圍內」的完整——callback/dispatch 呼叫模式的漏抓不會被這個流程解決，這是工具限制不是流程漏洞。
 6. **刪除 diff 暫存檔** `.claude/{ISSUE_KEY}-diff.tmp.txt`（已被 subagent 消化）
 7. 合併輸出 `coverage.json`：
 
@@ -1049,6 +1050,21 @@ template 已 require 以下模組，**修改測試共用邏輯（modal / waitSta
 ## Changelog
 
 版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / API 行為、MINOR=新增 helper 或階段步驟、PATCH=修 bug 或文件更新。
+
+### v1.3.0 — 2026-07-01（GitNexus 淘汰，改用 codebase-memory-mcp）
+
+**變更**：
+
+- `--with-gitnexus` 旗標更名為 `--with-graph`，階段 0/1 所有 `mcp__gitnexus__*` 工具呼叫改用對應的 `mcp__codebase-memory-mcp__*` 工具：
+  - `list_repos` → `list_projects`（project 名由 cwd 絕對路徑推導，見階段 0）
+  - `query(goal, query)` → `search_graph(query)`（BM25 全文搜尋）
+  - `context(name)` → `trace_path(function_name, direction=both)`（callers+callees 合看）
+  - `impact(target, direction)` → `trace_path(function_name, direction=inbound, risk_labels=true)`
+  - `cypher(query)` → `query_graph(query)`（Cypher 語法對應改變：`IMPORTS` 是直接 edge type，非 GitNexus 的 `CodeRelation {type: 'IMPORTS'}` 屬性寫法；File 節點路徑欄位是 `file_path`）
+- 移除 staleness 檢查（「N 天視為 stale」提醒）：codebase-memory-mcp 有 auto-sync，不像 GitNexus 需手動 `analyze` 才更新
+- 新增已知盲區警告：`trace_path` 對「方法當 callback 參照傳遞」（React method 綁定後當 prop 傳出）與 `dispatch(actionCreator(...))` 這類間接呼叫抓不到 caller，callers 空陣列不能當「無人呼叫」的結論，需搭配 grep 補查
+
+**淘汰原因**：2026-07-01 跟 codebase-memory-mcp 實測對照後決議淘汰 GitNexus——luna_web 索引落後 83 天/361 commit（手動索引無 auto-sync）、該次 session GitNexus MCP 連線失敗、且用真實案例（`startCsmsFetchingGuard` callback 參照傳遞）測試發現兩者對間接呼叫有共同盲區、能力打平不是誰更強。詳見 CLAUDE.md TOOL-USAGE:graph-first 與 POST-COMMIT-REVIEW STEP 5。
 
 ### v1.2.0 — 2026-05-19（斷言截圖三合一規範，與 jira-test-report v2.4.0 對齊）
 
