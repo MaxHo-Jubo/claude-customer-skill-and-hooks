@@ -259,7 +259,16 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - `write-preserve-comments`：Write 整檔重寫必須保留原註解，commit 前 grep 比對數量
 - `verify-vcs-state`：斷言 PR/commit 已在目標分支前，須驗 origin ancestry
 
-> **一致性提醒**：`skills/cup-build-test/SKILL.md` 仍保留 `--with-gitnexus` 旗標與 `mcp__gitnexus__*` 工具呼叫（階段 0/1），GitNexus MCP 移除後此旗標已失效，需使用者自行決定是否改寫為 `codebase-memory-mcp`（不在本次 STEP 03 文件重產範圍內）。
+**`skills/cup-build-test/SKILL.md` v1.2.0 → v1.3.0（已修復上述一致性問題）：**
+- `--with-gitnexus` 旗標更名 `--with-graph`，階段 0/1 全部 `mcp__gitnexus__*` 呼叫改用對應的 `mcp__codebase-memory-mcp__*` 工具（`list_repos`→`list_projects`、`query`→`search_graph`、`context`→`trace_path(direction=both)`、`impact`→`trace_path(direction=inbound)`、`cypher`→`query_graph`）
+- 移除 staleness 檢查（codebase-memory-mcp 有 auto-sync，不需要）
+- 新增「callback 參照傳遞 / dispatch 間接呼叫」已知盲區警告，避免對呼叫鏈覆蓋率有錯誤信心
+
+**清理殘留（全機器範圍）：**
+- `~/.claude/skills/skill-rules.json`：移除 4 個已刪除 gitnexus skill 的規則條目
+- `~/.claude/projects/-Users-maxhero/memory/inventory.md`：移除 PLUGIN-INDEX 與 hook 清單裡的 gitnexus 條目
+- 5 個業務 repo（`luna_RN_HomeCareStaff`/`luna_RN_DayCareStaff`/`care_mgt`/`vip_cs_frontend`/`vip_cs_backend`）的 `CLAUDE.md`：內容 100% 為 GitNexus 自動產生，已清空
+- 7 個業務 repo 的 `.gitnexus/` 快取目錄、中央索引 `~/.gitnexus`、Cursor 編輯器的 4 個 gitnexus skill 全數刪除
 
 ### 2026-05-31: multi-repo-commit-scanner v1.1.0（pathspec 拆分）+ 修正 weekly-review repo 路徑漂移 + 新增 translate skill 文件
 

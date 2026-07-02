@@ -46,51 +46,6 @@
         ]
       }
     },
-    "gitnexus-debugging": {
-      "enforcement": "suggest",
-      "priority": "high",
-      "promptTriggers": {
-        "keywords": ["trace bug", "追蹤 bug", "call chain", "呼叫鏈"],
-        "intentPatterns": [
-          "(trace|追蹤|找).*(bug|error|錯誤|問題).*(chain|鏈|flow|流程)",
-          "(debug|除錯).*(call|呼叫).*(chain|graph|圖)"
-        ]
-      }
-    },
-    "gitnexus-impact-analysis": {
-      "enforcement": "suggest",
-      "priority": "critical",
-      "promptTriggers": {
-        "keywords": ["impact analysis", "blast radius", "影響範圍", "影響分析"],
-        "intentPatterns": [
-          "(impact|影響|blast).*(analysis|分析|radius|範圍)",
-          "(改|修改|refactor|重構).*(之前|before).*(分析|check|檢查)",
-          "這個改動.*影響"
-        ]
-      }
-    },
-    "gitnexus-refactoring": {
-      "enforcement": "suggest",
-      "priority": "high",
-      "promptTriggers": {
-        "keywords": ["重構", "refactor", "rename", "extract module"],
-        "intentPatterns": [
-          "(refactor|重構|rename|重新命名|extract|抽取).*(safe|安全|plan|計畫)",
-          "(plan|規劃).*(refactor|重構)"
-        ]
-      }
-    },
-    "gitnexus-exploring": {
-      "enforcement": "suggest",
-      "priority": "medium",
-      "promptTriggers": {
-        "keywords": ["navigate code", "導覽程式碼", "不熟悉的程式碼"],
-        "intentPatterns": [
-          "(navigate|導覽|understand|理解).*(unfamiliar|不熟|new|新).*(code|程式碼|module|模組)",
-          "(怎麼運作|how.*work).*(module|模組|system|系統)"
-        ]
-      }
-    },
     "code-review:code-review": {
       "enforcement": "suggest",
       "priority": "high",

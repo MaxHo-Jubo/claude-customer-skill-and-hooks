@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-01（GitNexus 全面淘汰：4 個 skill + hook + MCP server 移除；新增 codebase-memory-mcp MCP Server 取代；pr-reviewer agent v1.0.0 → v1.2.0）
+> 上次更新：2026-07-02（GitNexus 全面淘汰：4 個 skill + hook + MCP server 移除；新增 codebase-memory-mcp MCP Server 取代；pr-reviewer agent v1.0.0 → v1.2.0；cup-build-test v1.2.0 → v1.3.0 修復 gitnexus 死引用；清除全機器殘留）
 
 ---
 
@@ -318,12 +318,12 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
-#### `/cup-build-test` — CUP 項目測試建立（v1.2.0）
+#### `/cup-build-test` — CUP 項目測試建立（v1.3.0）
 
 - **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
 - **用法**：`/cup-build-test`、「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」
 - **功能**（6 階段）：
-  - **階段 0**：開場提醒 GitNexus 可選增強（`--with-gitnexus` 旗標 + index 新鮮度提示）
+  - **階段 0**：開場提醒 codebase-memory-mcp 可選增強（`--with-graph` 旗標，auto-sync 不需 staleness 檢查；`trace_path` 對 callback 參照傳遞/dispatch 間接呼叫有已知盲區）
   - **階段 1**：從當前 branch 抓 `CUP-\d+` → `git diff main...HEAD` → 平行 3 subagent 反推 API/UI/Redux → 產 `coverage.json`
   - **階段 2**：依 coverage 產出雙用途測試計劃 `.claude/CUP-XX-test-plan.md`（人 + Playwright 共讀），完成後刪除 coverage.json
   - **階段 3**：產 Playwright 腳本 `.claude/CUP-XX-test.cjs`，`node --check` 語法驗證
@@ -332,6 +332,7 @@
   - **階段 6**：重產 cjs 腳本給 local/staging/R18 用；步驟 12 可選 publish 到業務 repo `e2e/release-tests/`
 - **產物管理**：所有 `.claude/CUP-*-test-plan.md` / `-test.cjs` / `-temp/` / `-coverage.json` 進 `.gitignore`，不入 repo
 - **不依賴 package.json**：執行時 `npx --yes -p playwright@latest node ...` 動態取得 Playwright，不污染專案依賴
+- **v1.3.0（2026-07-01）**：GitNexus 淘汰改用 codebase-memory-mcp——`--with-gitnexus` 更名 `--with-graph`，`mcp__gitnexus__*` 呼叫全部換成 `mcp__codebase-memory-mcp__*`（`list_repos`→`list_projects`、`query`→`search_graph`、`context`/`impact`→`trace_path`、`cypher`→`query_graph`），移除 staleness 檢查，新增 callback/dispatch 間接呼叫盲區警告
 - **v1.2.0 新增**：「斷言截圖三合一規範」— 每個 step 須同時具備 (1) 程式斷言 throw + 實測 vs 預期 (2) 真實頁面操作或視覺變更 (3) evidence overlay 注入結論；純資料比對 step 視為 anti-pattern，必須補 UI 證據（`select.size=N` 展開 / 逐一 selectOption / DOM highlight 三選一）；新增 `helpers/evidence.cjs`（封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`）
 - **v1.1.0 起**：登入流程改用 API（`.env.local` + `helpers/login.cjs`），移除互動式 MCP 登入；`browser.cjs` 支援 `{ login }` 主流程（v1.2.0 改為 `loginInContext` 保留 host-only cookies）
 - **與既有 skill 區隔**：`/jira-test-report` 對既有 test-plan 跑測試並上 Jira；本 skill 是**從零產 test-plan + 自我驗證**；`/r15-r18-verify` 是程式碼層比對，本 skill 是行為驗證，互補
