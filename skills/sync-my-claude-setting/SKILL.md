@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -32,6 +32,7 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 | `hooks/` | `hooks/` | 目錄 |
 | `scripts/` | `scripts/` | 目錄 |
 | `rules/` | `rules/` | 目錄 |
+| `harness/` | `harness/` | 目錄（排除機器專屬檔，見下方安全規則） |
 | `statusline-command.sh` | `statusline/statusline-command.sh` | 檔案 |
 | `~/.claude.json` → `mcpServers` | `mcp-servers.json` | 檔案（過濾 env） |
 
@@ -94,6 +95,8 @@ diff -rq "$SOURCE/skills/" "$TARGET/skills/" || true
 diff -rq "$SOURCE/hooks/" "$TARGET/hooks/" || true
 diff -rq "$SOURCE/scripts/" "$TARGET/scripts/" || true
 diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
+# harness/ 排除機器專屬檔（harness-diagnosis.md / handover-letter.md 不列入差異）
+diff -rq -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
 ```
 
 對 `diff -rq` 回報有差異的檔案，逐一執行 `diff -u` 顯示具體內容差異。
@@ -192,7 +195,11 @@ rsync -avL --delete "$SOURCE/hooks/" "$TARGET/hooks/"
 rsync -avL --delete "$SOURCE/scripts/" "$TARGET/scripts/"
 rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
 rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
+# harness/ 排除機器專屬檔；--exclude 同時保護 repo 側該兩檔不被 --delete 清掉
+rsync -avL --delete --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
 ```
+
+> **harness 機器專屬檔規則**：`harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為**機器專屬檔案，雙向不同步**——每台機器的診斷/交接只屬於那台機器，不互相覆蓋。repo main 現存的兩檔為 M4 機器快照，維持原樣；6 個通用制度檔（README、model-dispatch、judgment-matrix、delegation-templates、knowledge-protocol、commit-review-policy）正常同步。
 
 ### STEP 03: Generate Docs — 自動產生 README.md 與 CATALOG.md
 
@@ -330,6 +337,7 @@ diff -rq "$TARGET/skills/" "$SOURCE/skills/" || true
 diff -rq "$TARGET/hooks/" "$SOURCE/hooks/" || true
 diff -rq "$TARGET/scripts/" "$SOURCE/scripts/" || true
 diff -rq "$TARGET/rules/" "$SOURCE/rules/" || true
+diff -rq -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
 
 # MCP Server 比對
 # 從 repo 的 mcp-servers.json 與本機 ~/.claude.json 的 mcpServers 比對
@@ -397,6 +405,8 @@ rsync -avL --delete "$TARGET/skills/" "$SOURCE/skills/"
 rsync -avL --delete "$TARGET/hooks/" "$SOURCE/hooks/"
 rsync -avL --delete "$TARGET/scripts/" "$SOURCE/scripts/"
 rsync -avL --delete "$TARGET/rules/" "$SOURCE/rules/"
+# harness/ 還原同樣排除機器專屬檔（repo 的診斷/交接是別台機器的，不還原到本機）
+rsync -avL --delete --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
 ```
 
 ### STEP R3: Restore MCP Servers
@@ -442,6 +452,7 @@ else:
 - `~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤
 - `settings.local.json` 不同步（本機專屬設定）
 - `settings.json` 的 `model` 欄位不同步、不還原（雙向排除），兩邊各自保留自己原本的值
+- `harness/harness-diagnosis.md` 與 `harness/handover-letter.md` 為機器專屬檔案，雙向不同步（每台機器的診斷/交接不互相覆蓋）
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回

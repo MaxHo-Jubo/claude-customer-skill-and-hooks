@@ -42,6 +42,21 @@ COMMENT-ACCURACY:
   rule: 程式邏輯與註解必須一致
   action: 修改程式碼時同步更新對應註解；刪除已無對應程式碼的舊註解；拼寫與邏輯一致
 
+STEP-COMMENT-INSERT:
+  rule: 既有 STEP 序列前/中插入新註解→整段往後 +1 重排；禁止用 STEP 00 規避重排；插入序列尾端則直接接續編號
+  encoding: STEP 01 起算，最多4階(STEP 01.01.01.01)；禁止 STEP 00
+
+WRITE-PRESERVE-COMMENTS:
+  rule: Write 整檔重寫既有檔案時必須完整保留所有原註解（檔案層 JSDoc / 函式 JSDoc / @type / STEP 編號）
+  action: 優先用 Edit 局部替換；必須 Write 時先 Read 完整檔案並用 `git show HEAD:path` 為 baseline；commit 前自己 grep `/\*\*` 數量與 `STEP 0` 出現次數是否與重寫前一致
+
+GLOBAL-MUTATION:
+  rule: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
+
+EXTRACT-SHARED-HELPER:
+  rule: 同一個概念性判斷/驗證邏輯出現在 2+ 個檔案時，第一次就抽具名共用 helper（如 `isValidLocation`）放對應 utility 檔，所有呼叫點統一引用；不要「先 inline、之後再說」
+  why: Inline 重複是 fail-open 類 bug 的溫床，各處邏輯易分歧（一處檢查空值、另一處不檢查 → 行為不一致）
+
 </rules>
 
 <checklist label="完工前檢查">

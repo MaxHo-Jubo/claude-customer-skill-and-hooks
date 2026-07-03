@@ -3,9 +3,7 @@
 <rules>
 
 MODEL-SELECT:
-  haiku-4.5: lightweight agents / pair programming / worker agents(90% sonnet capability, 3x savings)
-  sonnet-4.5: main dev / orchestration / complex coding
-  opus-4.5: complex architecture / deep reasoning / research
+  rule: 模型分工表見 ~/.claude/harness/model-dispatch.md §3（haiku=批次機械/格式整理、sonnet=預設工作馬、opus=架構/模糊除錯/裁判；Haiku 禁區與升降級狀態機同檔）
 
 CONTEXT-WINDOW:
   avoid-last-20%: large refactoring / multi-file features / complex debugging
@@ -25,7 +23,7 @@ COMPLEX-TASK:
   4: split role sub-agents
 
 BUILD-FAIL:
-  agent: build-error-resolver
+  agent: 派 general-purpose agent（本機無專用 build-error-resolver）
   flow: analyze errors → fix incrementally → verify after each fix
 
 </rules>

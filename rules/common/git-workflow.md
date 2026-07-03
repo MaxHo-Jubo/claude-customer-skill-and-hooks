@@ -21,9 +21,9 @@ PR-WORKFLOW:
 <rhythm>
 
 FEATURE-IMPL:
-  plan: planner agent → identify dependencies/risks → break into phases
-  tdd: tdd-guide agent → RED→GREEN→IMPROVE → verify 80%+ coverage
-  review: code-reviewer agent → fix CRITICAL/HIGH → fix MEDIUM when possible
+  plan: 派 Plan agent → identify dependencies/risks → break into phases
+  tdd: 派 general-purpose agent 照 rules/common/testing.md TDD 流程 → RED→GREEN→IMPROVE → verify 80%+ coverage
+  review: 派 pr-review-toolkit:code-reviewer agent → fix CRITICAL/HIGH → fix MEDIUM when possible
   commit: detailed message, conventional commits format
 
 </rhythm>

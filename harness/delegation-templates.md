@@ -2,7 +2,7 @@
 
 > 用途：主模型派工 subagent 時直接複製填空。配合 model-dispatch.md §2 派工三件套。
 > 讀者：Sonnet / Opus 主對話模型。
-> 建立：Fable 5，2026-07-03。維護權限：黃區（見 knowledge-protocol.md §1）。
+> 建立：Fable 5，2026-07-03（M4 機器）；本機化：Sonnet 5，2026-07-03（佔位範例換本機專案坑）。維護權限：黃區（見 knowledge-protocol.md §1）。
 
 ## 0. 通用規則
 
@@ -25,7 +25,7 @@ Agent type：`Explore`（唯讀）；模型：sonnet（省略 model 參數即可
 【背景】〈專案是什麼、為什麼要查這個；2-3 句〉
 【起點】〈建議的目錄/檔案/關鍵字；沒有就寫「自行規劃」〉
 【已知與已排除】〈已確認的結論；已排除的方向＋依據。沒有就刪此行〉
-【特殊約束】[本專案的坑，例：GPIO 35/36/37 不可用、octal PSRAM]
+【特殊約束】[本專案的坑，例：luna_web react_15/ 目錄禁用 ?. 與 ??（babel 6）]
 
 【驗收條件】回報必須逐一回答：
 1. 〈問題一〉
@@ -55,7 +55,7 @@ Agent type：`Explore`（唯讀）；模型：sonnet（省略 model 參數即可
 【背景與約束】
 - 〈架構背景 2-3 句、相關既有模式的參照檔案〉
 - 風格規則：if 一律加 {}；非 React 函式內部用 STEP XX: 註解；變數/函式要註解用途；禁止 magic number；禁止 console.log/殘留 debug print。
-- [硬體約束/專案坑]
+- [專案坑，例：react_15/ 目錄禁 ?. 與 ??；大列表必用 FlatList]
 
 【TDD 變體——需要時啟用】先寫測試並跑一次確認 RED，再實作到 GREEN；全程禁止修改測試內容。
 
@@ -112,7 +112,7 @@ Agent type：`Explore`（唯讀）；模型：sonnet（省略 model 參數即可
 
 【範圍】執行 `git diff 〈基準〉` 取得變更；只審 diff 內的行，既有代碼問題標 [pre-existing] 不計分。
 【審查面向】〈本次只審：正確性｜風格合規｜測試覆蓋｜錯誤處理——單一面向〉
-【判準來源】〈規則檔絕對路徑，例：~/.claude/rules/common/coding-style.md；逐條比對，不自創標準〉
+【判準來源】〈規則檔絕對路徑，例：~/.claude/rules/common/coding-style.md、~/.claude/CODE-REVIEW-RULE.md；逐條比對，不自創標準〉
 【專案背景】〈2-3 句：這個 diff 要達成什麼〉
 
 【回報格式】繁體中文 ≤ 500 字：

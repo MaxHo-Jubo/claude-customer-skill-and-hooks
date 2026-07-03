@@ -34,7 +34,7 @@
 │   ├── statusline-command.sh
 │   └── README.md
 ├── claude-mem-customize-TC/ # claude-mem 繁體中文化客製（apply-tc.sh 套用腳本、patch、翻譯對照表）
-├── harness/               # 開發 Harness 制度檔（源自 M4 Pro 機器的 max-m4pro-setting 分支，Fable 5 建立）
+├── harness/               # 開發 Harness 制度檔（6 通用檔隨 sync 同步；harness-diagnosis.md 與 handover-letter.md 為機器專屬檔不同步，現存為 M4 機器快照）
 ├── rules/                 # 編碼規則（common + 語言特定）
 │   ├── common/            # 語言無關規則
 │   └── typescript/        # TypeScript/React/RN 特定規則
@@ -70,7 +70,7 @@
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.3.0 | 同步本機 Claude 設定到 Repo（v1.3.0 排除 `settings.json` 的 `model` 欄位，雙向同步都不覆蓋；v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.4.0 | 同步本機 Claude 設定到 Repo（v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
@@ -234,6 +234,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-03: 本機採用 harness 制度 — CLAUDE.md 路由中心版 + 六檔本機化
+
+- `~/.claude/CLAUDE.md` 重寫為 v2 路由中心版（240 行 → 路由 + 按需讀取；舊版備份 `CLAUDE.md.bak-20260703`），新增 `<priority>` 指令優先權仲裁與 `<harness>` 路由段；`<conn>`、hard-won 規則（no-fallback-after-root-cause、dont-blindly-mirror）、完整 commit-msg 規則保留
+- `~/.claude/harness/` 六檔本機化（源自 M4 分支 Fable 5 版）：model-dispatch 新增 §6 本機工具鏈守則（graph-first/upstream-trace/verify-vcs-state/cross-verify，自 TOOL-USAGE 移入）；judgment-matrix 案例換本機實例（claude-mem 中文化三修、isValidLocation fail-open、trace_path 盲區），硬體條款移除；commit-review-policy Tier 2/3 加 blast radius 步驟（取代 POST-COMMIT-REVIEW 強制六步）
+- `rules/common/coding-style.md` 新增 hard-won 細則段（write-preserve-comments/global-mutation/extract-shared-helper/STEP 重排）；`rules/common/agents.md` 移除（AGENT-MAP 指向 7 個不存在的 agent，職責由 model-dispatch 接手）；rules 各檔死 agent 引用改指實際資源（Plan / general-purpose / pr-review-toolkit:code-reviewer / security-review skill）
+- `sync-my-claude-setting` v1.4.0：`harness/` 納入同步清單，`harness-diagnosis.md` 與 `handover-letter.md` 為機器專屬檔雙向排除（repo 現存兩檔為 M4 快照，維持原樣）
+- 驗證：fresh-context read-back agent 6/6 ALL-PASS（引用路徑逐一存在、11 條 hard-won 規則落點確認、conn 完整、無 M4 殘留）
 
 ### 2026-07-03: 從 max-m4pro-setting 分支搬回 harness/、apply-tc.sh、translation-mapping 完整結構
 
