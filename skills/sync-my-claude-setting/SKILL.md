@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -26,7 +26,7 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 | 來源 (`~/.claude/`) | 目標 (repo) | 類型 |
 |---------------------|-------------|------|
-| `settings.json` | `settings.json` | 檔案 |
+| `settings.json` | `settings.json` | 檔案（`model` 欄位排除，見下方安全規則） |
 | `CLAUDE.md` | `CLAUDE.md.{YYYYMMDD}`（如 `CLAUDE.md.20260316`） | 檔案（日期後綴） |
 | `skills/` | `skills/` | 目錄 |
 | `hooks/` | `hooks/` | 目錄 |
@@ -43,7 +43,8 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 **檔案比對：**
 ```bash
-diff -u "$SOURCE/settings.json" "$TARGET/settings.json" || true
+# settings.json：排除 model 欄位（本機專屬設定，不列入同步差異）
+diff -u <(jq 'del(.model)' "$SOURCE/settings.json") <(jq 'del(.model)' "$TARGET/settings.json") || true
 # CLAUDE.md 比對最新的日期後綴版本
 LATEST_CLAUDE=$(ls -1 "$TARGET"/CLAUDE.md.* 2>/dev/null | sort -r | head -1)
 if [ -n "$LATEST_CLAUDE" ]; then
@@ -122,7 +123,24 @@ diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
 
 **檔案複製：**
 ```bash
-cp "$SOURCE/settings.json" "$TARGET/settings.json"
+# settings.json：複製本機內容，但 model 欄位保留 repo 原有值（不覆蓋）
+python3 -c "
+import json
+with open('$SOURCE/settings.json') as f:
+    src = json.load(f)
+try:
+    with open('$TARGET/settings.json') as f:
+        tgt_model = json.load(f).get('model')
+except FileNotFoundError:
+    tgt_model = None
+if tgt_model is not None:
+    src['model'] = tgt_model
+else:
+    src.pop('model', None)
+with open('$TARGET/settings.json', 'w') as f:
+    json.dump(src, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+"
 # CLAUDE.md：複製當日版本，移除 <conn> 區段（含個人資訊），再刪除先前日期備份
 TODAY=$(date +%Y%m%d)
 sed '/<conn /,/<\/conn>/d' "$SOURCE/CLAUDE.md" > "$TARGET/CLAUDE.md.$TODAY"
@@ -163,6 +181,7 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 > **安全規則**：
 > - CLAUDE.md 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），禁止同步到 repo。
 > - `mcp-servers.json` 會自動過濾 `env` 欄位並遮罩 `--api-key`/`--token`/`--secret`/`--password` 後的值。
+> - `settings.json` 的 `model` 欄位為本機專屬設定（依機器/當下任務彈性切換），同步時排除、不覆蓋、不還原，repo 端維持自己原本的值。
 
 **目錄同步（mirror 模式）：**
 ```bash
@@ -302,7 +321,8 @@ git push
 
 ```bash
 # 檔案比對（repo → 本機）
-diff -u "$TARGET/settings.json" "$SOURCE/settings.json" || true
+# settings.json：排除 model 欄位（本機專屬設定，不列入還原差異）
+diff -u <(jq 'del(.model)' "$TARGET/settings.json") <(jq 'del(.model)' "$SOURCE/settings.json") || true
 diff -u "$TARGET/statusline/statusline-command.sh" "$SOURCE/statusline-command.sh" || true
 
 # 目錄比對
@@ -344,7 +364,24 @@ if not (repo_names - local_names) and not (local_names - repo_names):
 
 ```bash
 # 檔案還原
-cp "$TARGET/settings.json" "$SOURCE/settings.json"
+# settings.json：還原 repo 內容，但 model 欄位保留本機原有值（不覆蓋）
+python3 -c "
+import json
+with open('$TARGET/settings.json') as f:
+    src = json.load(f)
+try:
+    with open('$SOURCE/settings.json') as f:
+        local_model = json.load(f).get('model')
+except FileNotFoundError:
+    local_model = None
+if local_model is not None:
+    src['model'] = local_model
+else:
+    src.pop('model', None)
+with open('$SOURCE/settings.json', 'w') as f:
+    json.dump(src, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+"
 cp "$TARGET/statusline/statusline-command.sh" "$SOURCE/statusline-command.sh"
 
 # CLAUDE.md 還原：從 repo 最新的日期後綴版本複製回本機
@@ -396,7 +433,7 @@ else:
 "
 ```
 
-> **安全規則**：restore 不會刪除本機已有但 repo 沒有的 MCP Server（單向新增）。兩邊都有的 server 保留本機版本（含完整 env）。
+> **安全規則**：restore 不會刪除本機已有但 repo 沒有的 MCP Server（單向新增）。兩邊都有的 server 保留本機版本（含完整 env）。`settings.json` 的 `model` 欄位同樣排除，還原後維持本機原本的值。
 
 ---
 
@@ -404,6 +441,7 @@ else:
 
 - `~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤
 - `settings.local.json` 不同步（本機專屬設定）
+- `settings.json` 的 `model` 欄位不同步、不還原（雙向排除），兩邊各自保留自己原本的值
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回

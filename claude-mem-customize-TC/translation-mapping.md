@@ -1,11 +1,14 @@
 # claude-mem 繁體中文化翻譯對照表
 
-> 適用版本：claude-mem 13.2.0（thedotmack）
+> 適用版本：claude-mem 13.9.3（thedotmack，前次為 13.2.0）
 > 插件更新後 cache 及 marketplaces 都會被覆蓋，需重新套用。依此對照表搜尋替換即可。
+> `code--zh-tw.json` mode 檔案也會在插件更新後消失（modes/ 目錄只剩原廠 `code--zh.json`），需重新複製。
 >
 > **重要：插件有兩個副本，兩邊都要 patch：**
 > - `~/.claude/plugins/cache/thedotmack/claude-mem/<VERSION>/scripts/` — MCP server 使用
-> - `~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/` — **Worker daemon 使用（實際產生 session 輸出）**
+> - `~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/` — worker daemon 可能使用
+>
+> Worker daemon 實際載入哪個路徑會隨版本變動（`ps aux | grep worker-service.cjs` 確認）：v13.2.0 時觀察到從 marketplaces 啟動，v13.9.3 時觀察到從 cache 啟動。不要假設固定路徑，兩邊都 patch 最保險。
 
 ## UI 字串對照
 
@@ -23,7 +26,7 @@
 | `Your savings:` | `節省效益：` | 經濟性分析 |
 | `reduction from reuse` | `透過重複利用節省` | 經濟性分析 |
 | `Tokens to read this observation (cost to learn it now)` | `讀取此觀察的 Token 數（現在學習的成本）` | 欄位說明 |
-| `Tokens spent on work that produced this record (research, building, deciding)` | `研究、建構、決策所花費的 Token 數` | 欄位說明 |
+| `Tokens spent on work that produced this record ( research, building, deciding)` | `研究、建構、決策所花費的 Token 數` | 欄位說明（v13.9.3 括號內多一個空格，先 grep 確認實際字元） |
 | `This semantic index (titles, types, files, tokens) is usually sufficient to understand past work.` | `此語意索引（標題、類型、檔案、Token 數）通常足以理解過去的工作。` | 索引說明 |
 | `tokens spent on research, building, and decisions` | `研究、建構與決策所花費的 Token 數` | 經濟性分析 |
 | `tokens of past research & decisions for just` | `過去研究與決策的 Token，僅需` | 經濟性分析 |
@@ -31,20 +34,20 @@
 
 ### worker-service.cjs 專用 — Session 摘要模板
 
-#### 彩色/無色 Terminal 輸出（v13.2.0 改用 BA/zA）
+#### 彩色/無色 Terminal 輸出（v13.9.3 改用 fh/ph）
 
 | 英文原文 | 繁體中文 | 備註 |
 |---------|---------|------|
-| `BA("Investigated"` | `BA("已調查"` | 彩色 Terminal 標籤 |
-| `BA("Completed"` | `BA("已完成"` | 彩色 Terminal 標籤 |
-| `BA("Learned"` | `BA("已學習"` | 彩色 Terminal 標籤 |
-| `BA("Next Steps"` | `BA("後續步驟"` | 彩色 Terminal 標籤 |
-| `zA("Investigated"` | `zA("已調查"` | 無色 Terminal 標籤 |
-| `zA("Completed"` | `zA("已完成"` | 無色 Terminal 標籤 |
-| `zA("Learned"` | `zA("已學習"` | 無色 Terminal 標籤 |
-| `zA("Next Steps"` | `zA("後續步驟"` | 無色 Terminal 標籤 |
+| `fh("Investigated"` | `fh("已調查"` | 彩色 Terminal 標籤 |
+| `fh("Completed"` | `fh("已完成"` | 彩色 Terminal 標籤 |
+| `fh("Learned"` | `fh("已學習"` | 彩色 Terminal 標籤 |
+| `fh("Next Steps"` | `fh("後續步驟"` | 彩色 Terminal 標籤 |
+| `ph("Investigated"` | `ph("已調查"` | 無色 Terminal 標籤 |
+| `ph("Completed"` | `ph("已完成"` | 無色 Terminal 標籤 |
+| `ph("Learned"` | `ph("已學習"` | 無色 Terminal 標籤 |
+| `ph("Next Steps"` | `ph("後續步驟"` | 無色 Terminal 標籤 |
 
-> **歷次函式名變遷：** v10.6.2 `bp/_p` → v11.0.0 `mf/ff` → v13.2.0 `BA/zA`。每次升級可能再改名，先 grep `Investigated` 找實際呼叫的函式名。
+> **歷次函式名變遷：** v10.6.2 `bp/_p` → v11.0.0 `mf/ff` → v13.2.0 `BA/zA` → v13.9.3 `fh/ph`。每次升級可能再改名，先 grep `Investigated` 找實際呼叫的函式名。
 
 #### Markdown 摘要標籤
 
@@ -65,12 +68,13 @@
 | `no summary available` | `無摘要` | 無摘要時的說明 |
 | `*No observations yet*` | `*尚無觀察記錄*` | 無觀察記錄 |
 
-#### Loading 訊息（變數名因檔案而異）
+#### Loading 訊息（變數名因檔案而異，且每次 minify 可能改變，先 grep 確認）
 
-| 英文原文 | 繁體中文 | 所在檔案 |
-|---------|---------|---------|
-| `Loading: ${t.totalObservations}` | `載入：${t.totalObservations}` | worker-service.cjs |
-| `Loading: ${r.totalObservations}` | `載入：${r.totalObservations}` | context-generator.cjs |
+| 英文原文 | 繁體中文 | 所在檔案 | 版本 |
+|---------|---------|---------|------|
+| `Loading: ${t.totalObservations}` | `載入：${t.totalObservations}` | worker-service.cjs | v13.2.0 / v13.9.3 不變 |
+| `Loading: ${r.totalObservations}` | `載入：${r.totalObservations}` | context-generator.cjs | v13.2.0 |
+| `Loading: ${n.totalObservations}` | `載入：${n.totalObservations}` | context-generator.cjs | v13.9.3 |
 
 ### code--zh-tw.json（基於 code--zh.json）
 
@@ -85,6 +89,15 @@
 > 完整簡繁對照請直接比較 `files/code--zh-tw.json` 與原版 `code--zh.json`。
 
 ## 版本差異記錄
+
+### v13.2.0 → v13.9.3 變更
+
+- Terminal 輸出函式：`BA("X"` / `zA("X"` → `fh("X"` / `ph("X"`
+- `context-generator.cjs` 的 Loading 變數名：`${r.totalObservations}` → `${n.totalObservations}`（`worker-service.cjs` 仍是 `${t.totalObservations}`）
+- `Tokens spent on work that produced this record (research, building, deciding)` 括號內多了一個空格，變成 `( research, building, deciding)`
+- `modes/code--zh-tw.json` 自訂檔案在插件更新後消失，需重新從 `files/code--zh-tw.json` 複製
+- worker daemon 觀察到改從 cache 路徑啟動（v13.2.0 時是 marketplaces）
+- 其餘共用 UI 字串與 Markdown 標籤無變化
 
 ### v11.0.0 → v13.2.0 變更
 
@@ -122,7 +135,7 @@ for DIR in "$CACHE" "$MARKET"; do
     sed -i '' 's/reduction from reuse/透過重複利用節省/g' "$F"
     sed -i '' 's/Previously/先前/g' "$F"
     sed -i '' 's/Tokens to read this observation (cost to learn it now)/讀取此觀察的 Token 數（現在學習的成本）/g' "$F"
-    sed -i '' 's/Tokens spent on work that produced this record (research, building, deciding)/研究、建構、決策所花費的 Token 數/g' "$F"
+    sed -i '' 's/Tokens spent on work that produced this record ( research, building, deciding)/研究、建構、決策所花費的 Token 數/g' "$F"
     sed -i '' 's/This semantic index (titles, types, files, tokens) is usually sufficient to understand past work\./此語意索引（標題、類型、檔案、Token 數）通常足以理解過去的工作。/g' "$F"
     sed -i '' 's/tokens spent on research, building, and decisions/研究、建構與決策所花費的 Token 數/g' "$F"
     sed -i '' 's/tokens of past research & decisions for just/過去研究與決策的 Token，僅需/g' "$F"
@@ -131,15 +144,15 @@ for DIR in "$CACHE" "$MARKET"; do
   done
 
   # ---- worker-service.cjs 專用 ----
-  # v13.2.0: BA() = 彩色, zA() = 無色（v11.0.0 為 mf/ff）
-  sed -i '' 's/BA("Investigated"/BA("已調查"/g' "$W"
-  sed -i '' 's/BA("Completed"/BA("已完成"/g' "$W"
-  sed -i '' 's/BA("Learned"/BA("已學習"/g' "$W"
-  sed -i '' 's/BA("Next Steps"/BA("後續步驟"/g' "$W"
-  sed -i '' 's/zA("Investigated"/zA("已調查"/g' "$W"
-  sed -i '' 's/zA("Completed"/zA("已完成"/g' "$W"
-  sed -i '' 's/zA("Learned"/zA("已學習"/g' "$W"
-  sed -i '' 's/zA("Next Steps"/zA("後續步驟"/g' "$W"
+  # v13.9.3: fh() = 彩色, ph() = 無色（v13.2.0 為 BA/zA，v11.0.0 為 mf/ff）
+  sed -i '' 's/fh("Investigated"/fh("已調查"/g' "$W"
+  sed -i '' 's/fh("Completed"/fh("已完成"/g' "$W"
+  sed -i '' 's/fh("Learned"/fh("已學習"/g' "$W"
+  sed -i '' 's/fh("Next Steps"/fh("後續步驟"/g' "$W"
+  sed -i '' 's/ph("Investigated"/ph("已調查"/g' "$W"
+  sed -i '' 's/ph("Completed"/ph("已完成"/g' "$W"
+  sed -i '' 's/ph("Learned"/ph("已學習"/g' "$W"
+  sed -i '' 's/ph("Next Steps"/ph("後續步驟"/g' "$W"
 
   # Markdown 標籤（先長後短）
   sed -i '' 's/\*\*Status:\*\* Active - summary pending/\*\*狀態：\*\* 進行中 - 摘要待生成/g' "$W"
@@ -157,9 +170,9 @@ for DIR in "$CACHE" "$MARKET"; do
   sed -i '' 's/no summary available/無摘要/g' "$W"
   sed -i '' 's/\*No observations yet\*/\*尚無觀察記錄\*/g' "$W"
 
-  # Loading 變數名因檔案而異
+  # Loading 變數名因檔案而異，且每次 minify 可能改變，先 grep 確認實際變數名
   sed -i '' 's/Loading: ${t\.totalObservations}/載入：${t.totalObservations}/g' "$W"
-  sed -i '' 's/Loading: ${r\.totalObservations}/載入：${r.totalObservations}/g' "$C"
+  sed -i '' 's/Loading: ${n\.totalObservations}/載入：${n.totalObservations}/g' "$C"
 done
 
 # 複製 code--zh-tw.json

@@ -104,7 +104,7 @@
 - **載入狀態**：`user-invocable-only`（只手動觸發）
 - **依賴**：git、claude-mem MCP、auto memory
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.2.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.3.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -113,12 +113,13 @@
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`；**STEP 03.0 載入 `skills-sources.json`**（read-only），在重新產生時自動為登錄的外部 skill 補上「來源」欄位
   4. Commit & Push — 根據差異報告產生 commit message 並推送
+- **model 欄位排除（v1.3.0 新增）**：`settings.json` 的 `model` 欄位為本機/repo 各自獨立設定，diff 比對用 `jq 'del(.model)'` 排除；正向複製與反向 restore 都改用 Python 合併寫入，保留目標端原本的 `model` 值，不被來源覆蓋。起因：本機依任務彈性切換 model（如 `opus[1m]` ↔ `sonnet`），不該被同步/還原動作洗掉。
 - **source 標註機制（v1.2.0 新增）**：repo 根目錄 `skills-sources.json` 記錄外部 skill 出處（schema：`{"<skill>": {"source": URL, "installed": "YYYY-MM-DD", "note": ...}}`）。**由使用者手動維護，sync skill 永遠 read-only**（不寫入、不增刪、不修改）。3.4 一致性檢查只提示 sources.json 含已不存在 skill，不自動清理。
-- **同步清單**：`settings.json`、`mcp-servers.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
+- **同步清單**：`settings.json`（排除 `model` 欄位）、`mcp-servers.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`statusline-command.sh`
 - **MCP Server 同步**：支援 MCP Server 設定同步（過濾 env 敏感資料），新增 restore 反向同步模式（從 repo 還原到本機）
 - **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
-- **依賴**：git、rsync、sed
-- **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步
+- **依賴**：git、rsync、sed、jq
+- **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步；`model` 欄位雙向排除
 
 #### `/neat-freak` — 跨平台知識庫整理（潔癖級）
 

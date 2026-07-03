@@ -69,7 +69,7 @@
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.2.0 | 同步本機 Claude 設定到 Repo（v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.3.0 | 同步本機 Claude 設定到 Repo（v1.3.0 排除 `settings.json` 的 `model` 欄位，雙向同步都不覆蓋；v1.2.0 新增 source 標註：讀取 `skills-sources.json` 自動補出處欄位，read-only） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
@@ -233,6 +233,12 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-03: sync-my-claude-setting v1.3.0 — 排除 settings.json 的 model 欄位
+
+- `settings.json` 的 `model` 欄位改為本機/repo 各自獨立、雙向排除：正向同步（本機 → repo）複製時保留 repo 原本的 `model` 值；反向 restore（repo → 本機）還原時保留本機原本的 `model` 值
+- STEP 01/STEP R1 的 diff 比對改用 `jq 'del(.model)'` 排除該欄位，避免每次同步都因為機器/任務彈性切換的 model 設定而產生假差異
+- 起因：本機為了不同任務彈性切換 `model`（如 `opus[1m]` ↔ `sonnet`），不該被同步覆蓋或還原
 
 ### 2026-07-01: GitNexus 全面淘汰 → codebase-memory-mcp + pr-reviewer v1.2.0
 
