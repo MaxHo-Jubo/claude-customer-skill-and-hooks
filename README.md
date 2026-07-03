@@ -33,7 +33,8 @@
 ├── statusline/            # 自訂狀態列腳本
 │   ├── statusline-command.sh
 │   └── README.md
-├── claude-mem-customize-TC/ # claude-mem 繁體中文化客製（修改檔、patch、翻譯對照表）
+├── claude-mem-customize-TC/ # claude-mem 繁體中文化客製（apply-tc.sh 套用腳本、patch、翻譯對照表）
+├── harness/               # 開發 Harness 制度檔（源自 M4 Pro 機器的 max-m4pro-setting 分支，Fable 5 建立）
 ├── rules/                 # 編碼規則（common + 語言特定）
 │   ├── common/            # 語言無關規則
 │   └── typescript/        # TypeScript/React/RN 特定規則
@@ -233,6 +234,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-03: 從 max-m4pro-setting 分支搬回 harness/、apply-tc.sh、translation-mapping 完整結構
+
+- 新增 `harness/` 目錄（8 個制度檔：model-dispatch、judgment-matrix、delegation-templates、commit-review-policy、knowledge-protocol、harness-diagnosis、handover-letter、README）— 源自 M4 Pro 機器分支，Fable 5 建立的工作流制度中心
+- 新增 `claude-mem-customize-TC/files/apply-tc.sh` — 中文化一鍵套用腳本（冪等可重跑），函式名已更新為 13.9.3 實測值（worker `fh/ph`、context-generator `H/X`）
+- `translation-mapping.md` 採用分支的完整結構（補 v13 新字串：索引標頭說明、Timeline 工具、knowledge-agent 報告、多 session 標題），內嵌 sed 清單改為指向 apply-tc.sh 單一資料來源
+- 本機 13.9.3 兩路徑已補套用 v13 新字串與 context-generator Terminal 標籤（早上首輪 patch 用舊對照表，漏了這些）
 
 ### 2026-07-03: sync-my-claude-setting v1.3.0 — 排除 settings.json 的 model 欄位
 
