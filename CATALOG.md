@@ -321,7 +321,6 @@
 | 腳本 | 用途 |
 |------|------|
 | `detect-jira-issue.sh` | 從 git branch 名稱偵測 Jira issue 編號，注入 session context |
-| `context-mode/sessionstart.mjs` | context-mode 初始化 |
 
 ### UserPromptSubmit
 
@@ -335,14 +334,12 @@
 |---------|------|------|
 | `Grep\|Glob\|Bash` | `gitnexus-hook.ts` | 攔截搜尋操作，用 GitNexus 圖譜提供額外上下文 |
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
-| `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 
 ### PostToolUse
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
 | `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
-| `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
 | `Bash` | `post-commit-review.ts` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
@@ -373,7 +370,6 @@
 | `detect-jira-issue.sh` | 從 git branch 解析 Jira issue key |
 | `generate-spec-mapping.ts` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
 | `spec-section-validator.ts` | 驗證 spec 必要區段是否存在 |
-| `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `post-commit-review.ts` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
@@ -412,10 +408,11 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（15）
+### 啟用的 Plugins（17）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
+| code-simplifier | claude-plugins-official | 程式碼精簡化 agent |
 | code-review | claude-plugins-official | PR 自動化 code review |
 | atlassian | claude-plugins-official | Jira & Confluence 整合 |
 | frontend-design | claude-plugins-official | 前端設計輔助 |
@@ -423,20 +420,23 @@
 | typescript-lsp | claude-plugins-official | TypeScript/JS Language Server |
 | gopls-lsp | claude-plugins-official | Go Language Server |
 | jdtls-lsp | claude-plugins-official | Java Language Server |
+| clangd-lsp | claude-plugins-official | C/C++ Language Server |
 | context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
 | claude-mem | thedotmack | 跨 session 持久記憶系統 |
-| context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
 | document-skills | anthropic-agent-skills | 文件處理套件（pdf、xlsx、docx、pptx、skill-creator…） |
 | superpowers | claude-plugins-official | 進階工作流程（brainstorming、plan、code review…） |
 | claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
+| ui-ux-pro-max | ui-ux-pro-max-skill | UI/UX 設計智能（樣式/色盤/字型配對/元件庫） |
+| playwright | claude-plugins-official | 瀏覽器自動化 MCP（browser_* 工具） |
 
-### 停用的 Plugins（2）
+### 停用的 Plugins（3）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
 | github | claude-plugins-official | 用 gh CLI 替代 |
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
+| context-mode | claude-context-mode | 2026-07-03 停用（原節省 98% context window 的沙盒執行方案，PreToolUse/SessionStart hook 已一併移除） |
 
 ### MCP Servers
 

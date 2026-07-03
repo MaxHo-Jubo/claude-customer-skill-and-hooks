@@ -93,13 +93,10 @@
 | Hook 類型 | 觸發時機 | Matcher | 腳本 | 用途 |
 |-----------|----------|---------|------|------|
 | SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
-| SessionStart | 啟動 session | —（空 matcher） | `context-mode/sessionstart.mjs` | context-mode 初始化 |
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | Grep\|Glob\|Bash | `gitnexus-hook.ts` | 用 GitNexus 圖譜豐富搜尋上下文 |
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
-| PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
-| PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | 提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
 | PostToolUse | 所有工具（catch-all） | —（空 matcher） | `post_tool_error.py` | tool 失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl` |
@@ -125,8 +122,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 15 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、document-skills、superpowers、claude-hud、pr-review-toolkit、claude-mem |
-| Plugins（停用） | 2 | github、everything-claude-code |
+| Plugins（啟用） | 17 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、clangd-lsp、context7、document-skills、superpowers、claude-hud、pr-review-toolkit、claude-mem、ui-ux-pro-max、playwright |
+| Plugins（停用） | 3 | github、everything-claude-code、context-mode（2026-07-03 停用） |
 | MCP Servers | 2 | pr-watcher、gitnexus（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
@@ -201,14 +198,14 @@
 | gitnexus-impact-analysis | 修改前分析 blast radius（d=1 必壞 / d=2 可能 / d=3 需測試） |
 | gitnexus-refactoring | 用依賴圖規劃安全的 rename、extract、split 重構 |
 
-## claude-mem 繁體中文化（11.0.0）
+## claude-mem 繁體中文化（13.9.1）
 
 詳見 [`claude-mem-customize-TC/README.md`](claude-mem-customize-TC/README.md)。
 
 claude-mem 插件的 UI 輸出預設英文，此資料夾保存繁體中文化的改動：
 - **修改後的完整檔案**（可直接覆蓋 plugin cache + marketplaces 兩個路徑）
-- **Patch 檔**（基於 11.0.0 版本的 diff，更新後可能失效）
-- **翻譯對照表**（插件更新後 patch 失效時，依此表手動替換）
+- **Patch 檔**（基於 13.9.1 版本的 diff，更新後可能失效）
+- **翻譯對照表 + `files/apply-tc.sh` 一鍵套用腳本**（插件更新後 patch 失效時，依此表/腳本重新替換）
 
 > 插件更新會覆蓋 cache，翻譯對照表是最可靠的重新套用方式。
 
@@ -250,6 +247,16 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-03: CLAUDE.md 由 Fable 5 重寫為 v2 路由中心版、context-mode 停用、plugins 更新
+
+- **CLAUDE.md 全面重寫**：從逐條展開的規則文（`<rules>` 區塊）改為「路由中心」架構——核心檔案只留 `<priority>`（指令優先權仲裁）、`<harness>`（依情境指向 `~/.claude/harness/*.md` 制度檔）、`<gates>`、`<persona>`、`<lang>`、`<core-principles>`、`<code-style>` 摘要、`<commit-msg>`、`<review-output>`、`<rhythm>`、`<compact>`、`<ref>`，細節下放到 `harness/` 與 `rules/`；舊版全文備份為 `CLAUDE.md.bak`
+- settings.json 新增頂層 `"model": "sonnet"` 欄位
+- **context-mode plugin 停用**：`enabledPlugins.context-mode` 由 `true` 改 `false`；對應的 `PreToolUse`（`context-mode/pretooluse.mjs` 子代理路由）與 `SessionStart`（`context-mode/sessionstart.mjs` 初始化）hook 一併移除
+- **新增啟用 plugins**：`clangd-lsp`（C/C++ LSP）、`ui-ux-pro-max`（UI/UX 設計智能）、`playwright`（瀏覽器自動化 MCP）
+- 移除 `inventory-drift-detector.ts` PostToolUse hook 與對應腳本（inventory 索引機制停用）
+- `hooks/` 新增 `context-mode-cache-heal.mjs`（context-mode plugin 自動部署的 cache 自癒腳本，修 [anthropics/claude-code#46915](https://github.com/anthropics/claude-code)，非 settings.json 註冊的自訂 hook）
+- `claude-mem-customize-TC/`：中文化更新至 claude-mem v13.9.1（詳見資料夾內 README/translation-mapping.md）
 
 ### 2026-04-19 (晚): 新增 r15-syntax-guard PreToolUse hook
 

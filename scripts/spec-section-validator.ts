@@ -6,7 +6,8 @@ import path from 'path';
  * PostToolUse hook: 驗證 spec markdown 檔案包含必要 section。
  *
  * 觸發條件: Write 或 Edit tool 修改了 spec/*.md 檔案
- * 輸出: 缺少必要 section 時輸出警告
+ * 輸出: 缺少必要 section 時以 systemMessage JSON 警告（user 與 Claude 下一輪皆可見；
+ *       2026-07-03 修正：原純 stdout 輸出不會注入 AI context，警告等於蒸發）
  */
 
 /** 跳過驗證的檔案（導航/索引用途） */
@@ -68,7 +69,7 @@ process.stdin.on('end', () => {
     // STEP 06: 擷取所有 h2 heading
     const headings = content.match(/^## .+$/gm) || [];
     if (headings.length === 0) {
-      console.log(`\n⚠️  Spec 驗證: ${fileName} 沒有任何 ## heading，可能是空骨架`);
+      console.log(JSON.stringify({ systemMessage: `⚠️ Spec 驗證: ${fileName} 沒有任何 ## heading，可能是空骨架` }));
       process.exit(0);
     }
 
@@ -88,12 +89,12 @@ process.stdin.on('end', () => {
 
     // STEP 08: 輸出結果
     if (missing.length > 0) {
-      let msg = `\n⚠️  Spec 驗證: ${fileName} 缺少以下 section:\n`;
+      let msg = `⚠️ Spec 驗證: ${fileName} 缺少以下 section:\n`;
       for (const m of missing) {
         msg += `   - ${m}\n`;
       }
       msg += `   現有 headings: ${headings.map(h => h.replace('## ', '')).join(', ')}`;
-      console.log(msg);
+      console.log(JSON.stringify({ systemMessage: msg }));
     }
   } catch {
     // 靜默失敗

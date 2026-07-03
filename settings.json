@@ -88,18 +88,10 @@
       "Bash(emulator -list-avds:*)",
       "Bash(claude mcp --help:*)",
       "Bash(claude mcp remove:*)",
-      "Bash(claude mcp add --scope user context7 -- npx -y @upstash/context7-mcp --api-key ctx7sk-97b9e21b-46b1-4ccb-a506-d89bffe8e548)",
       "Bash(claude mcp list:*)",
       "Bash(claude --version:*)",
       "Bash(npm show:*)",
       "Bash(tar:*)",
-      "mcp__plugin_serena_serena__activate_project",
-      "mcp__plugin_serena_serena__check_onboarding_performed",
-      "mcp__plugin_serena_serena__onboarding",
-      "mcp__plugin_serena_serena__list_dir",
-      "mcp__plugin_serena_serena__read_file",
-      "mcp__plugin_serena_serena__write_memory",
-      "mcp__plugin_serena_serena__think_about_whether_you_are_done",
       "Bash(adb:*)",
       "Bash(brew list:*)",
       "Bash(brew install:*)",
@@ -190,26 +182,17 @@
       "WebFetch(domain:repost.aws)",
       "Bash(cd:*)",
       "Bash(git restore:*)",
-      "mcp__plugin_serena_serena__list_memories",
-      "mcp__plugin_serena_serena__replace_content",
       "Bash(npm run lint:*)",
-      "mcp__plugin_serena_serena__create_text_file",
       "Bash(.head -20)",
-      "mcp__plugin_serena_serena__replace_symbol_body",
-      "mcp__plugin_serena_serena__read_memory",
       "Bash(npm test:*)",
       "Bash(npx jest:*)",
       "Skill(code-review:code-review)",
       "Bash(./gradlew bundleRelease)",
       "Bash(open:*)",
-      "mcp__plugin_serena_serena__find_file",
-      "mcp__plugin_serena_serena__find_symbol",
       "Bash(git grep:*)",
       "Bash(xargs:*)",
       "WebFetch(domain:jubo.atlassian.net)",
       "Bash(/Users/maxhero/.nvm/versions/node/v20.20.0/bin/claude:*)",
-      "mcp__plugin_serena_serena__search_for_pattern",
-      "mcp__plugin_serena_serena__get_symbols_overview",
       "Bash(for c in b4a3e49 3a3637b c0da0a3 040e8b5 000e1f7 ed79c9b e5672fe bbdf541 90f2d36 9ae5a85 153dbeb)",
       "Bash(do echo \"===== $c =====\")",
       "Bash(pod cache clean:*)",
@@ -233,14 +216,9 @@
       "mcp__plugin_claude-mem_mcp-search__save_memory",
       "Bash(fc-list:*)",
       "Bash(ghostty +show-config:*)",
-      "mcp__plugin_context-mode_context-mode__execute_file",
-      "mcp__plugin_context-mode_context-mode__batch_execute",
-      "mcp__plugin_context-mode_context-mode__search",
       "Bash(sed:*)",
       "Bash(bash:*)",
       "Bash(kill 88107:*)",
-      "mcp__plugin_context-mode_context-mode__execute",
-      "mcp__plugin_context-mode_context-mode__fetch_and_index",
       "Bash(CLAUDE_USER_CONTENT=\"幫我看一下這個 PR 的 code review\" node:*)",
       "Bash(CLAUDE_USER_CONTENT=\"這個改動的影響範圍有多大\" node:*)",
       "Bash(CLAUDE_TOOL_NAME=\"Write\" CLAUDE_TOOL_INPUT='{\"file_path\":\"/Users/maxhero/.claude/skills/test-new-skill/SKILL.md\"}' node:*)",
@@ -253,6 +231,7 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -277,16 +256,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SessionStart node /Users/maxhero/.claude/plugins/marketplaces/claude-context-mode/hooks/sessionstart.mjs",
-            "timeout": 10000
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -298,12 +267,6 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/spec-section-validator.ts",
             "timeout": 3000,
             "statusMessage": "Validating spec sections..."
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/inventory-drift-detector.ts",
-            "timeout": 5000,
-            "statusMessage": "Checking inventory drift..."
           },
           {
             "type": "command",
@@ -325,7 +288,7 @@
         ]
       },
       {
-        "matcher": "",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
@@ -387,16 +350,6 @@
             "statusMessage": "Checking R15 syntax compatibility..."
           }
         ]
-      },
-      {
-        "matcher": "Bash|WebFetch|Read|Grep|Agent|Task|mcp__plugin_context-mode_context-mode__ctx_execute|mcp__plugin_context-mode_context-mode__ctx_execute_file|mcp__plugin_context-mode_context-mode__ctx_batch_execute",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /Users/maxhero/.claude/plugins/cache/claude-context-mode/context-mode/1.0.53/hooks/pretooluse.mjs",
-            "timeout": 10000
-          }
-        ]
       }
     ]
   },
@@ -413,7 +366,6 @@
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "github@claude-plugins-official": false,
-    "context-mode@claude-context-mode": true,
     "everything-claude-code@everything-claude-code": false,
     "document-skills@anthropic-agent-skills": true,
     "gopls-lsp@claude-plugins-official": true,
@@ -421,13 +373,23 @@
     "superpowers@claude-plugins-official": true,
     "claude-hud@claude-hud": true,
     "pr-review-toolkit@claude-plugins-official": true,
-    "claude-mem@thedotmack": true
+    "claude-mem@thedotmack": true,
+    "clangd-lsp@claude-plugins-official": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "context-mode@claude-context-mode": false,
+    "playwright@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
       "source": {
         "source": "github",
         "repo": "jarrodwatts/claude-hud"
+      }
+    },
+    "ui-ux-pro-max-skill": {
+      "source": {
+        "source": "github",
+        "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
       }
     }
   },

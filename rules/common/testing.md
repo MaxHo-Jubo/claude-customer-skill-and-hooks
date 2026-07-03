@@ -15,7 +15,7 @@ TDD:
   flow: write-test(RED) → run-fail → implement(GREEN) → run-pass → refactor(IMPROVE) → verify-coverage
 
 TROUBLESHOOT:
-  agent: tdd-guide
+  skill: superpowers:systematic-debugging（舊 tdd-guide agent 屬已停用 plugin，2026-07-03 改指）
   1: check test isolation
   2: verify mocks
   3: fix implementation not tests(unless tests are wrong)

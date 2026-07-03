@@ -28,7 +28,7 @@ LOG-SAFETY:
 
 SECURITY-INCIDENT:
   1: STOP immediately
-  2: security-reviewer agent
+  2: 派 general-purpose agent 依本檔 checklist 逐條掃描（舊 security-reviewer agent 屬已停用 plugin）
   3: fix CRITICAL before continuing
   4: rotate exposed secrets
   5: review entire codebase for similar issues

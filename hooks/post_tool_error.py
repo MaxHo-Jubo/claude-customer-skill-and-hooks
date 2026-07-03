@@ -75,7 +75,14 @@ def main() -> None:
         # Not a valid hook call — exit silently, never block Claude
         sys.exit(0)
 
+    # hook_input 與 tool_response 預期為 dict；MCP 工具有時回 list/None/string，需防禦
+    if not isinstance(hook_input, dict):
+        sys.exit(0)
+
     tool_response = hook_input.get("tool_response", {})
+    if not isinstance(tool_response, dict):
+        sys.exit(0)
+
     exit_code = tool_response.get("exit_code")
 
     # Only log actual failures (non-zero exit code)
