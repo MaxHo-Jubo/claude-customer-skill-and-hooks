@@ -1,12 +1,12 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
 
-自動比對 `~/.claude/` 與 `~/Documents/projects/claude-customer-skill-and-hooks` 的差異，以 `~/.claude/` 為主複製最新內容，自動更新文件，commit and push。
+自動比對 `~/.claude/` 與 `~/Documents/MaxHero/Projects/claude-customer-skill-and-hooks` 的差異，以 `~/.claude/` 為主複製最新內容，自動更新文件，commit and push。
 
 ## 使用方式
 
@@ -18,9 +18,11 @@ version: 1.1.0
 ```yaml
 SOURCE: ~/.claude
 SOURCE_MCP: ~/.claude.json
-TARGET: ~/Documents/projects/claude-customer-skill-and-hooks
-TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.json
+TARGET: ~/Documents/MaxHero/Projects/claude-customer-skill-and-hooks
+TARGET_MCP: ~/Documents/MaxHero/Projects/claude-customer-skill-and-hooks/mcp-servers.json
 ```
+
+> 2026-07-03 修正：舊路徑 `~/Documents/projects/claude-customer-skill-and-hooks` 不存在，實際 repo 位置如上。
 
 ## 同步清單
 
@@ -32,6 +34,8 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 | `hooks/` | `hooks/` | 目錄 |
 | `scripts/` | `scripts/` | 目錄 |
 | `rules/` | `rules/` | 目錄 |
+| `agents/` | `agents/` | 目錄 |
+| `harness/` | `harness/` | 目錄（2026-07-03 起：CLAUDE.md v2 路由中心版依賴此目錄，缺了 CLAUDE.md 的引用會斷） |
 | `statusline-command.sh` | `statusline/statusline-command.sh` | 檔案 |
 | `~/.claude.json` → `mcpServers` | `mcp-servers.json` | 檔案（過濾 env） |
 
@@ -93,6 +97,8 @@ diff -rq "$SOURCE/skills/" "$TARGET/skills/" || true
 diff -rq "$SOURCE/hooks/" "$TARGET/hooks/" || true
 diff -rq "$SOURCE/scripts/" "$TARGET/scripts/" || true
 diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
+diff -rq "$SOURCE/agents/" "$TARGET/agents/" || true
+diff -rq "$SOURCE/harness/" "$TARGET/harness/" || true
 ```
 
 對 `diff -rq` 回報有差異的檔案，逐一執行 `diff -u` 顯示具體內容差異。
@@ -168,12 +174,15 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 ```bash
 # rsync --delete 確保 repo 側多出的檔案也會被刪除
 # -L: follow symlinks（部分 skill 是 symlink 指向 ~/.agents/skills/）
-rsync -avL --delete "$SOURCE/skills/" "$TARGET/skills/"
-rsync -avL --delete "$SOURCE/hooks/" "$TARGET/hooks/"
-rsync -avL --delete "$SOURCE/scripts/" "$TARGET/scripts/"
-rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
-rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/skills/" "$TARGET/skills/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/hooks/" "$TARGET/hooks/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/scripts/" "$TARGET/scripts/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/rules/" "$TARGET/rules/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/agents/" "$TARGET/agents/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/harness/" "$TARGET/harness/"
 ```
+
+> `--exclude='*.bak'`：knowledge-protocol.md §4 規定改 harness/rules 檔前要建 `.bak`，這些是本機暫存備份，不應進 repo。
 
 ### STEP 03: Generate Docs — 自動產生 README.md 與 CATALOG.md
 
@@ -255,6 +264,8 @@ diff -rq "$TARGET/skills/" "$SOURCE/skills/" || true
 diff -rq "$TARGET/hooks/" "$SOURCE/hooks/" || true
 diff -rq "$TARGET/scripts/" "$SOURCE/scripts/" || true
 diff -rq "$TARGET/rules/" "$SOURCE/rules/" || true
+diff -rq "$TARGET/agents/" "$SOURCE/agents/" || true
+diff -rq "$TARGET/harness/" "$SOURCE/harness/" || true
 
 # MCP Server 比對
 # 從 repo 的 mcp-servers.json 與本機 ~/.claude.json 的 mcpServers 比對
@@ -301,11 +312,15 @@ if [ -n "$LATEST_CLAUDE" ]; then
 fi
 
 # 目錄還原
-rsync -avL --delete "$TARGET/skills/" "$SOURCE/skills/"
-rsync -avL --delete "$TARGET/hooks/" "$SOURCE/hooks/"
-rsync -avL --delete "$TARGET/scripts/" "$SOURCE/scripts/"
-rsync -avL --delete "$TARGET/rules/" "$SOURCE/rules/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/skills/" "$SOURCE/skills/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/hooks/" "$SOURCE/hooks/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/scripts/" "$SOURCE/scripts/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/rules/" "$SOURCE/rules/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/agents/" "$SOURCE/agents/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/harness/" "$SOURCE/harness/"
 ```
+
+> `harness/` 還原後，CLAUDE.md 的 `<harness>` 路由表才有對應內容可讀，兩者必須一起還原。
 
 ### STEP R3: Restore MCP Servers
 
