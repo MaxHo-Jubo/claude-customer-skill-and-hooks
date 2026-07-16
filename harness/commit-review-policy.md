@@ -26,6 +26,18 @@
 - 通知步驟（所有 Tier 必跑）：`osascript` 發 macOS 通知「commit 與 review 完成（Tier N）」。
 - Tier 2/3 發現的問題若是**本次自己寫出來的壞習慣**（非既有代碼）→ 依 knowledge-protocol.md §2 存 feedback memory。
 
+## 自動強制機制（pending-review 閘門，2026-07-16 建立）
+
+> 沿革：舊版只靠 PostToolUse 印 systemMessage「提醒」跑 review，無強制力——主 agent 收到提醒後可以無視、直接開下一個 commit（ERPD-11970 b4eee29e0e 即如此，Tier 2/3 的 review 被整段跳過）。現改為 hook 機械判定 + 硬性 deny 的 fail-closed 閘門，不再依賴自覺。
+
+Tier 判定與閘門由三個 hook 自動執行，主 agent **不需**再自己讀本表憑感覺分級：
+
+1. **PostToolUse（`scripts/post-commit-review.ts`）**：git commit 成功後用 `git diff --numstat` 機械算 Tier（敏感路徑判定先於尺寸判定）。Tier 2/3 寫一個 marker 檔到 `~/.claude/state/pending-review/<repo>.json`。
+2. **PreToolUse Bash（`hooks/commit-gate-guard.ts`）**：該 repo 有未清 marker 時，**deny 新的 git commit**，強制先完成 review。放行 `--amend` / `push` / commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行（避免 brick）。
+3. **SubagentStop（`hooks/subagent-review-clear.ts`）**：review 類子 agent（`agent_type` 含 review）完成時自動清除 marker。**手動 `bun ~/.claude/scripts/clear-pending-review.ts` 仍是權威解鎖方式。**
+
+三個 hook 共用 `scripts/lib/review-marker.ts`（marker 路徑、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）。所有 hook 失敗一律 fail-open，不因自身錯誤誤擋正常 commit。手動解鎖：`bun ~/.claude/scripts/clear-pending-review.ts`。
+
 ## Blast Radius 分析（Tier 2/3 必跑；資訊性輸出，不自動修改）
 
 用 codebase-memory-mcp 對本次 commit 修改的 symbol 執行影響面分析：

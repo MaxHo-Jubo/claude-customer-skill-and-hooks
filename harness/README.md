@@ -13,8 +13,9 @@
 | [delegation-templates.md](delegation-templates.md) | 標準化派工 Prompt 模板：搜尋研究 / 功能實作 / 代碼重構 / 代碼審查 / 隔離驗收 / 失敗升級 | 派工時直接複製填空 |
 | [commit-review-policy.md](commit-review-policy.md) | Commit 後審查分級制（Tier 0~3，取代舊「強制六步」） | 每次 git commit 成功後 |
 | [knowledge-protocol.md](knowledge-protocol.md) | 知識迭代與反思協議：哪些檔可自改、踩坑格式、精簡觸發條件 | 被糾正時、想改 harness 檔案時 |
+| [harness-diagnosis.md](harness-diagnosis.md) | 本機漏水診斷書：session 注入稅實測、claude-mem/context-mode 去留評估、壞引用清單（機器專屬，不隨 sync 移植） | 質疑注入成本、評估 plugin 去留、清理死引用時 |
 
-> **本機尚未執行漏水診斷**：M4 機器的 `harness-diagnosis.md`（session 注入量實測、壞引用清單）與 `handover-letter.md`（交接信）為機器專屬檔案，不隨 sync 移植。本機診斷另案執行，方法論參考 repo `max-m4pro-setting` 分支的 M4 版本（三路唯讀審計 subagent：全域設定 / 專案層 / 記憶與外掛生態）。
+> 本機漏水診斷已於 2026-07-03 執行（Fable 5，三路唯讀審計 subagent：全域設定 / 專案層 / 記憶與外掛生態），方法論沿用 repo `max-m4pro-setting` 分支的 M4 版本。`handover-letter.md` 為 M4 機器專屬，本機無對應檔。
 
 ## 維護規則（摘要，完整版見 knowledge-protocol.md）
 

@@ -88,18 +88,10 @@
       "Bash(emulator -list-avds:*)",
       "Bash(claude mcp --help:*)",
       "Bash(claude mcp remove:*)",
-      "Bash(claude mcp add --scope user context7 -- npx -y @upstash/context7-mcp --api-key ***REMOVED-LEAKED-KEY***)",
       "Bash(claude mcp list:*)",
       "Bash(claude --version:*)",
       "Bash(npm show:*)",
       "Bash(tar:*)",
-      "mcp__plugin_serena_serena__activate_project",
-      "mcp__plugin_serena_serena__check_onboarding_performed",
-      "mcp__plugin_serena_serena__onboarding",
-      "mcp__plugin_serena_serena__list_dir",
-      "mcp__plugin_serena_serena__read_file",
-      "mcp__plugin_serena_serena__write_memory",
-      "mcp__plugin_serena_serena__think_about_whether_you_are_done",
       "Bash(adb:*)",
       "Bash(brew list:*)",
       "Bash(brew install:*)",
@@ -190,26 +182,17 @@
       "WebFetch(domain:repost.aws)",
       "Bash(cd:*)",
       "Bash(git restore:*)",
-      "mcp__plugin_serena_serena__list_memories",
-      "mcp__plugin_serena_serena__replace_content",
       "Bash(npm run lint:*)",
-      "mcp__plugin_serena_serena__create_text_file",
       "Bash(.head -20)",
-      "mcp__plugin_serena_serena__replace_symbol_body",
-      "mcp__plugin_serena_serena__read_memory",
       "Bash(npm test:*)",
       "Bash(npx jest:*)",
       "Skill(code-review:code-review)",
       "Bash(./gradlew bundleRelease)",
       "Bash(open:*)",
-      "mcp__plugin_serena_serena__find_file",
-      "mcp__plugin_serena_serena__find_symbol",
       "Bash(git grep:*)",
       "Bash(xargs:*)",
       "WebFetch(domain:jubo.atlassian.net)",
       "Bash(/Users/maxhero/.nvm/versions/node/v20.20.0/bin/claude:*)",
-      "mcp__plugin_serena_serena__search_for_pattern",
-      "mcp__plugin_serena_serena__get_symbols_overview",
       "Bash(for c in b4a3e49 3a3637b c0da0a3 040e8b5 000e1f7 ed79c9b e5672fe bbdf541 90f2d36 9ae5a85 153dbeb)",
       "Bash(do echo \"===== $c =====\")",
       "Bash(pod cache clean:*)",
@@ -233,14 +216,9 @@
       "mcp__plugin_claude-mem_mcp-search__save_memory",
       "Bash(fc-list:*)",
       "Bash(ghostty +show-config:*)",
-      "mcp__plugin_context-mode_context-mode__execute_file",
-      "mcp__plugin_context-mode_context-mode__batch_execute",
-      "mcp__plugin_context-mode_context-mode__search",
       "Bash(sed:*)",
       "Bash(bash:*)",
       "Bash(kill 88107:*)",
-      "mcp__plugin_context-mode_context-mode__execute",
-      "mcp__plugin_context-mode_context-mode__fetch_and_index",
       "Bash(CLAUDE_USER_CONTENT=\"幫我看一下這個 PR 的 code review\" node:*)",
       "Bash(CLAUDE_USER_CONTENT=\"這個改動的影響範圍有多大\" node:*)",
       "Bash(CLAUDE_TOOL_NAME=\"Write\" CLAUDE_TOOL_INPUT='{\"file_path\":\"/Users/maxhero/.claude/skills/test-new-skill/SKILL.md\"}' node:*)",
@@ -379,6 +357,30 @@
             "statusMessage": "Checking large-file read..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/commit-gate-guard.ts",
+            "timeout": 5000,
+            "statusMessage": "Checking pending-review gate..."
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SubagentStop bun /Users/maxhero/.claude/hooks/subagent-review-clear.ts",
+            "timeout": 5000,
+            "statusMessage": "Checking review auto-clear..."
+          }
+        ]
       }
     ]
   },
@@ -395,7 +397,7 @@
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "github@claude-plugins-official": false,
-    "context-mode@claude-context-mode": true,
+    "context-mode@claude-context-mode": false,
     "everything-claude-code@everything-claude-code": false,
     "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,

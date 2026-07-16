@@ -177,7 +177,9 @@ Agent(
 
 **查詢 B：assigned 給我且未完成的 ticket**
 
-JQL：`assignee = currentUser() AND status != Done AND updated >= -{days}d`
+JQL：`assignee = currentUser() AND statusCategory != Done AND updated >= -{days}d`
+
+> 用 `statusCategory != Done` 而非 `status != Done`：某些 Jira 實例的「已解決(Resolved)」status name 不是 "Done"，但 statusCategory 是 done，用 `status !=` 會把已完成 ticket 誤列入未完成。
 
 （`{days}` 為本 skill 回顧天數，預設 7）
 

@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-03（本機採用 harness 制度：CLAUDE.md 路由中心版 + harness/ 六檔本機化；rules/common/agents.md 移除；sync-my-claude-setting v1.4.0 harness 同步 + 機器專屬檔排除）
+> 上次更新：2026-07-16（pending-review 閘門機制：新增 `commit-gate-guard.ts`/`subagent-review-clear.ts` 兩個 hook + `scripts/lib/review-marker.ts`/`clear-pending-review.ts`；`post-commit-review.ts` 改為機械判定 Tier 並寫入 marker；settings.json `context-mode` 停用）
 
 ---
 
@@ -390,6 +390,7 @@
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
 | `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷 |
 | `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
+| `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open |
 
 ### PostToolUse
 
@@ -398,7 +399,7 @@
 | `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
-| `Bash` | `post-commit-review.ts` | git commit 後提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
+| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker（供 `commit-gate-guard.ts` 閘門讀取），並依 Tier 輸出對應審查步驟提醒 |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -410,6 +411,12 @@
 | 腳本 | 用途 |
 |------|------|
 | `pre-compact-snapshot.ts` | Context 壓縮前提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
+
+### SubagentStop
+
+| Matcher | 腳本 | 用途 |
+|---------|------|------|
+| —（依 payload `agent_type` 判定） | `subagent-review-clear.ts` | review 類子 agent（`agent_type` 含 review，如 pr-reviewer、pr-review-toolkit:code-reviewer）完成時，自動清除該 repo 的 pending-review marker；判定不到 review 型別或無 marker 一律不動（降級安全），手動 `clear-pending-review.ts` 仍為權威解鎖 |
 
 ### Notification
 
@@ -430,7 +437,9 @@
 | `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
-| `post-commit-review.ts` | PostToolUse hook — git commit 後提醒 Claude 執行 review 流程（步驟 2 改用 /pr-review-toolkit:review-pr） |
+| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用 |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後用 `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門阻擋下一個 commit，並依 Tier 提醒對應審查步驟 |
+| `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
 | `pr-watcher.sh` | 定期輪詢 GitHub PR，有新/更新的 PR 時發 macOS 通知，點擊觸發 review |
@@ -488,7 +497,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（14）
+### 啟用的 Plugins（13）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -502,19 +511,19 @@
 | jdtls-lsp | claude-plugins-official | Java Language Server |
 | context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
 | claude-mem | thedotmack | 跨 session 持久記憶系統 |
-| context-mode | claude-context-mode | 節省 98% context window，沙盒執行 |
 | claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 | playwright | claude-plugins-official | 瀏覽器自動化（取代 agent-browser skill） |
 
-### 停用的 Plugins（4）
+### 停用的 Plugins（5）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
 | github | claude-plugins-official | 用 gh CLI 替代 |
+| context-mode | claude-context-mode | 2026-07-16 停用（原：節省 98% context window，沙盒執行） |
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
 | document-skills | anthropic-agent-skills | 文件處理套件，目前用不到 |
-| superpowers | claude-plugins-official | 已分別啟用個別功能（context-mode 等），不需整套 |
+| superpowers | claude-plugins-official | 已分別啟用個別功能，不需整套 |
 
 ### MCP Servers
 
@@ -643,6 +652,18 @@ post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 C
   STEP 5: codebase-memory-mcp trace_path（inbound, risk_labels）→ blast radius 分析（資訊性，不自動修改；未索引則跳過）
   STEP 6: osascript macOS 通知
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
+
+pending-review 閘門（2026-07-16 新增，取代舊版純提醒無強制力的做法）：
+  post-commit-review.ts（PostToolUse Bash）
+    → git diff --numstat 機械判定 Tier（0~3）
+    → Tier 2/3 寫入 marker（~/.claude/state/pending-review/<repo>.json）
+       ↓ marker 存在
+  commit-gate-guard.ts（PreToolUse Bash）
+    → deny 該 repo 下一個 git commit（放行 --amend/push/[skip-review]；逾 4 小時自動清除放行）
+       ↓ review 完成
+  subagent-review-clear.ts（SubagentStop，agent_type 含 review）→ 自動清 marker（便利層）
+  clear-pending-review.ts（手動執行）→ 權威解鎖
+  三者共用 scripts/lib/review-marker.ts（marker 路徑推導 / git -C·cd 跨 repo 解析 / isGitCommitCommand 判定）
 
 pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
   lite: POST-COMMIT-REVIEW 自動觸發

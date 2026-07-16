@@ -97,12 +97,14 @@
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
 | PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
+| PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
-| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | 提醒 Claude 執行 POST-COMMIT-REVIEW 規則（步驟 2 用 /pr-review-toolkit:review-pr） |
+| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門使用，並提醒 Claude 執行對應審查步驟 |
 | PostToolUse | 所有工具（catch-all） | —（空 matcher） | `post_tool_error.py` | tool 失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl` |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
+| SubagentStop | 子 agent 結束 | —（依 `agent_type` 判定） | `subagent-review-clear.ts` | review 類子 agent（`agent_type` 含 review）完成時自動清除該 repo 的 pending-review marker（便利層，手動 `clear-pending-review.ts` 仍為權威解鎖） |
 | Notification | 通知 | * | (inline printf) | 終端機通知 |
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
@@ -123,8 +125,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 14 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、context-mode、claude-hud、pr-review-toolkit、claude-mem、playwright |
-| Plugins（停用） | 4 | github、everything-claude-code、document-skills、superpowers |
+| Plugins（啟用） | 13 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-hud、pr-review-toolkit、claude-mem、playwright |
+| Plugins（停用） | 5 | github、context-mode、everything-claude-code、document-skills、superpowers |
 | MCP Servers | 2 | pr-watcher、codebase-memory-mcp（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
@@ -234,6 +236,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-16: pending-review 閘門機制 — commit-gate-guard + subagent-review-clear + Tier 機械判定
+
+- **起因**：舊制 `post-commit-review.ts` 只靠 systemMessage 提醒「應執行 review」，無強制力，主 agent 可以無視提醒直接開下一個 commit（ERPD-11970 b4eee29e0e 即如此，Tier 2/3 的 review 被整段跳過）。改為 hook 機械判定 + 硬性 deny 的 fail-closed 閘門，不再依賴自覺
+- 新增 `hooks/commit-gate-guard.ts`（PreToolUse `Bash` matcher）：該 repo 有未清的 pending-review marker 時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick
+- 新增 `hooks/subagent-review-clear.ts`（SubagentStop hook）：review 類子 agent（`agent_type` 含 review，如 pr-reviewer、pr-review-toolkit:code-reviewer）完成時自動清除該 repo 的 marker（便利層，手動 clear 仍為權威解鎖）
+- 新增 `scripts/clear-pending-review.ts`：手動清除 marker、解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成後執行）
+- 新增 `scripts/lib/review-marker.ts`：三個 hook/script 共用 lib（marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）
+- `scripts/post-commit-review.ts` 大改：從純 systemMessage 提醒，改為用 `git diff --numstat` 機械判定 Tier（Tier 0 純文件/圖片、Tier 1 ≤50 行且≤2 檔、Tier 2 ≤300 行且≤5 檔、Tier 3 動到敏感路徑 `models/lib/shared` 或超過門檻），Tier 2/3 寫入 pending-review marker
+- `harness/commit-review-policy.md` 新增「自動強制機制」段落記錄三個 hook 的協作關係
+- `settings.json`：`context-mode@claude-context-mode` 由 `true` 改為 `false`（停用）；移除 serena / context-mode 相關 MCP 工具的 `permissions.allow` 條目（已不再使用）
 
 ### 2026-07-03: 本機採用 harness 制度 — CLAUDE.md 路由中心版 + 六檔本機化
 
