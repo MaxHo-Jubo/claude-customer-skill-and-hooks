@@ -2,7 +2,7 @@
 import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync } from 'fs';
 import {
-  MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, type ReviewMarker,
+  MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, type ReviewMarker,
 } from './lib/review-marker';
 
 /**
@@ -14,7 +14,7 @@ import {
  * 現改為「Tier 判定進腳本 + marker + PreToolUse deny」的 fail-closed 閘門，不再依賴自覺。
  *
  * 觸發條件：Bash 執行的命令包含 `git commit`
- * 例外：命令同時包含 `push`（commit and push 場景跳過）
+ * 例外：命令包含 `git push` 子指令（commit and push 場景跳過）
  */
 
 /** Tier 0 副檔名：文件/圖片/資料檔，不算「程式碼檔」 */
@@ -61,8 +61,8 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 03: 例外 — 命令包含 push 則跳過
-    if (command.match(/push/i)) {
+    // STEP 03: 例外 — 命令包含 git push 子指令則跳過（精確辨識，非 message 裡的 "push" 字樣）
+    if (isGitPushCommand(command)) {
       process.exit(0);
     }
 
@@ -86,8 +86,10 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 05: 解析 commit 實際目標 repo（支援 git -C / cd 到其他 repo），寫入與讀取側共用同一解析
-    const repoRoot = resolveRepoRootFromCommand(command, process.cwd());
+    // STEP 05: 解析 commit 實際目標 repo（支援 git -C / cd 到其他 repo），寫入與讀取側共用同一解析。
+    // fallback cwd 用 data.cwd || process.cwd()，與 commit-gate-guard（讀取側）對齊，
+    // 否則沒有 git -C / cd 的一般 commit 會因兩側 base 不同而算出不同 repo → marker 鎖錯/漏鎖。
+    const repoRoot = resolveRepoRootFromCommand(command, data.cwd || process.cwd());
 
     // STEP 06: 取得本次 commit 修改的檔案（在目標 repo 內查詢）
     let changedFiles: string[] = [];
@@ -137,7 +139,7 @@ process.stdin.on('end', () => {
       gateNote = writeMarker(tier, repoRoot);
     }
 
-    // STEP 09: 依 Tier 輸出對應 systemMessage
+    // STEP 10: 依 Tier 輸出對應 systemMessage
     console.log(JSON.stringify({
       systemMessage: buildMessage(tier, eslintResult, gateNote),
     }));

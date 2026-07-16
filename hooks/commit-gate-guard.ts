@@ -8,7 +8,7 @@
  * 放行條件（任一成立即不阻擋）：
  * - 非 Bash 工具、或指令不含 git commit
  * - 指令含 --amend（修正正在被 review 的 commit 是 review 流程本身，允許）
- * - 指令含 push（commit and push 是 policy 定義的 review 略過情境）
+ * - 指令含 git push 子指令（commit and push 是 policy 定義的 review 略過情境）
  * - commit message 含 [skip-review]（明確逃生門）
  * - 無法解析 repo 根目錄（fail-open，不阻斷）
  * - 無 marker、或 marker 已逾期（逾期自動清除後放行，避免永久 brick）
@@ -17,7 +17,7 @@
  */
 import { existsSync, readFileSync, unlinkSync } from 'fs';
 import {
-  markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, MARKER_MAX_AGE_MS, type ReviewMarker,
+  markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, MARKER_MAX_AGE_MS, type ReviewMarker,
 } from '../scripts/lib/review-marker';
 
 let input = '';
@@ -48,8 +48,8 @@ process.stdin.on('end', () => {
     if (/--amend/.test(command)) {
       process.exit(0);
     }
-    // STEP 03.02: commit and push 是 policy 定義的略過情境
-    if (/push/i.test(command)) {
+    // STEP 03.02: commit and push 是 policy 定義的略過情境（精確辨識 git push 指令，非 message 裡的 "push" 字樣）
+    if (isGitPushCommand(command)) {
       process.exit(0);
     }
     // STEP 03.03: 明確逃生門

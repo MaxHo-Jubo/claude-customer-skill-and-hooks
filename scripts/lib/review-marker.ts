@@ -47,6 +47,18 @@ export function isGitCommitCommand(command: string): boolean {
 }
 
 /**
+ * 判斷指令是否包含「git push」子指令——與 isGitCommitCommand 同樣用行首/分隔符錨定，
+ * 只認位於指令起始位置的 `git push`，不把 commit message 或引數裡的 "push" 字樣（如
+ * `git commit -m "移除 code push 設定"`、"push notification"）誤判為 push 指令。
+ * 用途：`git commit && git push` 是 policy 定義的 review 略過情境，需精確辨識 push 指令本身。
+ * @param command Bash 指令字串
+ * @returns 是否包含 git push 子指令
+ */
+export function isGitPushCommand(command: string): boolean {
+  return /(?:^|[\n;&|(])\s*git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*push(?![\w-])/.test(command);
+}
+
+/**
  * 依 repo 根目錄推導對應的 marker 檔案路徑。
  * 沿用專案目錄慣例：路徑分隔符換成 '-'（如 /Users/maxhero/... → -Users-maxhero-...）。
  * @param repoRoot git repo 根目錄絕對路徑
