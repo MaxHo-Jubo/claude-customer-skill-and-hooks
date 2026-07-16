@@ -375,7 +375,6 @@
 | 腳本 | 用途 |
 |------|------|
 | `detect-jira-issue.sh` | 從 git branch 名稱偵測 Jira issue 編號，注入 session context |
-| `context-mode/sessionstart.mjs` | context-mode 初始化 |
 
 ### UserPromptSubmit
 
@@ -389,7 +388,6 @@
 |---------|------|------|
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
 | `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷 |
-| `Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_*` | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 | `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open |
 
 ### PostToolUse

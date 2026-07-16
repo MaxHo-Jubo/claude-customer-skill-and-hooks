@@ -92,11 +92,9 @@
 | Hook 類型 | 觸發時機 | Matcher | 腳本 | 用途 |
 |-----------|----------|---------|------|------|
 | SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
-| SessionStart | 啟動 session | —（空 matcher） | `context-mode/sessionstart.mjs` | context-mode 初始化 |
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
-| PreToolUse | 工具執行前 | Bash\|WebFetch\|Read\|Grep\|Agent\|Task\|ctx_* | `context-mode/pretooluse.mjs` | context-mode 子代理路由 |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
