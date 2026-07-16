@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -26,12 +26,12 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 | 來源 (`~/.claude/`) | 目標 (repo) | 類型 |
 |---------------------|-------------|------|
-| `settings.json` | `settings.json` | 檔案（`model` 欄位排除，見下方安全規則） |
+| `settings.json` | `settings.json` | 檔案（遮罩 secret、`model` 欄位排除，見下方安全規則） |
 | `CLAUDE.md` | `CLAUDE.md.{YYYYMMDD}`（如 `CLAUDE.md.20260316`） | 檔案（日期後綴） |
-| `skills/` | `skills/` | 目錄 |
-| `hooks/` | `hooks/` | 目錄 |
-| `scripts/` | `scripts/` | 目錄 |
-| `rules/` | `rules/` | 目錄 |
+| `skills/` | `skills/` | 目錄（排除 `*.bak`） |
+| `hooks/` | `hooks/` | 目錄（排除 `*.bak`） |
+| `scripts/` | `scripts/` | 目錄（排除 `*.bak`） |
+| `rules/` | `rules/` | 目錄（排除 `*.bak` 與 repo 專屬 `README.md`） |
 | `harness/` | `harness/` | 目錄（排除機器專屬檔，見下方安全規則） |
 | `statusline-command.sh` | `statusline/statusline-command.sh` | 檔案 |
 | `~/.claude.json` → `mcpServers` | `mcp-servers.json` | 檔案（過濾 env） |
@@ -44,8 +44,10 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 **檔案比對：**
 ```bash
-# settings.json：排除 model 欄位（本機專屬設定，不列入同步差異）
-diff -u <(jq 'del(.model)' "$SOURCE/settings.json") <(jq 'del(.model)' "$TARGET/settings.json") || true
+# settings.json：遮罩 secret（見 mask_secrets.py）並排除 model 欄位後比對
+# SOURCE 是本機真值需遮罩；TARGET 已是遮罩過的備份，一併過濾以對齊比對，避免顯示明文或假差異
+MASK_PY="$SOURCE/skills/sync-my-claude-setting/mask_secrets.py"
+diff -u <(python3 "$MASK_PY" --del-model "$SOURCE/settings.json") <(python3 "$MASK_PY" --del-model "$TARGET/settings.json") || true
 # CLAUDE.md 比對最新的日期後綴版本
 LATEST_CLAUDE=$(ls -1 "$TARGET"/CLAUDE.md.* 2>/dev/null | sort -r | head -1)
 if [ -n "$LATEST_CLAUDE" ]; then
@@ -90,13 +92,14 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
 
 **目錄比對：**
 ```bash
-# 對每個目錄項目
-diff -rq "$SOURCE/skills/" "$TARGET/skills/" || true
-diff -rq "$SOURCE/hooks/" "$TARGET/hooks/" || true
-diff -rq "$SOURCE/scripts/" "$TARGET/scripts/" || true
-diff -rq "$SOURCE/rules/" "$TARGET/rules/" || true
+# 對每個目錄項目（一律排除 *.bak 臨時備份）
+diff -rq -x '*.bak' "$SOURCE/skills/" "$TARGET/skills/" || true
+diff -rq -x '*.bak' "$SOURCE/hooks/" "$TARGET/hooks/" || true
+diff -rq -x '*.bak' "$SOURCE/scripts/" "$TARGET/scripts/" || true
+# rules/ 額外排除 repo 專屬的 README.md（本機無此檔，不應列入差異或被刪）
+diff -rq -x '*.bak' -x 'README.md' "$SOURCE/rules/" "$TARGET/rules/" || true
 # harness/ 排除機器專屬檔（harness-diagnosis.md / handover-letter.md 不列入差異）
-diff -rq -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
+diff -rq -x '*.bak' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
 ```
 
 對 `diff -rq` 回報有差異的檔案，逐一執行 `diff -u` 顯示具體內容差異。
@@ -126,11 +129,15 @@ diff -rq -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$
 
 **檔案複製：**
 ```bash
-# settings.json：複製本機內容，但 model 欄位保留 repo 原有值（不覆蓋）
+# settings.json：遮罩 secret 後複製本機內容，但 model 欄位保留 repo 原有值（不覆蓋）
 python3 -c "
-import json
+import json, sys
+sys.path.insert(0, '$SOURCE/skills/sync-my-claude-setting')
+from mask_secrets import mask_secrets
 with open('$SOURCE/settings.json') as f:
     src = json.load(f)
+# 遮罩 permissions allow-list 等處可能夾帶的明文 secret，避免洩漏進 repo
+src = mask_secrets(src)
 try:
     with open('$TARGET/settings.json') as f:
         tgt_model = json.load(f).get('model')
@@ -183,6 +190,7 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 
 > **安全規則**：
 > - CLAUDE.md 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），禁止同步到 repo。
+> - `settings.json` 的 `permissions` allow-list 會記錄使用者執行過的 Bash 命令，可能夾帶帶明文 secret 的命令（如 `claude mcp add ... --api-key <key>`）。複製時一律經 `mask_secrets.py` 遞迴遮罩 secret（已知 key 格式如 `ctx7sk-`/`ghp_`/`glpat-`/`AKIA…`，以及 `--api-key`/`--token`/`--secret`/`--password` 後的值），禁止明文 secret 進 repo。
 > - `mcp-servers.json` 會自動過濾 `env` 欄位並遮罩 `--api-key`/`--token`/`--secret`/`--password` 後的值。
 > - `settings.json` 的 `model` 欄位為本機專屬設定（依機器/當下任務彈性切換），同步時排除、不覆蓋、不還原，repo 端維持自己原本的值。
 
@@ -190,13 +198,15 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 ```bash
 # rsync --delete 確保 repo 側多出的檔案也會被刪除
 # -L: follow symlinks（部分 skill 是 symlink 指向 ~/.agents/skills/）
-rsync -avL --delete "$SOURCE/skills/" "$TARGET/skills/"
-rsync -avL --delete "$SOURCE/hooks/" "$TARGET/hooks/"
-rsync -avL --delete "$SOURCE/scripts/" "$TARGET/scripts/"
-rsync -avL --delete "$SOURCE/rules/" "$TARGET/rules/"
-rsync -avL --delete "$SOURCE/agents/" "$TARGET/agents/"
+# --exclude='*.bak'：本機臨時備份不進 repo（同時保護 repo 側同名檔不被 --delete 清掉）
+rsync -avL --delete --exclude='*.bak' "$SOURCE/skills/" "$TARGET/skills/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/hooks/" "$TARGET/hooks/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/scripts/" "$TARGET/scripts/"
+# rules/ 額外保護 repo 專屬的 README.md（本機無此檔，--delete 會誤刪）
+rsync -avL --delete --exclude='*.bak' --exclude='README.md' "$SOURCE/rules/" "$TARGET/rules/"
+rsync -avL --delete --exclude='*.bak' "$SOURCE/agents/" "$TARGET/agents/"
 # harness/ 排除機器專屬檔；--exclude 同時保護 repo 側該兩檔不被 --delete 清掉
-rsync -avL --delete --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
+rsync -avL --delete --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
 ```
 
 > **harness 機器專屬檔規則**：`harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為**機器專屬檔案，雙向不同步**——每台機器的診斷/交接只屬於那台機器，不互相覆蓋。repo main 現存的兩檔為 M4 機器快照，維持原樣；6 個通用制度檔（README、model-dispatch、judgment-matrix、delegation-templates、knowledge-protocol、commit-review-policy）正常同步。
@@ -328,16 +338,17 @@ git push
 
 ```bash
 # 檔案比對（repo → 本機）
-# settings.json：排除 model 欄位（本機專屬設定，不列入還原差異）
-diff -u <(jq 'del(.model)' "$TARGET/settings.json") <(jq 'del(.model)' "$SOURCE/settings.json") || true
+# settings.json：遮罩 secret 並排除 model 欄位後比對（repo 已遮罩，本機端一併過濾以對齊）
+MASK_PY="$SOURCE/skills/sync-my-claude-setting/mask_secrets.py"
+diff -u <(python3 "$MASK_PY" --del-model "$TARGET/settings.json") <(python3 "$MASK_PY" --del-model "$SOURCE/settings.json") || true
 diff -u "$TARGET/statusline/statusline-command.sh" "$SOURCE/statusline-command.sh" || true
 
-# 目錄比對
-diff -rq "$TARGET/skills/" "$SOURCE/skills/" || true
-diff -rq "$TARGET/hooks/" "$SOURCE/hooks/" || true
-diff -rq "$TARGET/scripts/" "$SOURCE/scripts/" || true
-diff -rq "$TARGET/rules/" "$SOURCE/rules/" || true
-diff -rq -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
+# 目錄比對（排除 *.bak；rules 排除 repo 專屬 README.md）
+diff -rq -x '*.bak' "$TARGET/skills/" "$SOURCE/skills/" || true
+diff -rq -x '*.bak' "$TARGET/hooks/" "$SOURCE/hooks/" || true
+diff -rq -x '*.bak' "$TARGET/scripts/" "$SOURCE/scripts/" || true
+diff -rq -x '*.bak' -x 'README.md' "$TARGET/rules/" "$SOURCE/rules/" || true
+diff -rq -x '*.bak' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
 
 # MCP Server 比對
 # 從 repo 的 mcp-servers.json 與本機 ~/.claude.json 的 mcpServers 比對
@@ -400,13 +411,13 @@ if [ -n "$LATEST_CLAUDE" ]; then
   echo "⚠️  CLAUDE.md 已還原，但不含 <conn> 區段，請手動補回個人連線資訊"
 fi
 
-# 目錄還原
-rsync -avL --delete "$TARGET/skills/" "$SOURCE/skills/"
-rsync -avL --delete "$TARGET/hooks/" "$SOURCE/hooks/"
-rsync -avL --delete "$TARGET/scripts/" "$SOURCE/scripts/"
-rsync -avL --delete "$TARGET/rules/" "$SOURCE/rules/"
+# 目錄還原（排除 *.bak；rules 不還原 repo 專屬 README.md 到本機）
+rsync -avL --delete --exclude='*.bak' "$TARGET/skills/" "$SOURCE/skills/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/hooks/" "$SOURCE/hooks/"
+rsync -avL --delete --exclude='*.bak' "$TARGET/scripts/" "$SOURCE/scripts/"
+rsync -avL --delete --exclude='*.bak' --exclude='README.md' "$TARGET/rules/" "$SOURCE/rules/"
 # harness/ 還原同樣排除機器專屬檔（repo 的診斷/交接是別台機器的，不還原到本機）
-rsync -avL --delete --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
+rsync -avL --delete --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
 ```
 
 ### STEP R3: Restore MCP Servers
@@ -454,6 +465,8 @@ else:
 - `settings.json` 的 `model` 欄位不同步、不還原（雙向排除），兩邊各自保留自己原本的值
 - `harness/harness-diagnosis.md` 與 `harness/handover-letter.md` 為機器專屬檔案，雙向不同步（每台機器的診斷/交接不互相覆蓋）
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
-- 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除
+- 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除（`*.bak` 與 `rules/README.md` 除外，見安全規則）
+- `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）
+- `*.bak` 臨時備份雙向不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回
 - 如果 `diff` 回報無任何差異，直接告知使用者「已同步，無需更新」並結束
