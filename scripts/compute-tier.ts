@@ -27,17 +27,21 @@ if (!repoRoot) {
   process.exit(1);
 }
 
-// STEP 03: 取得目標 commit 短 hash（供 skill 顯示；解析失敗不阻斷，留空）
+// STEP 03: 驗證目標 commit 存在並取短 hash。
+// ref 打錯是手動模式最常見的失誤（數錯層數、hash 貼漏一碼），必須立即失敗：
+// 否則 getTierStats 會走 catch 回傳「向上取嚴」的 Tier 3，CLI 卻以 exit 0 輸出
+// TIER=3 FILES=0 LINES=0 這組自相矛盾的值，skill 會對一個不存在的 commit 跑完整 chain。
 let shortHash = '';
 try {
-  shortHash = execSync(`git rev-parse --short ${commitRef}`, {
+  shortHash = execSync(`git rev-parse --short --verify ${commitRef}^{commit}`, {
     cwd: repoRoot,
     encoding: 'utf8',
     timeout: 5000,
     stdio: ['ignore', 'pipe', 'ignore'],
   }).trim();
 } catch {
-  shortHash = '';
+  console.error(`❌ 無法解析 commit「${commitRef}」，請確認 ref 是否正確。`);
+  process.exit(1);
 }
 
 // STEP 04: 計算分級統計並以 key=value 格式輸出

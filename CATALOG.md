@@ -271,9 +271,10 @@
 - **判準權威**：`~/.claude/harness/commit-review-policy.md`（分級判定表、免跑條件、Blast Radius 節、禁止事項）。skill 不重複判定表，只定義每個 Tier 的執行步驟——兩者職責切開，避免同一份步驟寫在 hook 字串／skill／policy 三處而分歧
 - **Tier 對應 chain**：
   - Tier 0（純文件）→ 只發通知，不經 skill
+  - **Tier 3 敏感路徑**（動到 `models/`、`lib/`、`shared/`、`routes/middlewares/`、`base{controller,bean,model}`）→ **不論改動大小，先於尺寸判定**
   - Tier 1（≤50 行且≤2 檔）→ eslint → 自查 judgment-matrix.md §2 DoD checklist → 通知，**不 spawn agent**
   - Tier 2（≤300 行且≤5 檔）→ eslint → `/simplify` → pr-reviewer agent（lite）→ 自動修 CRITICAL（amend）→ blast radius → 通知
-  - Tier 3（超過門檻或動到公共 API / 共用 lib / 資料模型）→ Tier 2 全部 ＋ `/pr-review-toolkit:review-pr code comments errors tests types` → 修 Critical/Important
+  - Tier 3（超過 Tier 2 門檻）→ Tier 2 全部 ＋ `/pr-review-toolkit:review-pr code comments errors tests types` → 修 Critical/Important
 - **依賴**：`scripts/compute-tier.ts`（手動模式算 tier）、`scripts/lib/tier.ts`（與 hook 共用的判定邏輯）、pr-reviewer agent、codebase-memory-mcp（blast radius）
 
 ---
@@ -452,8 +453,8 @@
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用 |
-| `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）與 `computeTier(repoRoot, ref)`；被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧 |
-| `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts <target>` 輸出 `TIER=N`，供 `commit-review` skill 手動模式取得 tier |
+| `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
+| `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts [target]`，輸出 `TIER=N` 與 `FILES=… LINES=… SENSITIVE=… COMMIT=…` 兩行，供 `commit-review` skill 手動模式取得 tier；ref 無效時印錯誤並 exit 1（skill 見非 0 exit 即停止，不得採用 TIER 值） |
 | `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門阻擋下一個 commit，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |

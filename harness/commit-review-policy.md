@@ -13,16 +13,19 @@
 
 ## 分級判定（機械執行，不憑感覺）
 
-先跑：`git show --stat HEAD --format=""` 取得檔案清單與行數，再依下表由上而下取**第一個**命中的 Tier：
+先跑：`git diff --numstat --no-renames <ref>~1 <ref>`（預設 `<ref>` = HEAD）取得檔案清單與增刪行數，再依下表由上而下取**第一個**命中的 Tier：
 
 | Tier | 判準（由上而下先命中先用） | 執行步驟 |
 |------|--------------------------|---------|
-| **0 純文件** | 全部檔案皆為 `.md .html .txt .png .jpg .svg .csv`（文件/圖片/資料） | 只發通知 |
+| **0 純文件** | 全部檔案皆為 `.md .html .txt .png .jpg .jpeg .svg .csv`（文件/圖片/資料） | 只發通知 |
+| **3 敏感路徑** | 動到公共 API / 共用 lib / 資料模型（`models/`、`lib/`、`shared/`、`routes/middlewares/`、`base{controller,bean,model}`）——**不論改動大小，須先於尺寸判定** | commit-review skill |
 | **1 小改動** | 程式碼變更 ≤ 50 行 且 ≤ 2 個程式碼檔 | commit-review skill（不 spawn agent） |
 | **2 標準** | 程式碼變更 ≤ 300 行 且 ≤ 5 個程式碼檔 | commit-review skill |
-| **3 大改動** | 超過 Tier 2 門檻，或動到公共 API / 共用 lib / 資料模型 | commit-review skill |
+| **3 大改動** | 超過 Tier 2 門檻 | commit-review skill |
 
-- 「程式碼檔」= 非 Tier 0 副檔名清單的檔案。
+- 「程式碼檔」= 非 Tier 0 副檔名清單的檔案。副檔名比對用 basename 的最後一段，`CLAUDE.md.20260720` 這類日期後綴備份仍視為文件。
+- **敏感路徑先於尺寸**：對 `models/user.js` 改 3 行若先命中 Tier 1，就會漏掉高 blast radius 的 review，故此列必須排在 Tier 1/2 之前。實作（`scripts/lib/tier.ts`）即依此順序。
+- **rename 用 `--no-renames`**：git 預設把 rename 輸出成 `old => new` 或 `dir/{a => b}/x.ts` 合併形式，敏感路徑 regex 會漏判「把檔案搬進 `lib/`」這種高風險操作；`--no-renames` 拆成 delete + add 兩列即可正確命中。
 - **執行步驟權威定義在 commit-review skill**（`skills/commit-review/SKILL.md`）：eslint / `/simplify` / pr-reviewer / review-pr / blast radius / 通知 / feedback memory 各 Tier 的完整鏈在該 skill；本表僅保留分級判準，兩者勿重複。
 - **手動補跑**：`/commit-review [target]`（預設 HEAD，可帶 `HEAD~3` / `<hash>`）——用於 marker 逾期、想重跑、push 前主動 review。
 

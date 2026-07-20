@@ -10,8 +10,18 @@
  */
 import { execSync } from 'child_process';
 
-/** Tier 0 副檔名：文件/圖片/資料檔，不算「程式碼檔」 */
+/**
+ * Tier 0 副檔名：文件/圖片/資料檔，不算「程式碼檔」。
+ * 註：呼叫端須先 `.toLowerCase()`（本清單皆為小寫，用 endsWith 比對）。
+ */
 export const TIER0_EXTENSIONS = ['.md', '.html', '.txt', '.png', '.jpg', '.jpeg', '.svg', '.csv'];
+
+/**
+ * 日期/流水號後綴：比對副檔名前先剝除。
+ * sync-my-claude-setting skill 會產生 `CLAUDE.md.20260720` 這類日期後綴備份，
+ * 直接 endsWith('.md') 會是 false，導致自家同步產物被誤算成「程式碼檔」而虛增 Tier。
+ */
+export const NUMERIC_SUFFIX_REGEX = /\.\d+$/;
 
 /** Tier 1 上限：程式碼變更行數 */
 export const TIER1_MAX_LINES = 50;
@@ -26,6 +36,9 @@ export const TIER2_MAX_FILES = 5;
  * 動到即視為 Tier 3 的敏感路徑（公共 API / 共用 lib / 資料模型）。
  * 用 segment-aware regex：git diff 路徑相對 repo root 且無開頭斜線（如 models/x.js），
  * 故 models/lib/shared 以「行首或 /」為界比對，避免 mymodels.js 之類誤判、也不漏 repo 根層目錄。
+ * 例外：`base(controller|bean|model)` 刻意不加邊界，要抓任意層的 BaseXxx，
+ * 代價是 firebasemodel.js 之類誤判——方向是向上取嚴，可接受。
+ * 註：呼叫端須先 `.toLowerCase()`（本 regex 無 i flag）。
  */
 export const SENSITIVE_PATH_REGEX = /(^|\/)(models|lib|shared)\/|(^|\/)routes\/middlewares\/|base(controller|bean|model)/;
 
@@ -51,12 +64,18 @@ export interface TierStats {
  */
 export function getTierStats(repoRoot: string, commitRef: string = 'HEAD'): TierStats {
   try {
-    // STEP 01: 用 numstat 取指定 commit 相對其父 commit 每個檔案的增刪行數
-    const numstat = execSync(`git diff --numstat ${commitRef}~1 ${commitRef}`, {
+    // STEP 01: 用 numstat 取指定 commit 相對其父 commit 每個檔案的增刪行數。
+    // --no-renames 必要：git 預設把 rename 併成 `old => new` 或 `dir/{a => b}/x.ts` 單列，
+    // 敏感路徑 regex 會漏判「把檔案搬進 lib/」這種高 blast radius 操作（實測會誤判成 Tier 1）；
+    // 關掉 rename 偵測後拆成 delete + add 兩列，兩側路徑都能各自比對。
+    // stdio 忽略 stderr，與 review-marker.ts 的 resolveRepoRoot 一致，避免 git 錯訊噴進 hook 輸出。
+    const numstat = execSync(`git diff --numstat --no-renames ${commitRef}~1 ${commitRef}`, {
       cwd: repoRoot,
       encoding: 'utf8',
       timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
+    // 空 diff = 空 commit，對應 policy 的免跑條件，與 Tier 0 同樣只需通知
     if (!numstat) {
       return { tier: 0, codeFileCount: 0, codeLineCount: 0, touchesSensitive: false };
     }
@@ -70,8 +89,9 @@ export function getTierStats(repoRoot: string, commitRef: string = 'HEAD'): Tier
       const [addedRaw, deletedRaw, ...pathParts] = row.split('\t');
       const filePath = pathParts.join('\t');
       const lowerPath = filePath.toLowerCase();
-      // STEP 02.01: Tier 0 副檔名不算程式碼檔
-      const isTier0 = TIER0_EXTENSIONS.some((ext) => lowerPath.endsWith(ext));
+      // STEP 02.01: Tier 0 副檔名不算程式碼檔（先剝日期後綴，見 NUMERIC_SUFFIX_REGEX）
+      const comparablePath = lowerPath.replace(NUMERIC_SUFFIX_REGEX, '');
+      const isTier0 = TIER0_EXTENSIONS.some((ext) => comparablePath.endsWith(ext));
       if (isTier0) {
         continue;
       }

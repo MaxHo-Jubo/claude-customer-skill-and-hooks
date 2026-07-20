@@ -241,7 +241,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `skills/commit-review/`（v1.0.0）：review chain 的**唯一執行層**。被動模式吃 hook 算好的 `tier=N`（不重算，判定單一來源）；手動模式 `/commit-review [target]` 自己算 tier，可對 `HEAD~3` / `<hash>` 補跑
 - 新增 `scripts/lib/tier.ts`：Tier 判定邏輯從 `post-commit-review.ts` 抽出成共用模組（Tier 0 副檔名清單、Tier 1/2 行數與檔數門檻、敏感路徑 regex 全部移入）
 - 新增 `scripts/compute-tier.ts`：CLI 包裝，供 skill 手動模式呼叫，與 hook 共用同一份 `lib/tier.ts`，確保被動／手動判定不分歧
-- `scripts/post-commit-review.ts`：移除本地 `computeTier` 與 5 個常數改 import lib；`buildMessage` 從列舉步驟改為指派 `Skill(commit-review) args: "tier=N target=HEAD"`
+- `scripts/post-commit-review.ts`：移除本地 `computeTier` 與 6 個常數改 import lib；`buildMessage` 從列舉步驟改為指派 `Skill(commit-review) args: "tier=N target=HEAD"`
+- **同 commit 的 review 修掉 4 個既有缺陷**（皆實測復現，非推論）：
+  1. **CRITICAL** — `post-commit-review.ts` 的 `repoRoot ? computeTier(repoRoot) : 0`（f256e18 引入）在 repo 解析失敗時降級為 Tier 0，使用者收到「Tier 0 純文件，只需通知，無需 review」這句未經證實的斷言，而 marker 同時因缺 `repoRoot` 寫不進去 → 閘門靜默失效。改為 `number | null`，判定前提不成立時如實回報「Tier 判定失敗、閘門未上鎖」，讓「判不出來」在型別上無法偽裝成任何 Tier
+  2. **rename 漏判** — `git diff --numstat` 預設把 rename 併成 `old => new` / `dir/{a => b}/x.ts` 單列，敏感路徑 regex 比對不到。實測「把檔案搬進 `lib/`」被判成 Tier 1；加 `--no-renames` 拆成 delete + add 兩列後正確判 Tier 3
+  3. **自家同步產物誤判** — `endsWith('.md')` 對 `CLAUDE.md.20260720` 為 false，sync skill 每次產生的日期後綴備份都被算成「程式碼檔」而虛增 Tier；比對前先剝 `NUMERIC_SUFFIX_REGEX`
+  4. **eslint 錯誤分類** — 無 `eslint.config.*` 時（exit 2）報成「❌ eslint 發現問題」，會讓 Claude 去修不存在的 lint 錯誤（本 repo 實測踩到）；改為只有 exit 1 才視為 lint 問題，其餘歸環境問題。順帶修 `changedFiles.join(' ')` 未 quote
+- `scripts/compute-tier.ts`：ref 無效時原本 exit 0 並輸出 `TIER=3 FILES=0 LINES=0` 這組自相矛盾的值，skill 會對不存在的 commit 跑完整 chain；改為 `--verify <ref>^{commit}` 驗證後 exit 1，SKILL.md 補「非 0 exit 即停止」
+- `harness/commit-review-policy.md`：判定表把「敏感路徑」獨立成先於尺寸判定的一列（原表順序與實作相反，照字面執行會把 `models/user.js` 改 3 行判成 Tier 1）；修正取檔案清單的指令（原寫 `git show --stat`，實作用 `git diff --numstat`）；Tier 0 副檔名補回 `.jpeg`
 - `harness/commit-review-policy.md`：Tier 表的「執行步驟」欄收斂為「commit-review skill」，保留分級判準；新增手動補跑說明
 - `skills/skill-rules.json`：註冊 commit-review 觸發規則（`enforcement: suggest`、`priority: high`）
 - `agents/pr-reviewer.md` v1.2.0 → **v1.3.0**：新增「新增檔案例外」— 規則 9/10/11（變數/hook/interface 註解、函式 JSDoc、STEP 註解）命中本次 diff 全新建立的檔案時，跳過慣例檢查、直接依規則字面判定。起因是實測 `luna_web/frontend/react_18/src` 全庫 STEP 註解採用率僅 4.6%（48/1046 檔），慣例比對會把「大多數舊檔沒寫」誤判為主流而豁免新檔案（ERPD-11971 2026-07-15 首次 commit 即是實例）；規則 9 同時擴充涵蓋 React hook 變數與 interface/type 成員

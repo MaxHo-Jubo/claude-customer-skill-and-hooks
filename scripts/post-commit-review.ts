@@ -97,31 +97,46 @@ process.stdin.on('end', () => {
     let eslintResult = '';
     if (repoRoot && changedFiles.length > 0) {
       try {
-        execSync(`npx eslint ${changedFiles.join(' ')}`, {
+        // 檔名逐一 quote：含空白的路徑不 quote 會被 shell 拆成多個引數
+        const quotedFiles = changedFiles.map((f) => `'${f.replace(/'/g, `'\\''`)}'`).join(' ');
+        execSync(`npx eslint ${quotedFiles}`, {
           cwd: repoRoot,
           encoding: 'utf8',
-          timeout: 30000
+          timeout: 30000,
+          stdio: ['ignore', 'pipe', 'ignore'],
         });
         /** eslint 通過，無錯誤 */
         eslintResult = '✅ eslint: 全部通過';
       } catch (e: unknown) {
-        /** eslint 有錯誤，擷取輸出 */
-        const err = e as { stdout?: string; message?: string };
-        eslintResult = '❌ eslint 發現問題:\n' + (err.stdout || err.message || '').slice(0, 2000);
+        /** eslint 非 0 離開：status 1 才是真的抓到 lint 問題 */
+        const err = e as { stdout?: string; message?: string; status?: number };
+        if (err.status === 1) {
+          eslintResult = '❌ eslint 發現問題:\n' + (err.stdout || '').slice(0, 2000);
+        } else {
+          // status 2（缺 eslint.config.*）/ 127（未安裝）等屬環境問題，不是程式碼問題。
+          // 報成「發現問題」會讓 Claude 去修不存在的 lint 錯誤（本 repo 無 config，實測踩到）。
+          eslintResult = `⏭️ eslint: 未執行（無設定檔或工具不可用，exit ${err.status ?? '?'}），跳過`;
+        }
       }
+    } else if (!repoRoot) {
+      // 與「確實沒有 JS/TS 變更」區分：這裡是根本沒查成，不可謊稱已檢查過
+      eslintResult = '⚠️ eslint: 無法解析目標 repo，未執行';
     } else {
       eslintResult = '⏭️ eslint: 無 JS/TS 檔案變更，跳過';
     }
 
-    // STEP 08: 機械判定 Tier（不再由主 agent 憑感覺分級）
-    const tier = repoRoot ? computeTier(repoRoot) : 0;
+    // STEP 08: 機械判定 Tier（不再由主 agent 憑感覺分級）。
+    // repoRoot 解析失敗 → null 而非 0：判定前提不成立時不得偽裝成任何 Tier，
+    // 尤其不能落在 Tier 0（最寬鬆），否則使用者會收到「純文件，無需 review」這種
+    // 未經證實的斷言，而 marker 同時因缺 repoRoot 寫不進去 → 閘門靜默失效。
+    const tier: number | null = repoRoot ? computeTier(repoRoot) : null;
 
     // STEP 09: Tier 2/3 寫入 pending-review marker，供 PreToolUse 閘門阻擋下一個 commit。
     // 例外：命令含 [skip-review] 或 --amend 時不寫（與 commit-gate-guard 放行條件對稱，
     // 否則 skip-review 的 commit 雖自身放行，卻仍替下一個 commit 上鎖）。
     let gateNote = '';
     const skipMarker = /\[skip-review\]/i.test(command) || /--amend/.test(command);
-    if (tier >= 2 && repoRoot && !skipMarker) {
+    if (tier !== null && tier >= 2 && repoRoot && !skipMarker) {
       gateNote = writeMarker(tier, repoRoot);
     }
 
@@ -173,17 +188,29 @@ function writeMarker(tier: number, repoRoot: string): string {
 
 /**
  * 依 Tier 組出 systemMessage 內容。
- * @param tier Tier 數字
+ * @param tier Tier 數字；null 代表 repoRoot 解析失敗、判定前提不成立
  * @param eslintResult eslint 執行結果字串
  * @param gateNote 閘門說明字串（Tier 2/3 才有值）
  * @returns 完整 systemMessage
  */
-function buildMessage(tier: number, eslintResult: string, gateNote: string): string {
-  // STEP 01: Tier 0 純文件，只需通知，不經 skill
+function buildMessage(tier: number | null, eslintResult: string, gateNote: string): string {
+  // STEP 01: 判定前提不成立——如實說明，不得降級成 Tier 0 而謊稱「無需 review」。
+  // 此路徑 marker 也寫不進去（缺 repoRoot），閘門等同失效，必須讓使用者看見。
+  if (tier === null) {
+    return [
+      '⚠️ Post-commit（Tier 判定失敗）',
+      '',
+      eslintResult,
+      '',
+      '無法解析本次 commit 的目標 repo，Tier 未判定、pending-review 閘門未上鎖。',
+      '請確認 commit 指令的目標目錄；需要 review 時手動執行：/commit-review',
+    ].join('\n');
+  }
+  // STEP 02: Tier 0 純文件，只需通知，不經 skill
   if (tier === 0) {
     return `📋 Post-commit（Tier 0 純文件）\n\n${eslintResult}\n\n只需通知，無需 review。`;
   }
-  // STEP 02: Tier 1~3 一律交給 commit-review skill 執行對應 chain。
+  // STEP 03: Tier 1~3 一律交給 commit-review skill 執行對應 chain。
   // 步驟明細收斂在 skill（不再於此列舉，避免 hook 字串／skill／policy 三處分歧）：
   // Tier 1 不 spawn agent、Tier 2/3 跑 pr-reviewer／review-pr。tier 由本 hook 算好帶入，
   // skill 被動模式直接採用不重算（判定單一來源）；eslint 結果一併附上供 skill 據以修正。
