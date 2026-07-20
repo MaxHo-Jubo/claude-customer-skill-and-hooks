@@ -397,7 +397,6 @@
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "github@claude-plugins-official": false,
-    "context-mode@claude-context-mode": false,
     "everything-claude-code@everything-claude-code": false,
     "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,

@@ -53,7 +53,7 @@
 
 ---
 
-## Skills 一覽（25 個自訂 skill）
+## Skills 一覽（26 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -66,22 +66,23 @@
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
-| explore-report | `/explore-report <dir>` | 1.0.0 | 探索目錄並強制產出結構化報告 |
+| explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
+| commit-review | `/commit-review [target]` | 1.0.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.4.0 | 同步本機 Claude 設定到 Repo（v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.5.0 | 同步本機 Claude 設定到 Repo（v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
-| spec-design | `/spec-design` | 3.1.1 | 從需求到設計 spec + 實作計畫：openspec explore → brainstorming → openspec artifacts → 4-agent review → plan mode → 4-agent plan review |
-| plan-and-execute | `/plan-and-execute` | 2.0.0 | 自動執行 openspec plan：讀取 plan.md → TDD 分 Wave 實作 → 驗證。支援 `--resume`/`--wave`/`/loop` 分批執行 |
+| spec-design | `/spec-design` | 3.2.0 | 從需求到設計 spec + 實作計畫：openspec explore → brainstorming → openspec artifacts → 4-agent review → plan mode → 4-agent plan review |
+| plan-and-execute | `/plan-and-execute` | 2.1.0 | 自動執行 openspec plan：讀取 plan.md → TDD 分 Wave 實作 → 驗證。支援 `--resume`/`--wave`/`/loop` 分批執行 |
 | upgrade-to-status | `/upgrade-to-status` | 1.1.0 | 將專案升級為 status.md 架構（Milestone / 北極星 / Insight / Current / Next） |
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
-| r15-r18-verify | `/r15-r18-verify` | 1.0.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| cup-build-test | `/cup-build-test` | 1.2.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
+| r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
+| cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
 
@@ -99,7 +100,7 @@
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
-| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門使用，並提醒 Claude 執行對應審查步驟 |
+| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
 | PostToolUse | 所有工具（catch-all） | —（空 matcher） | `post_tool_error.py` | tool 失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl` |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
 | SubagentStop | 子 agent 結束 | —（依 `agent_type` 判定） | `subagent-review-clear.ts` | review 類子 agent（`agent_type` 含 review）完成時自動清除該 repo 的 pending-review marker（便利層，手動 `clear-pending-review.ts` 仍為權威解鎖） |
@@ -111,10 +112,10 @@
 
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
-| pr-reviewer | sonnet | 1.2.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent）；v1.2.0 新增「慣例優先原則」（風格類規則須先 grep 統計既有慣例才判定 issue）+ full 模式自動 post review 到 GitHub PR |
+| pr-reviewer | sonnet | 1.3.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent）；v1.3.0 新增「新增檔案例外」（規則 9/10/11 命中全新建立檔案時跳過慣例檢查、直接依規則字面判定）+ 規則 9 擴充涵蓋 React hook 變數與 interface/type 成員；v1.2.0 新增「慣例優先原則」+ full 模式自動 post review 到 GitHub PR |
 | multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計；v1.1.0 支援 `path`/`label`/`pathspec` 物件形式，可將 monorepo 依子目錄拆成多個 bucket（如 luna_web 拆 FE/BE）。用於 weekly-review STEP 01 |
 
-- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：POST-COMMIT-REVIEW 自動 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；v1.2.0 起 full 模式自動 post review 到 GitHub PR（依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE）；說明文件：`agents/README-pr-reviewer.md`
+- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：`commit-review` skill 的 Tier 2/3 chain 自動呼叫 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；v1.2.0 起 full 模式自動 post review 到 GitHub PR（依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE）；說明文件：`agents/README-pr-reviewer.md`
 - **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8；v1.1.0 起 repo 可用物件形式帶 `pathspec` 拆 monorepo 子目錄（橫跨子目錄的 full-stack commit 各 bucket 皆計入，不去重）
 
 ## Plugins & MCP Servers
@@ -124,7 +125,7 @@
 | 分類 | 數量 | 說明 |
 |------|------|------|
 | Plugins（啟用） | 13 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-hud、pr-review-toolkit、claude-mem、playwright |
-| Plugins（停用） | 5 | github、context-mode、everything-claude-code、document-skills、superpowers |
+| Plugins（停用） | 4 | github、everything-claude-code、document-skills、superpowers |
 | MCP Servers | 2 | pr-watcher、codebase-memory-mcp（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
@@ -151,7 +152,6 @@
 | Server | 來源 Plugin | 用途 |
 |--------|------------|------|
 | context7 | context7@claude-plugins-official | 即時查詢第三方套件文件，避免使用過時 API |
-| context-mode | context-mode@claude-context-mode | 沙盒執行 + FTS5 知識庫 |
 | mcp-search | claude-mem@thedotmack | 持久記憶語意搜尋 |
 | atlassian | atlassian@claude-plugins-official | Jira/Confluence CRUD |
 | typescript-lsp | typescript-lsp@claude-plugins-official | TS/JS 型別檢查與導航 |
@@ -234,6 +234,19 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-20: commit-review skill 抽取 — 執行步驟從 hook/policy 收斂到 skill
+
+- **起因**：Tier 對應的 review chain（eslint → `/simplify` → pr-reviewer → review-pr → blast radius → 通知）同時寫在 `post-commit-review.ts` 的 systemMessage 字串、`harness/commit-review-policy.md` 的表格兩處，改一邊另一邊就過時；且沒有手動補跑管道（marker 逾 4 小時自動清除後 review 就永遠不會跑）
+- 新增 `skills/commit-review/`（v1.0.0）：review chain 的**唯一執行層**。被動模式吃 hook 算好的 `tier=N`（不重算，判定單一來源）；手動模式 `/commit-review [target]` 自己算 tier，可對 `HEAD~3` / `<hash>` 補跑
+- 新增 `scripts/lib/tier.ts`：Tier 判定邏輯從 `post-commit-review.ts` 抽出成共用模組（Tier 0 副檔名清單、Tier 1/2 行數與檔數門檻、敏感路徑 regex 全部移入）
+- 新增 `scripts/compute-tier.ts`：CLI 包裝，供 skill 手動模式呼叫，與 hook 共用同一份 `lib/tier.ts`，確保被動／手動判定不分歧
+- `scripts/post-commit-review.ts`：移除本地 `computeTier` 與 5 個常數改 import lib；`buildMessage` 從列舉步驟改為指派 `Skill(commit-review) args: "tier=N target=HEAD"`
+- `harness/commit-review-policy.md`：Tier 表的「執行步驟」欄收斂為「commit-review skill」，保留分級判準；新增手動補跑說明
+- `skills/skill-rules.json`：註冊 commit-review 觸發規則（`enforcement: suggest`、`priority: high`）
+- `agents/pr-reviewer.md` v1.2.0 → **v1.3.0**：新增「新增檔案例外」— 規則 9/10/11（變數/hook/interface 註解、函式 JSDoc、STEP 註解）命中本次 diff 全新建立的檔案時，跳過慣例檢查、直接依規則字面判定。起因是實測 `luna_web/frontend/react_18/src` 全庫 STEP 註解採用率僅 4.6%（48/1046 檔），慣例比對會把「大多數舊檔沒寫」誤判為主流而豁免新檔案（ERPD-11971 2026-07-15 首次 commit 即是實例）；規則 9 同時擴充涵蓋 React hook 變數與 interface/type 成員
+- `CLAUDE.md` 對應新增 `new-file-comment-rule`，`comments` 條目擴充 hook 變數與 interface 成員
+- `settings.json`：移除已停用的 `context-mode@claude-context-mode` plugin 條目（cache 已於 2026-07-17 刪除，釋放 63M）
 
 ### 2026-07-16: pending-review 閘門機制 — commit-gate-guard + subagent-review-clear + Tier 機械判定
 

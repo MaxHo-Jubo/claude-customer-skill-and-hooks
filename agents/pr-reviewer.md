@@ -1,7 +1,7 @@
 ---
 name: pr-reviewer
-version: 1.2.0
-last_modified: 2026-06-24
+version: 1.3.0
+last_modified: 2026-07-16
 description: >
   Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。
   預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent，移植自 CI workflow）。
@@ -46,11 +46,19 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 ### 風格類規則清單（必須先做慣例檢查）
 
 - Magic Number（規則 4）
-- 變數與常數註解（規則 9）
+- 變數與常數註解（規則 9，含 React hook 變數如 `useState`/`useRef`、interface/type 成員）
 - 函式與方法註解 / JSDoc（規則 10）
 - STEP 格式註解（規則 11）— React functional component 內部已有例外
 - 註解正確性（規則 12）中的「JSDoc 完整度」面向
 - Reducer/State 操作風格（如 BASE case 是否清空、FAILURE 是否用 optional chaining 取 errors）
+
+### 新增檔案例外（2026-07-16；僅適用規則 9/10/11）
+
+規則 9（變數/常數/hook 變數/interface 註解）、規則 10（函式 JSDoc）、規則 11（STEP 格式註解）若命中的程式碼位於本次 diff 中**全新建立的檔案**（`git diff` 該檔案標示 `new file mode`），**一律跳過下方「慣例檢查流程」，直接依 CODE-REVIEW-RULE.md 規則字面判斷是否違反**，不受慣例統計影響。
+
+原因：實測 `luna_web/frontend/react_18/src` 全庫 STEP 註解採用率僅 4.6%（48/1046 檔）。若對新檔案也套用「跟全 repo 歷史比對、>50% 一致就不標」的邏輯，會把「大多數舊檔案沒寫」誤判為主流慣例，導致新規則對任何新檔案都罰不到（ERPD-11971 2026-07-15 第一次 commit 即是實例）。慣例比對的本意是避免對「修改既有檔案、有多種正確寫法擇一」的情境過度苛求（如規則 4 的 Magic Number、Reducer state 操作風格），不是用來豁免「新檔案要不要寫這個完整性標記」這種是非題。
+
+規則 4（Magic Number）、Reducer/State 操作風格、規則 12 的 JSDoc 完整度面向不在此例外範圍內，新檔案與既有檔案一律照原「慣例檢查流程」處理。
 
 ### 非風格類規則（不適用此豁免，照樣標）
 
@@ -65,6 +73,7 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 
 對風格類規則的每個候選 issue：
 
+0. **先判斷是否適用「新增檔案例外」**：候選 issue 屬規則 9/10/11 且命中檔案為本次 diff 全新建立（`new file mode`）→ 跳過以下 1-4 步，直接依規則字面判斷、違反即記錄。其餘情況（規則 4/Reducer 風格/規則 12，或規則 9/10/11 命中的是修改既有檔案）才繼續下方步驟。
 1. **執行 grep 統計**（必須有具體指令與行數，不可憑印象）：
    ```bash
    # 範例：檢查 reducer FAILURE case 是否慣例使用 optional chaining
@@ -116,7 +125,7 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 6. **安全性：禁止 log 敏感資料** — log 中不得印出 token、password、API key、session
 7. **錯誤處理：async/await + try-catch** — async/await 必須搭配 try-catch
 8. **錯誤處理：null safety** — 空值/undefined 存取必須做防護（optional chaining、guard clause、default value）
-9. **變數與常數註解** — 所有變數與常數必須加上用途註解
+9. **變數與常數註解** — 所有變數與常數必須加上用途註解（含 React hook 變數如 `useState`/`useRef`、TypeScript `interface`/`type` 本身與其成員欄位）
 10. **函式與方法註解** — 所有函式必須有 JSDoc 格式註解（用途、參數、回傳值）
 11. **STEP 格式註解** — 函式內部須有 STEP 01 起算的執行步驟註解（functional component 內部例外）
 12. **註解正確性** — 程式邏輯與註解必須一致，不得有過時/錯誤註解或錯字
@@ -130,7 +139,7 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 1. 理解規則要求
 2. 掃描 diff 中所有新增/修改的行
 3. 判斷是否有違反
-4. **若該規則屬「風格類」（見「慣例優先原則」清單）→ 執行慣例檢查（grep 統計同類檔案 + 抽樣 3-5 檔）→ 與主流慣例一致則不記錄**
+4. **若該規則屬「風格類」（見「慣例優先原則」清單）→ 執行慣例檢查（grep 統計同類檔案 + 抽樣 3-5 檔）→ 與主流慣例一致則不記錄；但規則 9/10/11 命中全新建立的檔案時套用「新增檔案例外」，跳過慣例檢查、違反即記錄**
 5. 若違反且非主流慣例：記錄 issue — 問題描述 + 違反的規則名稱 + 檔案路徑:行號 + 慣例統計結果（grep 指令 + 比例）
 
 注意：React/React Native 規則只在 diff 包含 `.jsx`、`.tsx`、`.js`、`.ts` 檔案時檢查。
@@ -157,7 +166,7 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 - Linter/typechecker/compiler 會抓的
 - 明顯有意為之的功能變更
 - 非修改行的問題
-- **新增 code 與同 repo 主流慣例一致**（grep 同類檔案 >50% 寫法相同；範本檔對範本檔複製）
+- **新增 code 與同 repo 主流慣例一致**（grep 同類檔案 >50% 寫法相同；範本檔對範本檔複製）——**此項不適用於全新建立檔案的規則 9/10/11（變數/hook/interface 註解、函式 JSDoc、STEP 格式註解）**，新檔案沒有「既有慣例」可比對，不得因舊 codebase 採用率低而降評
 - **要求解釋「業務決策」但常數已具名且已有用途註解**（如 `DEFAULT_X_MONTHS = 3` 已備註「往前 3 個月」即達標，不需解釋為何是 3）
 
 以下情況必須給 75 分以上（不得降級）：
@@ -165,11 +174,13 @@ CODE-REVIEW-RULE.md 的 17 條規則中，**風格類規則必須先比對既有
 - crash 風險：實際會 null pointer 的存取（不是 shape 已收斂後的多餘 optional chaining）
 - if 大括號、不可變性、console.log、全域變數修改 等硬性禁止
 - **以上規則被違反，且 grep 統計確認該寫法非主流慣例**（同類檔案 <30% 採用此寫法）
+- **全新建立的檔案中，規則 9/10/11 要求的變數/hook/interface 註解、函式 JSDoc、STEP 註解完全缺漏**——不論舊 codebase 全庫採用率高低，一律視同違反硬性規則
 
 風格類規則（magic number、JSDoc、變數註解、STEP 註解、reducer state 操作）的評分必須先看慣例：
 - 主流慣例一致 → 強制 ≤30（歸 INFO 或不報）
 - 並存慣例（30-50%）→ 40-60（INFO 為主）
 - 違反主流慣例（>50% code 不這樣寫）→ 才可給 75+
+- **例外：JSDoc / 變數註解 / STEP 註解命中全新建立的檔案 → 不看慣例，直接依規則 75+**
 
 diff context:
 {相關 diff 片段}

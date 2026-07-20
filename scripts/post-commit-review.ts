@@ -4,6 +4,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import {
   MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, type ReviewMarker,
 } from './lib/review-marker';
+import { computeTier } from './lib/tier';
 
 /**
  * PostToolUse hook：git commit 後依 commit-review-policy.md 機械判定 Tier，
@@ -13,28 +14,13 @@ import {
  * 主 agent 可以無視它直接開下一個 commit（ERPD-11970 b4eee29e0e 即如此，review 被跳過）。
  * 現改為「Tier 判定進腳本 + marker + PreToolUse deny」的 fail-closed 閘門，不再依賴自覺。
  *
+ * 職責分工：本 hook 只負責「偵測 commit + 機械判 Tier + 上鎖」；實際 review chain（eslint/simplify/
+ * pr-reviewer/review-pr/blast radius/通知）已收斂到 commit-review skill，systemMessage 只負責指派。
+ * Tier 判定邏輯抽在 lib/tier.ts，與 skill 手動模式（compute-tier.ts）共用同一份，避免分歧。
+ *
  * 觸發條件：Bash 執行的命令包含 `git commit`
  * 例外：命令包含 `git push` 子指令（commit and push 場景跳過）
  */
-
-/** Tier 0 副檔名：文件/圖片/資料檔，不算「程式碼檔」 */
-const TIER0_EXTENSIONS = ['.md', '.html', '.txt', '.png', '.jpg', '.jpeg', '.svg', '.csv'];
-
-/** Tier 1 上限：程式碼變更行數 */
-const TIER1_MAX_LINES = 50;
-/** Tier 1 上限：程式碼檔案數 */
-const TIER1_MAX_FILES = 2;
-/** Tier 2 上限：程式碼變更行數 */
-const TIER2_MAX_LINES = 300;
-/** Tier 2 上限：程式碼檔案數 */
-const TIER2_MAX_FILES = 5;
-
-/**
- * 動到即視為 Tier 3 的敏感路徑（公共 API / 共用 lib / 資料模型）。
- * 用 segment-aware regex：git diff 路徑相對 repo root 且無開頭斜線（如 models/x.js），
- * 故 models/lib/shared 以「行首或 /」為界比對，避免 mymodels.js 之類誤判、也不漏 repo 根層目錄。
- */
-const SENSITIVE_PATH_REGEX = /(^|\/)(models|lib|shared)\/|(^|\/)routes\/middlewares\/|base(controller|bean|model)/;
 
 /** hook 的 stdin JSON 資料 */
 let input = '';
@@ -149,74 +135,6 @@ process.stdin.on('end', () => {
 });
 
 /**
- * 依 commit-review-policy.md 判準機械計算本次 commit 的 Tier。
- * 由上而下取第一個命中：Tier 0（全文件/圖片）→ Tier 3（動到敏感路徑）→
- * Tier 1（≤50 行且≤2 檔）→ Tier 2（≤300 行且≤5 檔）→ 超過則 Tier 3。
- * @param repoRoot 目標 repo 根目錄
- * @returns Tier 數字（0~3）；判定失敗時保守回傳 3（向上取嚴）
- */
-function computeTier(repoRoot: string): number {
-  try {
-    // STEP 01: 用 numstat 取每個檔案的增刪行數
-    const numstat = execSync('git diff --numstat HEAD~1 HEAD', {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
-    if (!numstat) {
-      return 0;
-    }
-
-    // STEP 02: 逐行解析，分出「程式碼檔」與其變更行數
-    const rows = numstat.split('\n').filter(Boolean);
-    let codeFileCount = 0;
-    let codeLineCount = 0;
-    let touchesSensitive = false;
-    for (const row of rows) {
-      const [addedRaw, deletedRaw, ...pathParts] = row.split('\t');
-      const filePath = pathParts.join('\t');
-      const lowerPath = filePath.toLowerCase();
-      // STEP 02.01: Tier 0 副檔名不算程式碼檔
-      const isTier0 = TIER0_EXTENSIONS.some((ext) => lowerPath.endsWith(ext));
-      if (isTier0) {
-        continue;
-      }
-      // STEP 02.02: 累計程式碼檔數與變更行數（binary 檔以 '-' 表示，視為 0 行）
-      codeFileCount += 1;
-      const added = parseInt(addedRaw, 10) || 0;
-      const deleted = parseInt(deletedRaw, 10) || 0;
-      codeLineCount += added + deleted;
-      // STEP 02.03: 命中敏感路徑 → 標記為需 Tier 3
-      if (SENSITIVE_PATH_REGEX.test(lowerPath)) {
-        touchesSensitive = true;
-      }
-    }
-
-    // STEP 03: 全部都是文件/圖片 → Tier 0
-    if (codeFileCount === 0) {
-      return 0;
-    }
-    // STEP 04: 動到公共 API / 共用 lib / 資料模型 → Tier 3（不論大小，須先於尺寸判定，
-    //          否則對 model 的小改動會先命中 Tier 1 而漏掉高 blast radius 的 review）
-    if (touchesSensitive) {
-      return 3;
-    }
-    // STEP 05: 小改動 → Tier 1
-    if (codeLineCount <= TIER1_MAX_LINES && codeFileCount <= TIER1_MAX_FILES) {
-      return 1;
-    }
-    // STEP 06: 標準改動 → Tier 2，超過門檻 → Tier 3
-    if (codeLineCount <= TIER2_MAX_LINES && codeFileCount <= TIER2_MAX_FILES) {
-      return 2;
-    }
-    return 3;
-  } catch {
-    // 判定失敗時向上取嚴，寧可多跑一級
-    return 3;
-  }
-}
-
-/**
  * 寫入 pending-review marker 檔。
  * @param tier 本次 commit 的 Tier（2 或 3）
  * @param repoRoot 目標 repo 根目錄
@@ -261,17 +179,21 @@ function writeMarker(tier: number, repoRoot: string): string {
  * @returns 完整 systemMessage
  */
 function buildMessage(tier: number, eslintResult: string, gateNote: string): string {
-  // STEP 01: Tier 0 只需通知
+  // STEP 01: Tier 0 純文件，只需通知，不經 skill
   if (tier === 0) {
     return `📋 Post-commit（Tier 0 純文件）\n\n${eslintResult}\n\n只需通知，無需 review。`;
   }
-  // STEP 02: Tier 1 跑 eslint + 自查 DoD，不 spawn agent
-  if (tier === 1) {
-    return `📋 Post-commit（Tier 1 小改動）\n\n${eslintResult}\n\nClaude 應：修正 eslint 錯誤（如有）→ 自查 judgment-matrix.md §2 對應 DoD checklist → 通知。不 spawn agent。`;
-  }
-  // STEP 03: Tier 2/3 需跑完整 review chain，且已被閘門鎖住
-  const reviewSteps = tier === 3
-    ? 'eslint 修正（如有）→ /simplify → pr-reviewer agent → /pr-review-toolkit:review-pr code comments errors tests types → 修 Critical → blast radius → 通知'
-    : 'eslint 修正（如有）→ /simplify → pr-reviewer agent（lite）→ 修 CRITICAL（amend）→ blast radius → 通知';
-  return `📋 Post-commit（Tier ${tier}）\n\n${eslintResult}\n\nClaude 應自動執行：${reviewSteps}${gateNote}`;
+  // STEP 02: Tier 1~3 一律交給 commit-review skill 執行對應 chain。
+  // 步驟明細收斂在 skill（不再於此列舉，避免 hook 字串／skill／policy 三處分歧）：
+  // Tier 1 不 spawn agent、Tier 2/3 跑 pr-reviewer／review-pr。tier 由本 hook 算好帶入，
+  // skill 被動模式直接採用不重算（判定單一來源）；eslint 結果一併附上供 skill 據以修正。
+  return [
+    `📋 Post-commit（Tier ${tier}）`,
+    '',
+    eslintResult,
+    '',
+    `Claude 應執行 commit-review skill 跑 Tier ${tier} 的 review chain：`,
+    `  Skill(commit-review) args: "tier=${tier} target=HEAD"`,
+    gateNote,
+  ].join('\n');
 }

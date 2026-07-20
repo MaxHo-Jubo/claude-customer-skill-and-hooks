@@ -64,12 +64,12 @@
 
 **提供的 Skills（20+ 個）**：涵蓋 frontend-patterns、backend-patterns、golang-patterns、python-patterns、postgres-patterns、django-*、springboot-*、coding-standards、continuous-learning 等
 
-### context-mode（claude-context-mode，v0.9.16）
+### context-mode（claude-context-mode，v0.9.16）— 已移除
 
 - **作者**：Mert Koseoğlu
-- **狀態**：❌ 停用
+- **狀態**：🗑️ 已移除（2026-07-16 停用 → 2026-07-17 刪除 plugin cache 釋放 63M → 2026-07-20 從 `settings.json` 移除條目）
 - **說明**：節省 98% context window 的 MCP 插件。支援 11 種語言的沙盒執行、FTS5 知識庫與 BM25 排序、意圖驅動搜尋
-- **Skills**：`/context-mode`、`/doctor`、`/stats`、`/upgrade`
+- **移除原因**：與 `codebase-memory-mcp` 職責重疊，實際未使用；保留條目只是死設定
 
 ### anthropic-agent-skills（Anthropic 官方範例）
 
@@ -91,7 +91,7 @@
 | typescript-lsp | claude-plugins-official | — | TypeScript/JS 語言伺服器，提供型別檢查與程式碼導航 |
 | playwright | claude-plugins-official | stdio | 瀏覽器自動化，E2E 測試與網頁操作 |
 
-> `context-mode` 已停用，其 MCP server 不再運行；`codebase-memory-mcp` 為 user-scope MCP（定義於 `~/.claude.json`，非插件，見 `mcp-servers.json`）。
+> `context-mode` 已完全移除（cache 已刪、`settings.json` 條目已清），其 MCP server 不再運行；`codebase-memory-mcp` 為 user-scope MCP（定義於 `~/.claude.json`，非插件，見 `mcp-servers.json`）。
 
 ---
 

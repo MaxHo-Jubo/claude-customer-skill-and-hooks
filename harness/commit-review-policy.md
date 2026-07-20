@@ -18,13 +18,13 @@
 | Tier | 判準（由上而下先命中先用） | 執行步驟 |
 |------|--------------------------|---------|
 | **0 純文件** | 全部檔案皆為 `.md .html .txt .png .jpg .svg .csv`（文件/圖片/資料） | 只發通知 |
-| **1 小改動** | 程式碼變更 ≤ 50 行 且 ≤ 2 個程式碼檔 | eslint（有設定檔才跑）→ 自查 judgment-matrix.md §2 對應 DoD checklist → 通知。**不 spawn agent** |
-| **2 標準** | 程式碼變更 ≤ 300 行 且 ≤ 5 個程式碼檔 | eslint → `/simplify` → pr-reviewer agent（lite）→ 自動修 CRITICAL（修完 amend）→ blast radius（見下）→ 通知 |
-| **3 大改動** | 超過 Tier 2 門檻，或動到公共 API / 共用 lib / 資料模型 | Tier 2 全部 ＋ `/pr-review-toolkit:review-pr code comments errors tests types` → 修 Critical/Important（不另 commit）→ 通知 |
+| **1 小改動** | 程式碼變更 ≤ 50 行 且 ≤ 2 個程式碼檔 | commit-review skill（不 spawn agent） |
+| **2 標準** | 程式碼變更 ≤ 300 行 且 ≤ 5 個程式碼檔 | commit-review skill |
+| **3 大改動** | 超過 Tier 2 門檻，或動到公共 API / 共用 lib / 資料模型 | commit-review skill |
 
 - 「程式碼檔」= 非 Tier 0 副檔名清單的檔案。
-- 通知步驟（所有 Tier 必跑）：`osascript` 發 macOS 通知「commit 與 review 完成（Tier N）」。
-- Tier 2/3 發現的問題若是**本次自己寫出來的壞習慣**（非既有代碼）→ 依 knowledge-protocol.md §2 存 feedback memory。
+- **執行步驟權威定義在 commit-review skill**（`skills/commit-review/SKILL.md`）：eslint / `/simplify` / pr-reviewer / review-pr / blast radius / 通知 / feedback memory 各 Tier 的完整鏈在該 skill；本表僅保留分級判準，兩者勿重複。
+- **手動補跑**：`/commit-review [target]`（預設 HEAD，可帶 `HEAD~3` / `<hash>`）——用於 marker 逾期、想重跑、push 前主動 review。
 
 ## 自動強制機制（pending-review 閘門，2026-07-16 建立）
 
@@ -32,11 +32,11 @@
 
 Tier 判定與閘門由三個 hook 自動執行，主 agent **不需**再自己讀本表憑感覺分級：
 
-1. **PostToolUse（`scripts/post-commit-review.ts`）**：git commit 成功後用 `git diff --numstat` 機械算 Tier（敏感路徑判定先於尺寸判定）。Tier 2/3 寫一個 marker 檔到 `~/.claude/state/pending-review/<repo>.json`。
+1. **PostToolUse（`scripts/post-commit-review.ts`）**：git commit 成功後用 `git diff --numstat` 機械算 Tier（敏感路徑判定先於尺寸判定；判定邏輯抽在 `scripts/lib/tier.ts`）。Tier 2/3 寫一個 marker 檔到 `~/.claude/state/pending-review/<repo>.json`，並以 systemMessage 指派主 agent 執行 commit-review skill 跑對應 chain（hook 不再列舉步驟）。
 2. **PreToolUse Bash（`hooks/commit-gate-guard.ts`）**：該 repo 有未清 marker 時，**deny 新的 git commit**，強制先完成 review。放行 `--amend` / `push` / commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行（避免 brick）。
 3. **SubagentStop（`hooks/subagent-review-clear.ts`）**：review 類子 agent（`agent_type` 含 review）完成時自動清除 marker。**手動 `bun ~/.claude/scripts/clear-pending-review.ts` 仍是權威解鎖方式。**
 
-三個 hook 共用 `scripts/lib/review-marker.ts`（marker 路徑、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）。所有 hook 失敗一律 fail-open，不因自身錯誤誤擋正常 commit。手動解鎖：`bun ~/.claude/scripts/clear-pending-review.ts`。
+三個 hook 共用 `scripts/lib/review-marker.ts`（marker 路徑、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）；Tier 判定共用 `scripts/lib/tier.ts`，與 commit-review skill 手動模式（`scripts/compute-tier.ts`）同一份，確保被動／手動判定不分歧。所有 hook 失敗一律 fail-open，不因自身錯誤誤擋正常 commit。手動解鎖：`bun ~/.claude/scripts/clear-pending-review.ts`。
 
 ## Blast Radius 分析（Tier 2/3 必跑；資訊性輸出，不自動修改）
 

@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-16（pending-review 閘門機制：新增 `commit-gate-guard.ts`/`subagent-review-clear.ts` 兩個 hook + `scripts/lib/review-marker.ts`/`clear-pending-review.ts`；`post-commit-review.ts` 改為機械判定 Tier 並寫入 marker；settings.json `context-mode` 停用）
+> 上次更新：2026-07-20（新增 `commit-review` skill 作為 review chain 唯一執行層；Tier 判定抽出 `scripts/lib/tier.ts` 供 hook 與 skill 共用 + `compute-tier.ts` CLI；`pr-reviewer` v1.3.0 新增檔案例外；settings.json 移除已停用的 `context-mode` 條目）
 
 ---
 
@@ -104,7 +104,7 @@
 - **載入狀態**：`user-invocable-only`（只手動觸發）
 - **依賴**：git、claude-mem MCP、auto memory
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.4.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.5.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -113,14 +113,15 @@
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`；**STEP 03.0 載入 `skills-sources.json`**（read-only），在重新產生時自動為登錄的外部 skill 補上「來源」欄位
   4. Commit & Push — 根據差異報告產生 commit message 並推送
+- **secret 遮罩與同步保護（v1.5.0 新增）**：三個結構性缺陷一次修掉 —（1）新增 `mask_secrets.py`，`settings.json` 複製與比對前遞迴遮罩 `permissions` 中的明文 secret（已知格式 `ctx7sk-`/`ghp_`/`glpat-`/`AKIA…`，以及 `--api-key`/`--token`/`--secret`/`--password` 後的值），修掉 repo 曾夾帶明文 context7 API key 的根因；（2）`rules/` 同步與還原都排除 repo 專屬 `README.md`，不再被 `--delete` 誤刪；（3）所有目錄 diff/rsync 排除 `*.bak` 臨時備份。正向同步與 restore 兩方向一致套用
 - **harness 機器專屬檔排除（v1.4.0 新增）**：`harness/` 納入同步清單，但 `harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為機器專屬檔案**雙向不同步**（rsync `--exclude`，同時保護 repo 側不被 `--delete` 清掉）——每台機器的診斷/交接不互相覆蓋；repo 現存兩檔為 M4 機器快照
 - **model 欄位排除（v1.3.0 新增）**：`settings.json` 的 `model` 欄位為本機/repo 各自獨立設定，diff 比對用 `jq 'del(.model)'` 排除；正向複製與反向 restore 都改用 Python 合併寫入，保留目標端原本的 `model` 值，不被來源覆蓋。起因：本機依任務彈性切換 model（如 `opus[1m]` ↔ `sonnet`），不該被同步/還原動作洗掉。
 - **source 標註機制（v1.2.0 新增）**：repo 根目錄 `skills-sources.json` 記錄外部 skill 出處（schema：`{"<skill>": {"source": URL, "installed": "YYYY-MM-DD", "note": ...}}`）。**由使用者手動維護，sync skill 永遠 read-only**（不寫入、不增刪、不修改）。3.4 一致性檢查只提示 sources.json 含已不存在 skill，不自動清理。
 - **同步清單**：`settings.json`（排除 `model` 欄位）、`mcp-servers.json`、`CLAUDE.md`（日期後綴 `CLAUDE.md.YYYYMMDD`，移除 `<conn>` 區段後儲存，自動清理舊備份）、`skills/`、`hooks/`、`scripts/`、`rules/`、`harness/`（排除機器專屬檔）、`statusline-command.sh`
 - **MCP Server 同步**：支援 MCP Server 設定同步（過濾 env 敏感資料），新增 restore 反向同步模式（從 repo 還原到本機）
 - **安全規則**：`CLAUDE.md` 的 `<conn>` 區段包含個人連線資訊（Jira cloud-id、username、專案路徑），同步時強制移除，禁止出現在 repo
-- **依賴**：git、rsync、sed、jq
-- **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步；`model` 欄位與 harness 機器專屬檔雙向排除
+- **依賴**：git、rsync、sed、jq、python3（`mask_secrets.py`）
+- **注意**：`~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤；`settings.local.json` 不同步；`model` 欄位、harness 機器專屬檔、`*.bak` 與 `rules/README.md` 雙向排除
 
 #### `/neat-freak` — 跨平台知識庫整理（潔癖級）
 
@@ -137,7 +138,7 @@
 - **與既有 skills 區隔**：偏向 docs/ 三層整理（給下游、人類同事看）；weekly-review 偏個人記憶 hygiene；sync-my-claude-setting 是把 `.claude/` 推到 repo
 - **依賴**：無外部依賴（純文件編輯）
 
-#### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.1.1）
+#### `/spec-design` — 需求探索到設計 Spec + 實作計畫（v3.2.0）
 
 - **位置**：`~/.claude/skills/spec-design/SKILL.md`
 - **用法**：
@@ -155,7 +156,7 @@
 - **依賴**：superpowers plugin（必要）、`@fission-ai/openspec` CLI（必要）
 - **不適用於**：讀原始碼產 spec（用 spec-module）、重構既有程式碼、寫測試、bug fix
 
-#### `/plan-and-execute` — 自動執行 openspec plan（v2.0.0）
+#### `/plan-and-execute` — 自動執行 openspec plan（v2.1.0）
 
 - **位置**：`~/.claude/skills/plan-and-execute/SKILL.md`
 - **用法**：
@@ -222,7 +223,7 @@
 - **框架支援**：Flutter integration_test（完整）、React Testing Library / Playwright / Cypress（對照表）
 - **依賴**：依專案 E2E 框架而定
 
-#### `/explore-report <dir>` — 探索報告（v1.0.0）
+#### `/explore-report <dir>` — 探索報告（v1.1.0）
 
 - **位置**：`~/.claude/skills/explore-report/SKILL.md`
 - **用法**：`/explore-report <directory>`、`--to-spec`
@@ -259,6 +260,21 @@
   - Step 3：彙整報告（🔴 Critical / 🟡 Structural / 🟢 Incremental）
 - **特性**：`disable-model-invocation: true`（不會被自動觸發，僅手動執行）
 - **依賴**：無外部依賴
+
+#### `/commit-review [target]` — Commit 後分級 review chain（v1.0.0）
+
+- **位置**：`~/.claude/skills/commit-review/SKILL.md`
+- **用法**：
+  - 被動（hook 指派）：commit 後 `post-commit-review.ts` 已算好 Tier，透過 systemMessage 下 `Skill(commit-review) args: "tier=N target=HEAD"`；**此模式 tier 已知直接採用、不重算**（判定單一來源）
+  - 手動：`/commit-review`（對 HEAD）、`/commit-review HEAD~3`、`/commit-review <hash>` — 用於 marker 逾期補跑、想重跑、push 前主動 review、對舊 commit 補 review；手動模式自己跑 `bun ~/.claude/scripts/compute-tier.ts <target>` 算 tier
+- **定位**：整套 pending-review 機制的**執行層**。分級判定由 hook 負責、強制力由 `commit-gate-guard.ts`（PreToolUse deny）提供，本 skill 只負責「跑對應 Tier 的步驟」
+- **判準權威**：`~/.claude/harness/commit-review-policy.md`（分級判定表、免跑條件、Blast Radius 節、禁止事項）。skill 不重複判定表，只定義每個 Tier 的執行步驟——兩者職責切開，避免同一份步驟寫在 hook 字串／skill／policy 三處而分歧
+- **Tier 對應 chain**：
+  - Tier 0（純文件）→ 只發通知，不經 skill
+  - Tier 1（≤50 行且≤2 檔）→ eslint → 自查 judgment-matrix.md §2 DoD checklist → 通知，**不 spawn agent**
+  - Tier 2（≤300 行且≤5 檔）→ eslint → `/simplify` → pr-reviewer agent（lite）→ 自動修 CRITICAL（amend）→ blast radius → 通知
+  - Tier 3（超過門檻或動到公共 API / 共用 lib / 資料模型）→ Tier 2 全部 ＋ `/pr-review-toolkit:review-pr code comments errors tests types` → 修 Critical/Important
+- **依賴**：`scripts/compute-tier.ts`（手動模式算 tier）、`scripts/lib/tier.ts`（與 hook 共用的判定邏輯）、pr-reviewer agent、codebase-memory-mcp（blast radius）
 
 ---
 
@@ -310,7 +326,7 @@
 - **適用時機**：session 結束前、預感 rate limit、長時間離開前
 - **錯誤追蹤**：失敗時記錄到 `~/.claude/.learnings/ERRORS.jsonl`
 
-#### `/r15-r18-verify` — R15→R18 遷移驗證（v1.0.0）
+#### `/r15-r18-verify` — R15→R18 遷移驗證（v1.4.0）
 
 - **位置**：`~/.claude/skills/r15-r18-verify/SKILL.md`
 - **用法**：`/r15-r18-verify`、「驗證 r18」、「比對 r15 r18」、「遷移驗證」
@@ -397,7 +413,7 @@
 | `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
-| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker（供 `commit-gate-guard.ts` 閘門讀取），並依 Tier 輸出對應審查步驟提醒 |
+| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（供 `commit-gate-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD` 的 chain（步驟明細在 skill，hook 不列舉） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -436,7 +452,9 @@
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用 |
-| `post-commit-review.ts` | PostToolUse hook — git commit 後用 `git diff --numstat` 機械判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門阻擋下一個 commit，並依 Tier 提醒對應審查步驟 |
+| `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）與 `computeTier(repoRoot, ref)`；被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧 |
+| `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts <target>` 輸出 `TIER=N`，供 `commit-review` skill 手動模式取得 tier |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門阻擋下一個 commit，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
@@ -452,10 +470,10 @@
 
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
-| pr-reviewer | sonnet | 1.2.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告；v1.2.0 新增慣例優先原則 + full 模式自動 post GitHub PR review |
+| pr-reviewer | sonnet | 1.3.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告；v1.3.0 新增「新增檔案例外」；v1.2.0 新增慣例優先原則 + full 模式自動 post GitHub PR review |
 | multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計；v1.1.0 支援 pathspec 物件形式拆 monorepo 子目錄 |
 
-### pr-reviewer — Code Review Agent（v1.2.0）
+### pr-reviewer — Code Review Agent（v1.3.0）
 
 - **位置**：`~/.claude/agents/pr-reviewer.md`
 - **模型**：sonnet
@@ -463,8 +481,9 @@
 - **模式**：
   - **Lite（預設）**：單 agent 逐條比對 CODE-REVIEW-RULE.md（17 條規則）+ Haiku 信心評分 → 分類（CRITICAL/MINOR/INFO）+ 品質評分（30 分制）
   - **Full**：指定 PR 時啟用，5 個平行 Sonnet agent（規則合規 / Shallow Bug Scan / Git Blame 歷史 / PR Comments / Code Comments）+ Haiku 信心評分；**v1.2.0 起自動 post review 到 GitHub PR**（review event 依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE；inline comment 走 `gh api repos/.../pulls/<n>/reviews`，無權限或行號超出 hunk 時保留 terminal 輸出並印錯誤），terminal 結構化輸出仍保留供 debug
+- **v1.3.0 新增「新增檔案例外」**：規則 9（變數/常數/React hook 變數/interface 成員註解）、規則 10（函式 JSDoc）、規則 11（STEP 格式註解）若命中本次 diff 中**全新建立的檔案**（`git diff` 標示 `new file mode`），跳過慣例檢查流程、直接依 CODE-REVIEW-RULE.md 字面判定，違反即記錄且不得因舊 codebase 採用率低而降評。起因：實測 `luna_web/frontend/react_18/src` 全庫 STEP 註解採用率僅 4.6%（48/1046 檔），慣例比對會把「大多數舊檔沒寫」誤判為主流，導致新規則對任何新檔案都罰不到（ERPD-11971 2026-07-15 首次 commit 即是實例）。規則 4（Magic Number）、Reducer/State 操作風格、規則 12 的 JSDoc 完整度面向**不在例外範圍**，新舊檔案一律照原慣例檢查流程
 - **v1.2.0 新增「慣例優先原則」**：風格類規則（Magic Number / 變數常數註解 / 函式註解 / STEP 格式註解 / 部分註解正確性 / Reducer 慣例）標 issue 前，須先 `grep` 統計既有寫法（抽樣 3-5 檔），主流慣例（>50%）一致 → 不標；30-50% 並存 → 可放 INFO；<30% → 可標 MINOR；範本檔強訊號（新增 code 明顯複製既有檔）也視為主流慣例代表。安全性（hardcoded secrets、log 敏感資料）、null safety crash 風險、if 大括號、不可變性、全域變數修改、React/RN 規則等非風格類規則不適用此豁免
-- **觸發方式**：POST-COMMIT-REVIEW 自動觸發（lite）或手動指定 PR（full）
+- **觸發方式**：`commit-review` skill 的 Tier 2/3 chain 自動呼叫（lite）或手動指定 PR（full）
 - **檔案過濾**：排除 `*.md`、`*.json`、`*.yml`、`*.yaml`
 - **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
 - **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent；v1.2.0 起說明「不需外部 `review-pr.sh`」，因 full 模式已內建 post）
@@ -513,12 +532,11 @@
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 | playwright | claude-plugins-official | 瀏覽器自動化（取代 agent-browser skill） |
 
-### 停用的 Plugins（5）
+### 停用的 Plugins（4）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
 | github | claude-plugins-official | 用 gh CLI 替代 |
-| context-mode | claude-context-mode | 2026-07-16 停用（原：節省 98% context window，沙盒執行） |
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
 | document-skills | anthropic-agent-skills | 文件處理套件，目前用不到 |
 | superpowers | claude-plugins-official | 已分別啟用個別功能，不需整套 |
@@ -549,7 +567,6 @@
 | Server | 來源 Plugin | 用途 |
 |--------|------------|------|
 | context7 | context7@claude-plugins-official | 取得最新函式庫文件與範例程式碼 |
-| context-mode | context-mode@claude-context-mode | 沙盒執行 + FTS5 知識庫 |
 | mcp-search | claude-mem@thedotmack | 持久記憶語意搜尋 |
 | atlassian | atlassian@claude-plugins-official | Jira/Confluence CRUD |
 | typescript-lsp | typescript-lsp@claude-plugins-official | TS/JS 型別檢查與導航 |
@@ -642,18 +659,20 @@ auto memory ──→ weekly-review（整理 + skill 錯誤分析）
 
 health（獨立稽核，無外部依賴）
 
-post-commit-review hook ──→ CLAUDE.md POST-COMMIT-REVIEW 規則（驅動 Claude）
-  STEP 1: eslint → amend commit（有錯誤時）
-  STEP 2: code-simplifier:code-simplifier agent → amend commit（有修改時）
-  STEP 3: pr-reviewer agent（lite）→ CODE-REVIEW-RULE.md 合規，CRITICAL 自動修正
-  STEP 4: /pr-review-toolkit:review-pr → 自動修正 Critical/Important issue
-  STEP 5: codebase-memory-mcp trace_path（inbound, risk_labels）→ blast radius 分析（資訊性，不自動修改；未索引則跳過）
-  STEP 6: osascript macOS 通知
+post-commit-review hook ──→ commit-review skill（唯一執行層，2026-07-20 抽取）
+  hook 只做：偵測 commit → lib/tier.ts 算 Tier → 上 marker → systemMessage 指派 skill
+  skill 依 Tier 跑 chain：
+    Tier 0: 只發通知（不經 skill）
+    Tier 1: eslint → 自查 judgment-matrix.md §2 DoD → 通知（不 spawn agent）
+    Tier 2: eslint → /simplify → pr-reviewer agent（lite）→ 修 CRITICAL（amend）→ blast radius → 通知
+    Tier 3: Tier 2 全部 ＋ /pr-review-toolkit:review-pr code comments errors tests types → 修 Critical/Important
+  分級判準權威：harness/commit-review-policy.md（skill 不重複判定表）
+  blast radius：codebase-memory-mcp trace_path（inbound, risk_labels）；資訊性輸出不自動修改，未索引則跳過
 post_tool_error hook ──→ ERRORS.jsonl ──→ weekly-review STEP 06-08（錯誤分析）
 
 pending-review 閘門（2026-07-16 新增，取代舊版純提醒無強制力的做法）：
   post-commit-review.ts（PostToolUse Bash）
-    → git diff --numstat 機械判定 Tier（0~3）
+    → git diff --numstat 機械判定 Tier（0~3，邏輯在 scripts/lib/tier.ts）
     → Tier 2/3 寫入 marker（~/.claude/state/pending-review/<repo>.json）
        ↓ marker 存在
   commit-gate-guard.ts（PreToolUse Bash）
@@ -662,11 +681,13 @@ pending-review 閘門（2026-07-16 新增，取代舊版純提醒無強制力的
   subagent-review-clear.ts（SubagentStop，agent_type 含 review）→ 自動清 marker（便利層）
   clear-pending-review.ts（手動執行）→ 權威解鎖
   三者共用 scripts/lib/review-marker.ts（marker 路徑推導 / git -C·cd 跨 repo 解析 / isGitCommitCommand 判定）
+  Tier 判定共用 scripts/lib/tier.ts：hook（被動）與 compute-tier.ts（skill 手動模式）同一份，判定不分歧
 
 pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
-  lite: POST-COMMIT-REVIEW 自動觸發
+  lite: commit-review skill 的 Tier 2/3 chain 自動呼叫
   full: 手動指定 PR → 5 平行 Sonnet agents + Haiku 信心評分 → 自動 post GitHub PR review（v1.2.0）
+  新增檔案例外（v1.3.0）：規則 9/10/11 命中 new file mode 的檔案 → 跳過慣例檢查、依規則字面判定
 
 codebase-memory-mcp ──→ TOOL-USAGE graph-first 規則（已索引專案優先 search_graph/trace_path 取代 Grep/手動追呼叫鏈）
-                      ──→ POST-COMMIT-REVIEW STEP 5（blast radius 分析）
+                      ──→ commit-review skill Tier 2/3 blast radius 分析
 ```
