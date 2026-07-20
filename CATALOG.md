@@ -104,7 +104,7 @@
 - **載入狀態**：`user-invocable-only`（只手動觸發）
 - **依賴**：git、claude-mem MCP、auto memory
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.5.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.6.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -112,7 +112,10 @@
   1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開）
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`；**STEP 03.0 載入 `skills-sources.json`**（read-only），在重新產生時自動為登錄的外部 skill 補上「來源」欄位
-  4. Commit & Push — 根據差異報告產生 commit message 並推送
+  4. Commit — 根據差異報告產生 commit message 並 commit（**不 push**）
+  5. Review — 依 hook 判定的 Tier 跑 `commit-review` skill；Tier 0 只需通知
+  6. Push — review 完成、修正 `--amend` 收進同一個 commit 後才推送，並驗證兩個 remote 對齊
+- **push 移到 review 之後（v1.6.0 新增）**：舊制 STEP 04 是「Commit & Push」，review 在推送後才跑，修正只能另開 fix commit（2026-07-20 實際踩到）。改為 commit → review → push 三步分離後，review 修出的問題可直接 `--amend` 收進同一個 commit。同時新增兩條硬性規則：（1）**review 修正必須先落回本機 `~/.claude/` 再 rsync 到 repo**——只改 repo 端會被下次同步的本機舊版覆蓋掉，修正憑空消失；（2）**push 被 non-fast-forward 拒絕時先查成因再動作**，不反射性 force push（此 repo 曾因 `filter-repo` 清 secret 重寫歷史，只 force push 了一個 remote，另一個停在含明文 API key 的舊歷史達 4 天）
 - **secret 遮罩與同步保護（v1.5.0 新增）**：三個結構性缺陷一次修掉 —（1）新增 `mask_secrets.py`，`settings.json` 複製與比對前遞迴遮罩 `permissions` 中的明文 secret（已知格式 `ctx7sk-`/`ghp_`/`glpat-`/`AKIA…`，以及 `--api-key`/`--token`/`--secret`/`--password` 後的值），修掉 repo 曾夾帶明文 context7 API key 的根因；（2）`rules/` 同步與還原都排除 repo 專屬 `README.md`，不再被 `--delete` 誤刪；（3）所有目錄 diff/rsync 排除 `*.bak` 臨時備份。正向同步與 restore 兩方向一致套用
 - **harness 機器專屬檔排除（v1.4.0 新增）**：`harness/` 納入同步清單，但 `harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為機器專屬檔案**雙向不同步**（rsync `--exclude`，同時保護 repo 側不被 `--delete` 清掉）——每台機器的診斷/交接不互相覆蓋；repo 現存兩檔為 M4 機器快照
 - **model 欄位排除（v1.3.0 新增）**：`settings.json` 的 `model` 欄位為本機/repo 各自獨立設定，diff 比對用 `jq 'del(.model)'` 排除；正向複製與反向 restore 都改用 Python 合併寫入，保留目標端原本的 `model` 值，不被來源覆蓋。起因：本機依任務彈性切換 model（如 `opus[1m]` ↔ `sonnet`），不該被同步/還原動作洗掉。

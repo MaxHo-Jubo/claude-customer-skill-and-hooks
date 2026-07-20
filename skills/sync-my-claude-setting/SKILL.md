@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.5.0
+version: 1.6.0
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -10,7 +10,7 @@ version: 1.5.0
 
 ## 使用方式
 
-- `/sync-my-claude-setting` — 完整四步驟同步（本機 → repo）
+- `/sync-my-claude-setting` — 完整六步驟同步（本機 → repo）：Diff → Copy → Generate Docs → Commit → Review → Push
 - `/sync-my-claude-setting restore` — 反向同步（repo → 本機），含完整設定與 MCP Server
 
 ## 常數定義
@@ -304,7 +304,7 @@ jq -r 'to_entries | map(select(.key | startswith("_") | not)) | .[].key' "$SOURC
 ⚠️  skills-sources.json 有 'old-skill' 但 skills/ 已無此目錄，請手動清理 sources 條目
 ```
 
-### STEP 04: Commit & Push
+### STEP 04: Commit（先不 push）
 
 ```bash
 cd "$TARGET"
@@ -323,8 +323,66 @@ chore: 同步本機設定，{變更摘要}
 
 ```bash
 git commit -m "{message}"
+```
+
+> **不在此步 push**：commit 後的 review（STEP 05）可能改出修正，未推送前可以直接 `--amend` 收進同一個 commit；先推了就只能另開 commit 或改寫已發布歷史。詳見 STEP 06。
+
+### STEP 05: Review（commit-review chain）
+
+commit 成功後 PostToolUse hook 會算好 Tier 並指派 `commit-review` skill。**依 hook 帶入的 tier 執行，不要跳過**：
+
+```
+Skill(commit-review) args: "tier=N target=HEAD"
+```
+
+- **Tier 0（純文件同步）**：只發通知，直接進 STEP 06。
+- **Tier 1~3**：跑完對應 chain 才進 STEP 06。
+- hook 的 systemMessage 沒出現（例如判定失敗）→ 手動 `/commit-review` 補跑。
+
+> **修正必須先落回本機 `~/.claude/`，不能只改 repo**
+>
+> `~/.claude/` 是 source of truth，repo 是鏡像。review 修出的改動若只改 repo 端，**下次 `/sync-my-claude-setting` 會被本機的舊版覆蓋回去**，修正憑空消失。正確順序：
+>
+> ```bash
+> # 1. 先改本機（用 Edit 改 ~/.claude/ 下的檔案）
+> # 2. 再同步到 repo（只需同步實際改動的目錄）
+> rsync -aL --exclude='*.bak' "$SOURCE/scripts/" "$TARGET/scripts/"
+> rsync -aL --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
+> # 3. repo 專屬文件（README.md / CATALOG.md / plugins/README.md）直接改 repo，本機無對應檔
+> ```
+>
+> 判斷依據：檔案在 `~/.claude/` 有對應 → 先改本機再 rsync；只存在於 repo → 直接改 repo。
+
+### STEP 06: Push
+
+review 完成、修正已收進 commit 後才推送。
+
+```bash
+cd "$TARGET"
+git status --short   # 確認 working tree 乾淨
+```
+
+**修正的收斂方式（二選一）：**
+
+| 情境 | 做法 |
+|------|------|
+| commit 尚未 push（正常情況） | `git add -A && git commit --amend --no-edit`（或改寫 message 說明修正內容），修正併入同一個 commit |
+| commit 已推送（例外，如中途已 push） | 另開 `fix:` commit，**不 force push 改寫已發布歷史** |
+
+```bash
 git push
 ```
+
+推送後驗證兩個 remote 都對齊：
+
+```bash
+git fetch origin -q && git fetch gitlab -q
+echo "origin: $(git rev-parse --short origin/main)"
+echo "gitlab: $(git rev-parse --short gitlab/main)"
+echo "local:  $(git rev-parse --short HEAD)"
+```
+
+> **remote 分歧處理**：若 `git push` 因 non-fast-forward 被拒，**先查清成因再動作**，不要反射性 force push。此 repo 曾因 `git filter-repo` 清除洩漏 secret 而重寫歷史，導致只有一個 remote 被 force push、另一個停在含 secret 的舊歷史（2026-07-20 發現 GitHub 端明文 API key 殘留 4 天）。確認是「歷史重寫後未同步」才 force push，並向使用者確認。
 
 ---
 
@@ -469,4 +527,6 @@ else:
 - `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）
 - `*.bak` 臨時備份雙向不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回
+- **push 在 review 之後（v1.6.0 起）**：STEP 04 只 commit，STEP 05 跑 review，STEP 06 才 push。這樣 review 修出的問題可以 `--amend` 收進同一個 commit，不必另開 fix commit 或改寫已發布歷史
+- **review 修正先落回本機 `~/.claude/` 再 rsync 到 repo**（只改 repo 會被下次同步的本機舊版覆蓋掉）；`README.md`/`CATALOG.md`/`plugins/README.md` 為 repo 專屬，直接改 repo
 - 如果 `diff` 回報無任何差異，直接告知使用者「已同步，無需更新」並結束
