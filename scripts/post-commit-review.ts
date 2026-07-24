@@ -8,7 +8,8 @@ import { computeTier } from './lib/tier';
 
 /**
  * PostToolUse hook：git commit 後依 commit-review-policy.md 機械判定 Tier，
- * Tier 2/3 寫入 pending-review marker，交由 PreToolUse commit-gate-guard 強制阻擋下一個 commit。
+ * Tier 2/3 寫入 pending-review marker，交由 PreToolUse commit-gate-guard 強制阻擋下一個 commit、
+ * Stop stop-review-guard 阻擋回合結束。
  *
  * 設計沿革：舊版只靠這個 hook 的 systemMessage 提醒「應執行 review」，但 systemMessage 無強制力，
  * 主 agent 可以無視它直接開下一個 commit（ERPD-11970 b4eee29e0e 即如此，review 被跳過）。
@@ -131,13 +132,16 @@ process.stdin.on('end', () => {
     // 未經證實的斷言，而 marker 同時因缺 repoRoot 寫不進去 → 閘門靜默失效。
     const tier: number | null = repoRoot ? computeTier(repoRoot) : null;
 
-    // STEP 09: Tier 2/3 寫入 pending-review marker，供 PreToolUse 閘門阻擋下一個 commit。
+    // STEP 09: Tier 2/3 寫入 pending-review marker，供 PreToolUse 閘門阻擋下一個 commit、
+    // Stop 閘門阻擋回合結束。sessionId 一併寫入，作為 stop-review-guard 的第一比對鍵。
     // 例外：命令含 [skip-review] 或 --amend 時不寫（與 commit-gate-guard 放行條件對稱，
     // 否則 skip-review 的 commit 雖自身放行，卻仍替下一個 commit 上鎖）。
     let gateNote = '';
     const skipMarker = /\[skip-review\]/i.test(command) || /--amend/.test(command);
     if (tier !== null && tier >= 2 && repoRoot && !skipMarker) {
-      gateNote = writeMarker(tier, repoRoot);
+      /** 本次 hook 事件所屬 session id；缺漏時不寫入欄位（stop gate 退回 repoRoot 比對） */
+      const sessionId = typeof data.session_id === 'string' && data.session_id ? data.session_id : undefined;
+      gateNote = writeMarker(tier, repoRoot, sessionId);
     }
 
     // STEP 10: 依 Tier 輸出對應 systemMessage
@@ -153,9 +157,10 @@ process.stdin.on('end', () => {
  * 寫入 pending-review marker 檔。
  * @param tier 本次 commit 的 Tier（2 或 3）
  * @param repoRoot 目標 repo 根目錄
+ * @param sessionId 觸發 commit 的 session id；undefined 時 JSON 序列化自動略去該欄位
  * @returns 給 systemMessage 用的閘門說明字串；寫入失敗回傳空字串（fail-open，不阻斷）
  */
-function writeMarker(tier: number, repoRoot: string): string {
+function writeMarker(tier: number, repoRoot: string, sessionId?: string): string {
   try {
     // STEP 01: 取得目標 repo 的 commit hash
     const commitHash = execSync('git rev-parse HEAD', {
@@ -171,6 +176,7 @@ function writeMarker(tier: number, repoRoot: string): string {
       commitHash,
       tier,
       createdAt: Date.now(),
+      sessionId,
     };
     writeFileSync(markerPathForRepo(repoRoot), JSON.stringify(marker, null, 2), 'utf8');
 

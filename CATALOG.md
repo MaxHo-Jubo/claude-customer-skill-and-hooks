@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-20（新增 `commit-review` skill 作為 review chain 唯一執行層；Tier 判定抽出 `scripts/lib/tier.ts` 供 hook 與 skill 共用 + `compute-tier.ts` CLI；`pr-reviewer` v1.3.0 新增檔案例外；settings.json 移除已停用的 `context-mode` 條目）
+> 上次更新：2026-07-24（新增 `stop-review-guard.ts` Stop hook——pending-review 閘門補上「回合結束」路徑，marker 新增 `sessionId`/`stopBlockCounts` 欄位；前次 2026-07-20 新增 `commit-review` skill 作為 review chain 唯一執行層）
 
 ---
 
@@ -417,7 +417,7 @@
 | `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
-| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（供 `commit-gate-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD` 的 chain（步驟明細在 skill，hook 不列舉） |
+| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker 含 `sessionId`（供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD` 的 chain（步驟明細在 skill，hook 不列舉） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -429,6 +429,12 @@
 | 腳本 | 用途 |
 |------|------|
 | `pre-compact-snapshot.ts` | Context 壓縮前提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
+
+### Stop
+
+| Matcher | 腳本 | 用途 |
+|---------|------|------|
+| —（所有回合結束） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員——marker 未清時 block 回合結束，reason 以指令級注入（user role）指派 `commit-review` skill，補上「commit 後只打字回覆、systemMessage 被無視」的生命週期缺口。比對雙鍵：`marker.sessionId` 優先（本 session 欠的 review，不 spawn git）、cwd repoRoot 補位（跨 session 接手）。防 brick：per-session 有界計數（同 session 最多攔 3 次，達上限放行印警告）、plan mode 放行、逾期 marker 自動清除、計數寫回失敗放行；失敗一律 fail-open |
 
 ### SubagentStop
 
@@ -455,10 +461,10 @@
 | `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
-| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用 |
+| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）與 `stopBlockCounts`（per-session block 計數）欄位 |
 | `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
 | `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts [target]`，輸出 `TIER=N` 與 `FILES=… LINES=… SENSITIVE=… COMMIT=…` 兩行，供 `commit-review` skill 手動模式取得 tier；ref 無效時印錯誤並 exit 1（skill 見非 0 exit 即停止，不得採用 TIER 值） |
-| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門阻擋下一個 commit，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |

@@ -15,9 +15,9 @@
  *
  * 失敗一律 fail-open（exit 0），絕不因 hook 自身錯誤而擋掉正常 commit。
  */
-import { existsSync, readFileSync, unlinkSync } from 'fs';
+import { existsSync } from 'fs';
 import {
-  markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, MARKER_MAX_AGE_MS, type ReviewMarker,
+  markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, readValidMarker,
 } from '../scripts/lib/review-marker';
 
 let input = '';
@@ -70,27 +70,17 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 06: 讀 marker；解析失敗 → 保守放行（不因壞檔擋 commit）
-    let marker: ReviewMarker;
-    try {
-      marker = JSON.parse(readFileSync(markerPath, 'utf8'));
-    } catch {
-      process.exit(0);
-    }
-
-    // STEP 07: marker 逾期 → 自動清除並「靜默放行」（exit 0），避免永久 brick 住 commit。
+    // STEP 06: 讀 marker——壞檔或逾期（逾期由 readValidMarker 就地清除）都視為無效，
+    // 「靜默放行」（exit 0），避免永久 brick 住 commit；有效性判定與 stop-review-guard
+    // 共用同一份 readValidMarker，避免兩個閘門判定分歧。
     // 刻意不回傳顯式 allow：顯式 allow 會 auto-approve、短路其他權限判斷；靜默 exit 0 為純中立放行。
-    const age = Date.now() - (marker.createdAt || 0);
-    if (age > MARKER_MAX_AGE_MS) {
-      try {
-        unlinkSync(markerPath);
-      } catch {
-        // 清除失敗不影響放行
-      }
+    /** 有效 marker；壞檔或逾期為 null */
+    const marker = readValidMarker(markerPath, Date.now());
+    if (!marker) {
       process.exit(0);
     }
 
-    // STEP 08: marker 有效 → deny 這次新 commit
+    // STEP 07: marker 有效 → deny 這次新 commit
     const reason = [
       `🔒 pending-review 閘門：Tier ${marker.tier} commit ${(marker.commitHash || '').slice(0, 10)} 的 review 尚未完成，禁止開新 commit。`,
       '',

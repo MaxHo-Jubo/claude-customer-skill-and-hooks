@@ -1,23 +1,27 @@
 /**
  * pending-review marker 共用工具。
  *
- * 被四個消費端共用，統一 marker 檔案路徑與判定邏輯，避免各自複製造成分歧：
+ * 被五個 marker 讀寫消費端共用，統一 marker 檔案路徑與判定邏輯，避免各自複製造成分歧
+ * （另有 scripts/compute-tier.ts 只借用 resolveRepoRoot，不碰 marker）：
  * - scripts/post-commit-review.ts（PostToolUse：Tier 2/3 commit 後「寫入」marker）
  * - hooks/commit-gate-guard.ts（PreToolUse Bash：偵測 marker「阻擋」新 commit）
+ * - hooks/stop-review-guard.ts（Stop：marker 未清時「阻擋」回合結束，強制指派 review）
  * - scripts/clear-pending-review.ts（review 完成後「清除」marker）
- * - （未來）hooks/subagent-review-clear.ts（SubagentStop：review agent 完成後自動清除）
+ * - hooks/subagent-review-clear.ts（SubagentStop：review agent 完成後自動清除）
  *
- * 設計：marker 存在 = 該 repo 有一個 Tier 2/3 commit 的 review 尚未完成，禁止開新 commit。
+ * 設計：marker 存在 = 該 repo 有一個 Tier 2/3 commit 的 review 尚未完成，
+ * 禁止開新 commit、且回合不得結束。
  * 這是 fail-closed 強制閘門，取代舊版「靠 systemMessage 提醒但無強制力」的做法。
  */
 import { homedir } from 'os';
 import { join, resolve, isAbsolute } from 'path';
 import { execSync } from 'child_process';
+import { readFileSync, unlinkSync } from 'fs';
 
 /** marker 檔案存放目錄 */
 export const MARKER_DIR = join(homedir(), '.claude', 'state', 'pending-review');
 
-/** marker 逾期門檻：超過此時間視為卡死，PreToolUse 放行並自動清除，避免永久 brick 住 commit */
+/** marker 逾期門檻：超過此時間視為卡死，閘門（commit-gate-guard / stop-review-guard）經 readValidMarker 放行並自動清除，避免永久 brick */
 export const MARKER_MAX_AGE_MS = 4 * 60 * 60 * 1000;
 
 /** pending-review marker 內容 */
@@ -30,6 +34,15 @@ export interface ReviewMarker {
   tier: number;
   /** 建立時間（epoch ms），供逾期判定 */
   createdAt: number;
+  /** 觸發此 marker 的 session id（Stop gate 的第一比對鍵）；舊 marker 無此欄位，optional 保持向後相容 */
+  sessionId?: string;
+  /**
+   * Stop gate 有界保險絲：sessionId → 該 session 已被 block 的次數。
+   * 採 per-session 計數而非全域單一計數：同 repo 的其他 session（尤其 skill spawn 的
+   * headless claude -p）repoRoot 命中也會被 block，全域計數會被它們把額度吃光、
+   * 讓主 session 免審通過。舊 marker 無此欄位，optional 保持向後相容。
+   */
+  stopBlockCounts?: Record<string, number>;
 }
 
 /**
@@ -67,6 +80,41 @@ export function isGitPushCommand(command: string): boolean {
 export function markerPathForRepo(repoRoot: string): string {
   const sanitized = repoRoot.replace(/[/\\]/g, '-');
   return join(MARKER_DIR, `${sanitized}.json`);
+}
+
+/**
+ * 讀取單一 marker 檔並驗證有效性（可解析且未逾期）。
+ * marker「有效性」的唯一定義處——commit-gate-guard（PreToolUse）與 stop-review-guard（Stop）
+ * 共用此函式，避免兩個閘門對同一顆 marker 判定分歧。
+ * @param path marker 檔完整路徑
+ * @param now 現在時間（epoch ms），供逾期判定
+ * @returns 有效 marker；壞檔或逾期回傳 null（呼叫端一律視為「無此 marker」fail-open 放行）
+ */
+export function readValidMarker(path: string, now: number): ReviewMarker | null {
+  // STEP 01: 解析 marker 檔——壞檔視為無效，不因壞檔擋住呼叫端
+  let marker: ReviewMarker;
+  try {
+    marker = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+
+  // STEP 02: shape guard——內容是合法 JSON 但非物件（如字面 null）時同樣視為無效。
+  // 少了這層，後續屬性存取會在 try 之外 throw、打斷呼叫端的 marker 掃描迴圈
+  if (!marker || typeof marker !== 'object') {
+    return null;
+  }
+
+  // STEP 03: 逾期 marker 就地清除後視為無效，避免殘留 marker 永久 brick 閘門
+  if (now - (marker.createdAt || 0) > MARKER_MAX_AGE_MS) {
+    try {
+      unlinkSync(path);
+    } catch {
+      // 清除失敗不影響「視為無效」的結論
+    }
+    return null;
+  }
+  return marker;
 }
 
 /**

@@ -33,13 +33,14 @@
 
 > 沿革：舊版只靠 PostToolUse 印 systemMessage「提醒」跑 review，無強制力——主 agent 收到提醒後可以無視、直接開下一個 commit（ERPD-11970 b4eee29e0e 即如此，Tier 2/3 的 review 被整段跳過）。現改為 hook 機械判定 + 硬性 deny 的 fail-closed 閘門，不再依賴自覺。
 
-Tier 判定與閘門由三個 hook 自動執行，主 agent **不需**再自己讀本表憑感覺分級：
+Tier 判定與閘門由四個 hook 自動執行，主 agent **不需**再自己讀本表憑感覺分級：
 
-1. **PostToolUse（`scripts/post-commit-review.ts`）**：git commit 成功後用 `git diff --numstat` 機械算 Tier（敏感路徑判定先於尺寸判定；判定邏輯抽在 `scripts/lib/tier.ts`）。Tier 2/3 寫一個 marker 檔到 `~/.claude/state/pending-review/<repo>.json`，並以 systemMessage 指派主 agent 執行 commit-review skill 跑對應 chain（hook 不再列舉步驟）。
+1. **PostToolUse（`scripts/post-commit-review.ts`）**：git commit 成功後用 `git diff --numstat` 機械算 Tier（敏感路徑判定先於尺寸判定；判定邏輯抽在 `scripts/lib/tier.ts`）。Tier 2/3 寫一個 marker 檔到 `~/.claude/state/pending-review/<repo>.json`（含觸發 commit 的 `sessionId`，供 Stop gate 比對），並以 systemMessage 指派主 agent 執行 commit-review skill 跑對應 chain（hook 不再列舉步驟）。
 2. **PreToolUse Bash（`hooks/commit-gate-guard.ts`）**：該 repo 有未清 marker 時，**deny 新的 git commit**，強制先完成 review。放行 `--amend` / `push` / commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行（避免 brick）。
-3. **SubagentStop（`hooks/subagent-review-clear.ts`）**：review 類子 agent（`agent_type` 含 review）完成時自動清除 marker。**手動 `bun ~/.claude/scripts/clear-pending-review.ts` 仍是權威解鎖方式。**
+3. **Stop（`hooks/stop-review-guard.ts`，2026-07-24 建立）**：marker 未清時 **block 回合結束**，reason 以指令級注入（user role「Stop hook feedback:」訊息）指派 commit-review skill，實測遵從度遠高於 systemMessage。補上的生命週期缺口：commit 後主 agent 只打字回覆就結束回合，systemMessage 軟指派被無視（2026-07-22 兩次漏 review 皆此路徑；工具呼叫路徑已由第 2 層看守）。比對雙鍵擇一命中即攔——`marker.sessionId`（本 session 欠的 review）優先、cwd 的 repoRoot 補位（跨 session 接手）。防 brick：per-session 有界計數（同 session 最多攔 `MAX_STOP_BLOCKS=3` 次，達上限放行改印警告；per-session 而非全域，避免 skill spawn 的 headless session 吃光額度讓主 session 免審）、plan mode 放行（該模式跑不了 review chain）、逾期 marker 自動清除、計數寫回失敗放行。
+4. **SubagentStop（`hooks/subagent-review-clear.ts`）**：review 類子 agent（`agent_type` 含 review）完成時自動清除 marker。**手動 `bun ~/.claude/scripts/clear-pending-review.ts` 仍是權威解鎖方式。**
 
-三個 hook 共用 `scripts/lib/review-marker.ts`（marker 路徑、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）；Tier 判定共用 `scripts/lib/tier.ts`，與 commit-review skill 手動模式（`scripts/compute-tier.ts`）同一份，確保被動／手動判定不分歧。所有 hook 失敗一律 fail-open，不因自身錯誤誤擋正常 commit。手動解鎖：`bun ~/.claude/scripts/clear-pending-review.ts`。
+四個 hook 共用 `scripts/lib/review-marker.ts`（marker 路徑、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測）；Tier 判定共用 `scripts/lib/tier.ts`，與 commit-review skill 手動模式（`scripts/compute-tier.ts`）同一份，確保被動／手動判定不分歧。所有 hook 失敗一律 fail-open，不因自身錯誤誤擋正常 commit。手動解鎖：`bun ~/.claude/scripts/clear-pending-review.ts`。
 
 ## Blast Radius 分析（Tier 2/3 必跑；資訊性輸出，不自動修改）
 

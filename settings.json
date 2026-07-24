@@ -370,6 +370,19 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh Stop bun /Users/maxhero/.claude/hooks/stop-review-guard.ts",
+            "timeout": 10,
+            "statusMessage": "Checking pending-review stop gate..."
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "matcher": "",

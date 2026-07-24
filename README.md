@@ -100,9 +100,10 @@
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
-| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker 供 `commit-gate-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
+| PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
 | PostToolUse | 所有工具（catch-all） | —（空 matcher） | `post_tool_error.py` | tool 失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl` |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
+| Stop | 回合結束前 | —（所有回合） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員：marker 未清時 block 回合結束，reason 以指令級注入指派 `commit-review` skill；`sessionId` 優先比對、cwd repoRoot 補位；per-session 最多攔 3 次（保險絲）、plan mode 放行、逾期自動清除、失敗 fail-open |
 | SubagentStop | 子 agent 結束 | —（依 `agent_type` 判定） | `subagent-review-clear.ts` | review 類子 agent（`agent_type` 含 review）完成時自動清除該 repo 的 pending-review marker（便利層，手動 `clear-pending-review.ts` 仍為權威解鎖） |
 | Notification | 通知 | * | (inline printf) | 終端機通知 |
 
@@ -234,6 +235,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-24: stop-review-guard Stop hook — pending-review 閘門補上「回合結束」路徑
+
+- **起因**：回合只有兩種結束方式——(1) 呼叫工具繼續（`commit-gate-guard.ts` PreToolUse deny 已看守）、(2) 結束回合（含純文字回覆）。2026-07-22 兩次 review 未觸發都走路徑 (2)：commit 後主 agent 只打字回覆就結束，systemMessage 軟指派被無視
+- 新增 `hooks/stop-review-guard.ts`（Stop hook）：marker 未清時 block 回合結束，reason 以**指令級注入**（user role「Stop hook feedback:」訊息）指派 `commit-review` skill——E2E 實測模型第一次注入即遵從，遵從度遠高於 systemMessage
+- 比對雙鍵擇一命中即攔：`marker.sessionId`（本 session 欠的 review，不 spawn git）優先、cwd 的 repoRoot 補位（跨 session 接手）
+- 防 brick 設計：per-session 有界計數 `stopBlockCounts`（同 session 最多攔 3 次，達上限放行改印警告；不用全域計數，避免 skill spawn 的 headless session 吃光額度讓主 session 免審）、plan mode 放行（該模式跑不了 review chain）、逾期 marker 自動清除、計數寫回失敗放行、任何錯誤 fail-open
+- `scripts/lib/review-marker.ts`：`ReviewMarker` 新增 `sessionId?` 與 `stopBlockCounts?` 欄位（optional，向後相容舊 marker）
+- `scripts/post-commit-review.ts`：寫 marker 時一併寫入 stdin 的 `session_id`，作為 Stop gate 第一比對鍵
+- `settings.json`：註冊 Stop hook（走 `hook-error-wrapper.sh`，timeout 10 秒）
+- 驗證：合成 stdin 全路徑測試 11/11 通過（誤掛防呆/plan mode/雙鍵比對/計數遞增/保險絲/壞檔/逾期清除）；headless E2E 實測被 block 至 max turns、transcript 確認模型遵從注入立即執行 review
 
 ### 2026-07-20: commit-review skill 抽取 — 執行步驟從 hook/policy 收斂到 skill
 
