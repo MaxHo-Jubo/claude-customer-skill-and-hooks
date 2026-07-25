@@ -2,31 +2,40 @@
 
 目前安裝的 Claude Code 插件與 MCP 伺服器清單。
 
-## Plugins（18 個安裝，13 個啟用）
+## Plugins（19 個安裝，8 個啟用）
 
 ### claude-plugins-official（Anthropic 官方）
 
 | Plugin | 狀態 | 用途 |
 |--------|------|------|
-| code-simplifier | ✅ 啟用 | 程式碼簡化 agent，保留功能前提下提升清晰度與一致性 |
-| code-review | ✅ 啟用 | PR 自動化 code review，使用多個專業 agent 協作 |
 | atlassian | ✅ 啟用 | Jira & Confluence 整合，issue 查詢、建立、編輯、搜尋 |
 | frontend-design | ✅ 啟用 | 前端 UI 設計指引與產生 |
-| claude-md-management | ✅ 啟用 | CLAUDE.md 維護工具，審計與改善專案指令檔 |
 | typescript-lsp | ✅ 啟用 | TypeScript/JavaScript Language Server，增強程式碼智慧 |
 | context7 | ✅ 啟用 | Upstash Context7 MCP，即時查詢最新函式庫文件 |
-| gopls-lsp | ✅ 啟用 | Go Language Server，Go 程式碼智慧與導航 |
-| jdtls-lsp | ✅ 啟用 | Java Language Server，Java 程式碼智慧與導航 |
 | pr-review-toolkit | ✅ 啟用 | PR 審查工具組，多個專業 review agent（silent-failure、type-design、test-analyzer 等）|
 | playwright | ✅ 啟用 | Playwright 瀏覽器自動化 MCP，E2E 測試與網頁操作 |
 | github | ❌ 停用 | GitHub 操作（改用 `gh` CLI） |
 | superpowers | ❌ 停用 | superpowers 工作流程擴充套件 |
+| code-simplifier | ❌ 停用（2026-07-25） | post-commit review 流程實際依賴 pr-review-toolkit 的 code-simplifier agent，與此獨立 plugin 無關；內建 `/code-review` 已取代其功能 |
+| code-review | ❌ 停用（2026-07-25） | 同上，內建 `/code-review`／`/review` 指令與 pr-review-toolkit 已取代 |
+| claude-md-management | ❌ 停用（2026-07-25） | 批次精簡插件清單 |
+| gopls-lsp | ❌ 停用（2026-07-25） | 批次精簡插件清單 |
+| jdtls-lsp | ❌ 停用（2026-07-25） | 批次精簡插件清單 |
 
 ### claude-hud（claude-hud）
 
 | Plugin | 狀態 | 用途 |
 |--------|------|------|
-| claude-hud | ✅ 啟用 | statusline HUD，顯示 session 資訊與狀態 |
+| claude-hud | ❌ 停用（2026-07-25） | statusline HUD 概念參考；概念已被本機 `statusline-command.sh` 採納，不需持續啟用 plugin 本體 |
+
+### mcp-outline（mcp-outline，v1.10.1）
+
+| Plugin | 狀態 | 用途 |
+|--------|------|------|
+| mcp-outline | ✅ 啟用（2026-07-25 新增） | 連接 Outline 進行文件搜尋、讀取、建立與管理 |
+
+- **作者**：Vortiago
+- **來源**：https://github.com/Vortiago/mcp-outline
 
 ### thedotmack（claude-mem，v13.9.3）
 
@@ -90,6 +99,7 @@
 | atlassian | claude-plugins-official | — | Jira issue CRUD、Confluence 頁面管理、JQL/CQL 搜尋 |
 | typescript-lsp | claude-plugins-official | — | TypeScript/JS 語言伺服器，提供型別檢查與程式碼導航 |
 | playwright | claude-plugins-official | stdio | 瀏覽器自動化，E2E 測試與網頁操作 |
+| mcp-outline | mcp-outline | stdio | Outline 文件搜尋、讀取、建立與管理 |
 
 > `context-mode` 已完全移除（cache 已刪、`settings.json` 條目已清），其 MCP server 不再運行；`codebase-memory-mcp` 為 user-scope MCP（定義於 `~/.claude.json`，非插件，見 `mcp-servers.json`）。
 

@@ -1,5 +1,7 @@
 # MAX-HERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
 # v2 路由中心版（架構源自 M4 機器 Fable 5 重寫；2026-07-03 由 Sonnet 5 本機化；舊版全文保存於 CLAUDE.md.bak-20260703）
+# v2.1（2026-07-25 Fable 5）：依官方 Claude 5 context-engineering 指南對齊——單一出處去重、補 spec 高保真參照、移除平台已內建行為（context 自動摘要取代 token-check）；改前備份 CLAUDE.md.bak-20260725
+# 收錄門檻：只收 (a)事實與連線資料 (b)codebase 慣例與踩坑 gotcha (c)user 明定偏好與工作協議；模型能自行判斷的通用工程常識不寫；rules/ 與 harness/ 已載明的不重複寫
 
 
 <priority label="指令優先權 | 衝突仲裁，先讀這條">
@@ -76,15 +78,13 @@ anti-overengineering: 先寫最簡單能動的版本；修改前 grep 全部使�
 
 </core-principles>
 
-<code-style label="摘要 | 細則: rules/common/coding-style.md + rules/typescript/*.md">
+<code-style label="只收 rules/ 未涵蓋的本機慣例 | 細則: rules/common/coding-style.md + rules/typescript/*.md（自動載入，勿重複）">
 
 tool: 編輯用 Edit、建檔用 Write | banned: sed -i（跨平台行為不一致）
 if-braces: 一律用 { }，禁止單行 if
 step-comments: 函式內部從 STEP 01 起算、最多 4 階、格式「STEP XX: 說明」；React functional component 本體免、內部成員函式要；插入重排規則見 rules/common/coding-style.md
-comments: 變數/常數註解用途（含 hook 變數如 useState/useRef、interface/type 本身與成員）；函式用 JSDoc（JS/TS）；註解與邏輯必須一致，禁過時註解與錯字
+comments: 變數/常數註解用途（含 hook 變數如 useState/useRef、interface/type 本身與成員）；函式用 JSDoc（JS/TS）
 new-file-comment-rule: 全新建立的檔案，STEP/JSDoc/變數/interface 註解規則 review 時不比對既有 codebase 慣例、一律照規則字面檢查（實測依據見 CODE-REVIEW-RULE.md「新增檔案不適用既有慣例豁免」；根因是 luna_web react_18 STEP 註解全庫採用率僅 4.6%，比慣例會誤判為主流而放行）
-magic-number: 禁未解釋數字常數，抽具名常數＋用途註解
-null-safety: optional chaining / guard clause / default value 防護所有可空存取
 naming: 區域變數短名稱，全域介面描述性名稱
 
 </code-style>
@@ -122,7 +122,7 @@ backend-test: endpoint 改動先寫 integration test（supertest+jest）；錯�
 task-mgmt: 計畫寫 tasks/todo.md（checkbox）→ 開工前確認 → 做完勾選 → 每步高層摘要 → 完成加 review section
 elegance: non-trivial 修改先暫停問「有沒有更優雅的方式？」；trivial 直接做不過度設計；commit 前挑戰自己的方案
 auto-bugfix: bug report / CI 失敗 / 錯誤 log → 直接修，不等人帶路
-token-check: 大型開發前評估剩餘 context，讓 user 決定是否繼續
+spec-ref: 計畫/規格優先用高保真參照（可跑的測試套件、HTML mockup、可移植的既有程式碼）取代長篇文字描述；引用原檔勝過轉述
 
 </rhythm>
 
@@ -139,5 +139,6 @@ rules/typescript/{coding-style,testing,patterns,hooks,security}.md
 記憶與教訓寫入 → harness/knowledge-protocol.md 為唯一協議（取代舊版 LEARNING / SELF-IMPROVE / MEMORY-HYGIENE 段落；記憶整理仍用 /weekly-review skill 步驟 5）
 subagent 調度與工具鏈守則 → harness/model-dispatch.md（取代舊版 SUBAGENT-USAGE / TOOL-USAGE 段落與已移除的 rules/common/agents.md）
 commit 後審查 → harness/commit-review-policy.md（取代舊版 POST-COMMIT-REVIEW 段落）
+CLAUDE.md / skills 肥大體檢 → Claude Code 內建 /doctor（官方 context-engineering 指南建議定期 rightsize）
 
 </ref>

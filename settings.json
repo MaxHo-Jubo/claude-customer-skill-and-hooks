@@ -229,14 +229,21 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr create:*)"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "auto"
   },
   "model": "opus[1m]",
   "skillOverrides": {
     "ai-md": "user-invocable-only",
-    "daily-review": "user-invocable-only",
     "humanizer-zh-tw": "user-invocable-only",
-    "upgrade-to-status": "user-invocable-only"
+    "upgrade-to-status": "off",
+    "method-refactor": "off",
+    "jira-acceptance": "off",
+    "claude-max-quota": "off",
+    "explore-report": "off",
+    "plan-and-execute": "off",
+    "spec-design": "off",
+    "spec-to-e2e-test": "off",
+    "test-module": "off"
   },
   "hooks": {
     "UserPromptSubmit": [
@@ -402,29 +409,36 @@
     "command": "bash /Users/maxhero/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
-    "code-simplifier@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": false,
+    "code-review@claude-plugins-official": false,
     "atlassian@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": false,
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "github@claude-plugins-official": false,
     "everything-claude-code@everything-claude-code": false,
     "document-skills@anthropic-agent-skills": false,
-    "gopls-lsp@claude-plugins-official": true,
-    "jdtls-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": false,
+    "jdtls-lsp@claude-plugins-official": false,
     "superpowers@claude-plugins-official": false,
-    "claude-hud@claude-hud": true,
+    "claude-hud@claude-hud": false,
     "pr-review-toolkit@claude-plugins-official": true,
     "claude-mem@thedotmack": true,
-    "playwright@claude-plugins-official": true
+    "playwright@claude-plugins-official": true,
+    "mcp-outline@mcp-outline": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
       "source": {
         "source": "github",
         "repo": "jarrodwatts/claude-hud"
+      }
+    },
+    "mcp-outline": {
+      "source": {
+        "source": "github",
+        "repo": "Vortiago/mcp-outline"
       }
     }
   },

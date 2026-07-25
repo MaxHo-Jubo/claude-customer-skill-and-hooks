@@ -70,7 +70,6 @@
 | commit-review | `/commit-review [target]` | 1.0.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
-| daily-review | `/daily-review` | 1.0.1 | 今日工作回顧（weekly-review 輕量版）；彙整 commit、auto memory 變動、各專案未勾 todo |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.6.0 | 同步本機 Claude 設定到 Repo（v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
@@ -85,8 +84,9 @@
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
+| ai-case-report | `/ai-case-report` | — | 引導工程師透過對話式訪談逐步填寫 AI 效益案例填報表；Outline MCP 已連線→直接發佈至對應團隊子文件集，未連線→產出 `.md` 檔案供手動上傳 |
 
-> **載入狀態**：`ai-md` / `daily-review` / `humanizer-zh-tw` / `upgrade-to-status` 設為 `user-invocable-only`（不主動推薦，只在使用者輸入 slash command 時觸發）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
+> **載入狀態**：`ai-md` / `humanizer-zh-tw` 設為 `user-invocable-only`（保留指令但不主動推薦）；`upgrade-to-status` / `method-refactor` / `jira-acceptance` / `claude-max-quota` / `explore-report` / `plan-and-execute` / `spec-design` / `spec-to-e2e-test` / `test-module` 設為 `off`（完全隱藏，2026-07-25 清理）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
 
 ## Hooks 一覽
 
@@ -125,8 +125,8 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 13 | code-simplifier、code-review、atlassian、frontend-design、claude-md-management、typescript-lsp、gopls-lsp、jdtls-lsp、context7、claude-hud、pr-review-toolkit、claude-mem、playwright |
-| Plugins（停用） | 4 | github、everything-claude-code、document-skills、superpowers |
+| Plugins（啟用） | 8 | atlassian、frontend-design、typescript-lsp、context7、pr-review-toolkit、claude-mem、playwright、mcp-outline |
+| Plugins（停用） | 10 | github、everything-claude-code、document-skills、superpowers、claude-hud、claude-md-management、gopls-lsp、jdtls-lsp、code-simplifier、code-review |
 | MCP Servers | 2 | pr-watcher、codebase-memory-mcp（獨立於 plugins 的 MCP Server 設定） |
 
 ## MCP Servers 一覽
@@ -156,6 +156,7 @@
 | mcp-search | claude-mem@thedotmack | 持久記憶語意搜尋 |
 | atlassian | atlassian@claude-plugins-official | Jira/Confluence CRUD |
 | typescript-lsp | typescript-lsp@claude-plugins-official | TS/JS 型別檢查與導航 |
+| mcp-outline | mcp-outline@mcp-outline | Outline 文件搜尋/讀取/建立/管理（2026-07-25 新增） |
 
 ## Rules（編碼規則）
 
@@ -235,6 +236,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-25: Skills 與 Plugins 清理 — 停用 9 個 skills、移除 daily-review、停用 6 個 plugins、新增 ai-case-report
+
+- **Skills 停用（`skillOverrides` 設為 `off`）**：`method-refactor`、`jira-acceptance`、`claude-max-quota`、`explore-report`、`plan-and-execute`、`spec-design`、`spec-to-e2e-test`、`test-module`、`upgrade-to-status`（原為 `user-invocable-only`，本次降為完全隱藏）；`daily-review` 從 `user-invocable-only` 改為**完全移除本機目錄**（repo 端保留版控歷史）
+- **Plugins 停用（`enabledPlugins` 設為 `false`）**：`claude-hud`、`claude-md-management`、`gopls-lsp`、`jdtls-lsp`、`code-simplifier`、`code-review`；理由——post-commit review 流程實際依賴的是 `pr-review-toolkit` 的 agent types（`code-reviewer`/`code-simplifier`），與獨立的 `code-simplifier`/`code-review` plugin 無關；內建 `/simplify`、`/code-review`、`/review` 指令已完全取代這些獨立 plugin 功能。累計停用 plugins 達 10 個（含原已停用的 4 個：`github`/`everything-claude-code`/`document-skills`/`superpowers`）
+- **新增 `ai-case-report` skill**：引導工程師透過對話式訪談逐步填寫 AI 效益案例填報表，Outline MCP 已連線時直接發佈至對應團隊子文件集
+- **新增 `mcp-outline` plugin**（marketplace: `Vortiago/mcp-outline`）：Outline 文件搜尋/讀取/建立/管理，`extraKnownMarketplaces` 同步新增條目
+- **已調查排除的誤判**：`skill-rules.json` 為孤立設定檔（系統中無任何消費者，未被此次清理處理）；`jira` skill 對 `linus-requirements-analysis` 的引用維持不變（未受影響）
 
 ### 2026-07-24: stop-review-guard Stop hook — pending-review 閘門補上「回合結束」路徑
 

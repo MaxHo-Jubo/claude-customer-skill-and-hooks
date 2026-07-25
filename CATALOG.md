@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-24（新增 `stop-review-guard.ts` Stop hook——pending-review 閘門補上「回合結束」路徑，marker 新增 `sessionId`/`stopBlockCounts` 欄位；前次 2026-07-20 新增 `commit-review` skill 作為 review chain 唯一執行層）
+> 上次更新：2026-07-25（Skills 與 Plugins 清理——停用 9 個 skills、移除 `daily-review`、停用 6 個 plugins、新增 `ai-case-report` skill 與 `mcp-outline` plugin；前次 2026-07-24 新增 `stop-review-guard.ts` Stop hook）
 
 ---
 
@@ -14,9 +14,18 @@
 | Skill | 狀態 | 說明 |
 |-------|------|------|
 | `ai-md` | `user-invocable-only` | 僅手動 `/ai-md` 觸發；不主動推薦 |
-| `daily-review` | `user-invocable-only` | 僅手動 `/daily-review` 觸發 |
 | `humanizer-zh-tw` | `user-invocable-only` | 僅手動 `/humanizer-zh-tw` 觸發 |
-| `upgrade-to-status` | `user-invocable-only` | 僅手動 `/upgrade-to-status` 觸發 |
+| `upgrade-to-status` | `off` | 完全隱藏（2026-07-25 由 `user-invocable-only` 降級） |
+| `method-refactor` | `off` | 完全隱藏（2026-07-25 清理） |
+| `jira-acceptance` | `off` | 完全隱藏（2026-07-25 清理） |
+| `claude-max-quota` | `off` | 完全隱藏（2026-07-25 清理） |
+| `explore-report` | `off` | 完全隱藏（2026-07-25 清理） |
+| `plan-and-execute` | `off` | 完全隱藏（2026-07-25 清理） |
+| `spec-design` | `off` | 完全隱藏（2026-07-25 清理） |
+| `spec-to-e2e-test` | `off` | 完全隱藏（2026-07-25 清理） |
+| `test-module` | `off` | 完全隱藏（2026-07-25 清理） |
+
+> `daily-review` 已於 2026-07-25 完全移除本機目錄（repo 端版控歷史保留，見 git log）。
 
 **四種狀態**：`on`（完整載入）｜`name-only`（只載名稱省描述）｜`user-invocable-only`（保留指令但不主動推薦）｜`off`（完全隱藏）。Plugin 內的 skill 不受此設定控制，須用 `/plugin` 開關。
 
@@ -92,17 +101,6 @@
   8. Amendment 成效追蹤（Subagent B，與 STEP 06 平行）— 比對 `AMENDMENTS.md` 修補前後錯誤頻率
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
-
-#### `/daily-review` — 每日工作回顧（v1.0.1）
-
-- **位置**：`~/.claude/skills/daily-review/SKILL.md`
-- **用法**：`/daily-review`、「今日回顧」、「今天做了什麼」、「daily digest」、「明日焦點」
-- **功能**：weekly-review 的輕量版
-  - 彙整當日 commit、auto memory 變動、各專案未勾 todo
-  - 輸出 digest 並提出明日 1-3 個焦點候選
-- **不做**：記憶整理、error 分析、Obsidian 歸檔（這些是 weekly-review 的範圍）
-- **載入狀態**：`user-invocable-only`（只手動觸發）
-- **依賴**：git、claude-mem MCP、auto memory
 
 #### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.6.0）
 
@@ -386,6 +384,17 @@
 - **runtime 產物**（不進 repo）：`raw.md`、`last-version.txt`、`output/*.md`
 - **依賴**：`gh` CLI（GitHub releases API）、sonnet subagent
 
+#### `/ai-case-report` — AI 效益案例填報輔助（2026-07-25 新增）
+
+- **位置**：`~/.claude/skills/ai-case-report/SKILL.md`
+- **用法**：`/ai-case-report`；觸發語句：「要填 AI 案例」、「我有個 AI 工具用得很好」、「幫我整理 AI 效益」、「填報 AI 效益案例」
+- **功能**：
+  - 透過對話式訪談逐步收集填報表必要資訊，產出符合格式要求、具備量化數字的完整案例文件
+  - Outline MCP 已連線 → 直接呼叫 `outline:create_document` 發佈至對應團隊的子文件集（6 個團隊節點：JEM 1 - Core/LTC/iCare、JEM 2 - Go、JEM 3 - DTC、JEM 4 - AI）
+  - Outline MCP 未連線 → 產出 `.md` 檔案，並告知使用者手動上傳路徑
+  - 內嵌填報表模板與空白模板/業界範例集 Outline 文件 ID，不依賴 Outline 連線即可套用結構
+- **依賴**：Outline MCP（選用，未連線時降級為純檔案產出）
+
 ---
 
 ## Hooks
@@ -524,25 +533,20 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（13）
+### 啟用的 Plugins（8）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
-| code-simplifier | claude-plugins-official | 後置 commit 自動精簡程式碼 |
-| code-review | claude-plugins-official | PR 自動化 code review |
 | atlassian | claude-plugins-official | Jira & Confluence 整合 |
 | frontend-design | claude-plugins-official | 前端設計輔助 |
-| claude-md-management | claude-plugins-official | CLAUDE.md 維護工具 |
 | typescript-lsp | claude-plugins-official | TypeScript/JS Language Server |
-| gopls-lsp | claude-plugins-official | Go Language Server |
-| jdtls-lsp | claude-plugins-official | Java Language Server |
 | context7 | claude-plugins-official | 即時查詢函式庫最新文件 |
 | claude-mem | thedotmack | 跨 session 持久記憶系統 |
-| claude-hud | claude-hud | StatusLine HUD 概念參考（jarrodwatts/claude-hud） |
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 | playwright | claude-plugins-official | 瀏覽器自動化（取代 agent-browser skill） |
+| mcp-outline | mcp-outline | Outline 文件搜尋/讀取/建立/管理（2026-07-25 新增） |
 
-### 停用的 Plugins（4）
+### 停用的 Plugins（10）
 
 | Plugin | 來源 | 理由 |
 |--------|------|------|
@@ -550,6 +554,12 @@
 | everything-claude-code | everything-claude-code | hooks 開銷大，有用功能已被其他工具覆蓋 |
 | document-skills | anthropic-agent-skills | 文件處理套件，目前用不到 |
 | superpowers | claude-plugins-official | 已分別啟用個別功能，不需整套 |
+| code-simplifier | claude-plugins-official | 2026-07-25 停用；post-commit review 流程實際依賴 pr-review-toolkit 的 code-simplifier agent，與此獨立 plugin 無關；內建 `/code-review` 已取代其功能 |
+| code-review | claude-plugins-official | 2026-07-25 停用；同上，內建 `/code-review`／`/review` 指令與 pr-review-toolkit 已取代 |
+| claude-hud | claude-hud | 2026-07-25 停用；原用途僅為 statusline 概念參考，概念已被本機 `statusline-command.sh` 採納，不需持續啟用 plugin 本體 |
+| claude-md-management | claude-plugins-official | 2026-07-25 停用；批次精簡插件清單（詳見 README.md 變更紀錄） |
+| gopls-lsp | claude-plugins-official | 2026-07-25 停用；批次精簡插件清單（詳見 README.md 變更紀錄） |
+| jdtls-lsp | claude-plugins-official | 2026-07-25 停用；批次精簡插件清單（詳見 README.md 變更紀錄） |
 
 ### MCP Servers
 
@@ -580,6 +590,7 @@
 | mcp-search | claude-mem@thedotmack | 持久記憶語意搜尋 |
 | atlassian | atlassian@claude-plugins-official | Jira/Confluence CRUD |
 | typescript-lsp | typescript-lsp@claude-plugins-official | TS/JS 型別檢查與導航 |
+| mcp-outline | mcp-outline@mcp-outline | Outline 文件搜尋/讀取/建立/管理（2026-07-25 新增） |
 
 ---
 
