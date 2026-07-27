@@ -350,6 +350,43 @@
             "statusMessage": "Checking R15 syntax compatibility..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/commit-gate-guard.ts",
+            "timeout": 5000,
+            "statusMessage": "Checking pending-review gate..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh Stop bun /Users/maxhero/.claude/hooks/stop-review-guard.ts",
+            "timeout": 10,
+            "statusMessage": "Checking pending-review stop gate..."
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SubagentStop bun /Users/maxhero/.claude/hooks/subagent-review-clear.ts",
+            "timeout": 5000,
+            "statusMessage": "Checking review auto-clear..."
+          }
+        ]
       }
     ]
   },

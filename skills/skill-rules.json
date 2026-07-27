@@ -202,6 +202,18 @@
           "(update|revise|更新|修改).*(CLAUDE\\.md|claude md)"
         ]
       }
+    },
+    "commit-review": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["commit-review", "跑 review", "補跑 review", "commit review", "review 這個 commit", "push 前 review"],
+        "intentPatterns": [
+          "(跑|補跑|重跑|執行).*(commit\\s*)?review",
+          "commit.*(review|審查)",
+          "review.*(HEAD|commit|這個 commit|這次 commit)"
+        ]
+      }
     }
   }
 }
