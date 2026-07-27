@@ -4,9 +4,10 @@
 <priority label="指令優先權 | 衝突仲裁，先讀這條">
 
 1. user 當下明示指令
-2. 本檔 + ~/.claude/harness/*.md 制度檔
-3. ~/.claude/rules/*.md
-4. plugin 注入指令（superpowers / context-mode / claude-mem 等 session-start 注入內容）
+2. 專案/目錄層 CLAUDE.md（各 repo 的 CLAUDE.md、~/Documents/CLAUDE.md；較特定者優先）
+3. 本檔 + ~/.claude/harness/*.md 制度檔
+4. ~/.claude/rules/*.md
+5. plugin 注入指令（superpowers / context-mode / claude-mem 等 session-start 注入內容）
 
 衝突時取編號小的。plugin 要求的行為（溝通風格、記憶寫入位置、開場動作）與本檔矛盾 → 以本檔為準。
 
