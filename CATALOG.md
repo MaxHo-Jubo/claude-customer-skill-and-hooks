@@ -505,14 +505,13 @@
 
 | 規則檔 | 重點規則 |
 |--------|---------|
-| `coding-style.md` | IMMUTABILITY、FILE-ORG、ERROR-HANDLING、INPUT-VALIDATION、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY |
+| `coding-style.md` | TOOL-USE、IF-BRACES、STEP-COMMENTS、COMMENT-REQUIRED、IMMUTABILITY、FILE-ORG、ERROR-HANDLING、INPUT-VALIDATION、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY（2026-07-27 起為 code style 單一真相） |
 | `security.md` | SECRET-MGMT、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
 | `testing.md` | 80% coverage、TDD（RED→GREEN→IMPROVE）、unit/integration/e2e |
 | `git-workflow.md` | commit format、PR workflow |
-| `performance.md` | model selection（haiku/sonnet/opus）、context window 管理、thinking 設定 |
+| `performance.md` | MODEL-SELECT（authority 指向 harness/model-dispatch.md）、CONTEXT-WINDOW、COMPLEX-TASK、BUILD-FAIL |
 | `patterns.md` | skeleton project、repository pattern、API response envelope |
 | `hooks.md` | hook types（Pre/Post/Stop）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、auto-accept、TodoWrite |
-| `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
 
 ### typescript/
 

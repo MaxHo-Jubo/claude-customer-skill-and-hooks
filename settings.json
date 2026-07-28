@@ -229,9 +229,9 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr create:*)"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "auto"
   },
-  "model": "sonnet",
+  "model": "claude-fable-5[1m]",
   "hooks": {
     "UserPromptSubmit": [
       {

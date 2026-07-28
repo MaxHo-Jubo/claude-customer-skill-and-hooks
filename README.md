@@ -161,11 +161,11 @@
 
 | 層級 | 檔案數 | 涵蓋範圍 |
 |------|--------|---------|
-| common | 8 | coding-style、security、testing、git-workflow、performance、patterns、hooks、agents |
+| common | 7 | coding-style、security、testing、git-workflow、performance、patterns、hooks |
 | typescript | 5 | coding-style（含 REACT/REACT-NATIVE）、testing（Playwright）、patterns、hooks、security |
 
 重點規則：
-- **coding-style**: IMMUTABILITY、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY
+- **coding-style**: TOOL-USE（Edit/Write、禁 sed -i）、IF-BRACES、STEP-COMMENTS、COMMENT-REQUIRED、IMMUTABILITY、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY——2026-07-27 起為 code style 單一真相（全域 CLAUDE.md 不再有摘要段）
 - **security**: SECRET-MGMT、LOG-SAFETY；pre-commit checklist 9 項
 - **typescript/coding-style**: REACT（re-render/useEffect cleanup）、REACT-NATIVE（FlatList/StyleSheet.create）
 - **hooks**: HOOK-OUTPUT（PostToolUse stdout 不注入 AI context，需靠 CLAUDE.md 規則驅動）
@@ -247,6 +247,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-07-28: Claude 5 context engineering 對齊——指令層三層去重、defaultMode auto
+
+依 Claude 5 世代 context engineering 原則（跨層重複與過時資訊為反模式）清理指令堆疊，每 session 常駐指令層 25.3KB → 19.7KB（-22%）：
+
+- `rules/common/performance.md`: 刪除過時 THINKING 段（31,999 token 上限／Option+T／alwaysThinkingEnabled 皆為 4.5 世代機制，現以 effortLevel 控制）；MODEL-SELECT 僅留 model-dispatch.md authority 指向
+- `rules/common/coding-style.md`: 升格為 code style 單一真相，新增 TOOL-USE、IF-BRACES、STEP-COMMENTS（完整詳規含 React 例外）、COMMENT-REQUIRED 四段；checklist +2 項
+- `CLAUDE.md`（快照 `CLAUDE.md.20260727`）: 刪除 `<code-style>` 摘要段（改由 rules 承載）；`<priority>` 補入第 2 位「專案/目錄層 CLAUDE.md」，修補原階梯未定義 project CLAUDE.md 位階的漏洞
+- 本機配套（不入 repo）：`~/Documents/CLAUDE.md` 瘦身 64%，僅留專案對照表／Commit Message 規則／Spec 維護流程三節，解除 tasks/lessons.md 與 knowledge-protocol.md 的教訓寫入衝突
+- `settings.json`: `permissions.defaultMode` 改 `auto`（/doctor 健檢採納，窗口內零拒絕紀錄）；`model` 更新為 `claude-fable-5[1m]`
+- 移除 `CLAUDE.md.20260703` 舊日期快照（同步慣例僅留最新，歷史可從 git 回溯）
 
 ### 2026-07-03: CLAUDE.md 由 Fable 5 重寫為 v2 路由中心版、context-mode 停用、plugins 更新
 
