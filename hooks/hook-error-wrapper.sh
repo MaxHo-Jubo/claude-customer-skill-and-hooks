@@ -25,7 +25,18 @@ cat > "$STDIN_TMP"
 EXIT_CODE=$?
 
 # STEP 04: 失敗時記錄錯誤
-if [ $EXIT_CODE -ne 0 ]; then
+# exit 2 是 PostToolUse/PreToolUse 的「阻擋」約定信號，不是進程失敗——
+# hook 正常擋下一次操作也會 exit 2。單純排除 exit 2 會漏記真正 crash 成 2 的情況，
+# 所以再看 stderr：正常阻擋的 reason 走 stdout（stderr 空），真 crash 一定有 stderr。
+# 依據：2026-08-14 實測，ERRORS.jsonl 29/53 筆假陽性全部是 exit 2 + stderr 空。
+SHOULD_LOG=1
+if [ $EXIT_CODE -eq 0 ]; then
+    SHOULD_LOG=0
+elif [ $EXIT_CODE -eq 2 ] && [ ! -s "$STDERR_TMP" ]; then
+    SHOULD_LOG=0
+fi
+
+if [ $SHOULD_LOG -eq 1 ]; then
     LOG_DIR="$HOME/.claude/.learnings"
     LOG_FILE="$LOG_DIR/ERRORS.jsonl"
     mkdir -p "$LOG_DIR"

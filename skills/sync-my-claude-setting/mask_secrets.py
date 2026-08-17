@@ -7,8 +7,9 @@
 若原封複製進 repo 會造成 secret 洩漏（曾發生 context7 API key 被同步進版控的事故）。
 本模組遞迴遮罩所有已知格式的 secret，是「複製前一律先過濾」的單一權威來源。
 
-用法（CLI）：python3 mask_secrets.py [--del-model] <file.json>  → stdout 輸出遮罩後 JSON
-用法（import）：from mask_secrets import mask_secrets; masked = mask_secrets(obj)
+用法（CLI）：python3 mask_secrets.py [--del-model] [--del-local] <file.json>  → stdout 輸出遮罩後 JSON
+用法（import）：見 SKILL.md STEP 02 / STEP R2 的實際用法；公開符號為
+              mask_secrets / strip_local_only / strip_private_permissions / find_private_content / LOCAL_ONLY_KEYS
 """
 import json
 import re
@@ -32,6 +33,39 @@ _FLAG_PATTERN = re.compile(
 )
 # 遮罩後的佔位字串，與 mcp-servers.json 過濾邏輯保持一致
 MASK = '***MASKED***'
+# 本機專屬、一律不進 repo 的頂層 key（雙向排除，換機也不還原）
+# autoMode.environment 記錄公司內部域名、私有 repo 名稱、本機絕對路徑，
+# autoMode.soft_deny 記錄專案 deploy script 名稱——與 CLAUDE.md <conn> 同類的環境資訊，
+# 而 repo 是 public，故整段排除（2026-08-17 使用者裁示）。
+LOCAL_ONLY_KEYS = ('autoMode',)
+
+# 私有識別符黑名單：組織名／私有 repo 名／內部域名／Jira 編號。
+# **這是 denylist，本質不可能完備**——未列入的私有名稱會靜默放行，`find_private_content` 回空
+# 只能證明「不含以下 pattern」，不能證明「無私有內容」。新增私有 repo／組織／域名時必須同步更新。
+_PRIVATE_ID_PATTERN = re.compile(
+    r'luna_RN_HomeCareStaff'          # 私有 repo（居服 App）
+    r'|luna_web'                      # 私有 repo（luna 網站）
+    r'|DayCareStaff|FamilyMember'     # 私有 repo（日照 App／家屬 App）
+    r'|erpv3_web_(?:frontend|backend)'  # 私有 repo（v3 前後端）
+    r'|compal[-_]swhq'                # GitHub 組織名（含底線變體）
+    r'|compal-health\.com'            # 公司內部域名（含 staging）
+    r'|\b(?:ERPD|LVB|LWM)-\d+',       # Jira 編號——常隨 commit message 夾帶工作內容外洩
+    re.IGNORECASE,
+)
+# 家目錄路徑採 **allowlist 反轉**：`/Users/<user>/` 底下一律視為私有，除非第一層目錄在豁免清單。
+# 改用反轉的理由：原本是 denylist（只認 Documents/Desktop/Downloads），`~/Projects`、`~/work`、
+# `~/src` 等全部靜默放行，且失敗方向是「漏判即通過」。實測本機 settings.json 只有三類 home 路徑
+# （Documents 26 / .claude 16 / .nvm 1），反轉的落地成本就是豁免清單這一行。
+_HOME_PATH_PATTERN = re.compile(r'(?:/Users/[^/\s"\'()]+|~|\$HOME)/([^/\s"\'()]+)', re.IGNORECASE)
+# 豁免：hook / statusline 指令必須寫絕對路徑指向這些目錄，屬必要而非洩漏
+_ALLOWED_HOME_DIRS = (
+    '.claude', '.claude-max-2', '.claude-review', '.agents',  # Claude 設定與隔離帳號目錄
+    '.nvm', '.npm', '.cache', '.config', '.local', '.ssh',    # 標準工具目錄（路徑本身不含專案資訊）
+    'library',                                                # macOS ~/Library（系統路徑）
+)
+# marker 檔名等 dash-encoded 路徑（scripts/lib/review-marker.ts 的 markerPathForRepo 產物），
+# 斜線被換成 dash 後上面的路徑 pattern 認不出來，需單獨比對
+_DASH_PATH_PATTERN = re.compile(r'-Users-[^-\s]+-(?!claude|nvm|agents)[A-Za-z]', re.IGNORECASE)
 
 
 def _mask_str(text):
@@ -58,24 +92,104 @@ def mask_secrets(obj):
     return obj
 
 
+def strip_local_only(obj):
+    """
+    移除本機專屬、不得進 repo 的頂層 key（LOCAL_ONLY_KEYS），回傳新 dict（不 mutate 原物件）。
+    非 dict 原樣回傳。
+    """
+    # STEP 01: 非 dict 無 key 可移除，原樣回傳
+    if not isinstance(obj, dict):
+        return obj
+    # STEP 02: 濾掉本機專屬 key，保留其餘原順序
+    return {key: value for key, value in obj.items() if key not in LOCAL_ONLY_KEYS}
+
+
+def find_private_content(obj, path='$'):
+    """
+    遞迴掃描 JSON 結構，找出仍殘留的私有內容（組織名／私有 repo／內部域名／本機專案路徑）。
+    `~/.claude/` 路徑不算命中（hook 指令必需）。
+    @param obj 待掃描的 JSON 結構
+    @param path 目前節點的 JSONPath，供回報定位
+    @return list of (path, 命中的字串片段, 觸發原因)
+    """
+    hits = []
+    # STEP 01: 字串節點才需比對
+    if isinstance(obj, str):
+        # STEP 01.01: 私有識別符（denylist）
+        m = _PRIVATE_ID_PATTERN.search(obj)
+        if m:
+            hits.append((path, m.group(0), 'private-identifier'))
+        # STEP 01.02: 家目錄路徑（allowlist 反轉）——逐一檢查每個命中的第一層目錄是否在豁免清單。
+        # 不用「先 sub 掉豁免片段再比對」的寫法：那會讓 `~/.claude/state/.../-Users-x-Documents-y.json`
+        # 這種夾帶在豁免路徑後方的內容整段漏網（實測過）。
+        for match in _HOME_PATH_PATTERN.finditer(obj):
+            if match.group(1).lower() not in _ALLOWED_HOME_DIRS:
+                hits.append((path, match.group(0), 'local-project-path'))
+        # STEP 01.03: dash-encoded 路徑（marker 檔名形式，斜線已被換成 dash）
+        m = _DASH_PATH_PATTERN.search(obj)
+        if m:
+            hits.append((path, m.group(0), 'dash-encoded-path'))
+        return hits
+    # STEP 02: list 逐項遞迴
+    if isinstance(obj, list):
+        for i, item in enumerate(obj):
+            hits.extend(find_private_content(item, f'{path}[{i}]'))
+        return hits
+    # STEP 03: dict 逐值遞迴
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            hits.extend(find_private_content(value, f'{path}.{key}'))
+    return hits
+
+
+def strip_private_permissions(obj):
+    """
+    從 permissions 的各個清單移除含私有內容的條目（如 `Bash(git -C /Users/<user>/Documents/<專案>/<repo> ...)`，
+    波浪號與 $HOME 形式亦涵蓋）。
+    這些條目在別台機器上本來就無效，且會把私有 repo 名、本機路徑、commit message 帶進 public repo。
+    @param obj settings.json 的完整結構
+    @return (新結構, 被移除的條目 list)
+    """
+    # STEP 01: 無 permissions 區段就原樣回傳
+    if not isinstance(obj, dict) or not isinstance(obj.get('permissions'), dict):
+        return obj, []
+    removed = []
+    new_perms = {}
+    # STEP 02: 逐區段過濾，非 list 的設定值（如 defaultMode）原樣保留
+    for section, items in obj['permissions'].items():
+        if not isinstance(items, list):
+            new_perms[section] = items
+            continue
+        kept = []
+        for item in items:
+            if find_private_content(item):
+                removed.append(f'{section}: {item}')
+            else:
+                kept.append(item)
+        new_perms[section] = kept
+    # STEP 03: 回傳新結構，不 mutate 原物件
+    return {**obj, 'permissions': new_perms}, removed
+
+
 def main():
-    """CLI 入口：讀取檔案 → 遮罩（可選刪除 model）→ stdout 輸出 JSON。"""
-    # STEP 01: 解析參數（--del-model 供 diff 對齊時排除本機專屬 model 欄位）
+    """CLI 入口：讀取檔案 → 遮罩（可選刪除本機專屬欄位）→ stdout 輸出 JSON。"""
+    # STEP 01: 解析參數（--del-model 排除 model 欄位、--del-local 排除 LOCAL_ONLY_KEYS，皆供 diff 對齊用）
     args = sys.argv[1:]
-    del_model = False
-    if '--del-model' in args:
-        del_model = True
-        args.remove('--del-model')
+    del_model = '--del-model' in args
+    del_local = '--del-local' in args
+    args = [a for a in args if a not in ('--del-model', '--del-local')]
     if len(args) != 1:
-        sys.stderr.write('用法：python3 mask_secrets.py [--del-model] <file.json>\n')
+        sys.stderr.write('用法：python3 mask_secrets.py [--del-model] [--del-local] <file.json>\n')
         sys.exit(2)
     # STEP 02: 讀取並遮罩
     with open(args[0]) as f:
         data = json.load(f)
     data = mask_secrets(data)
-    # STEP 03: 選擇性刪除 model 欄位（僅供 diff，不影響實際複製流程）
+    # STEP 03: 選擇性刪除本機專屬欄位（model 供 diff 對齊；autoMode 等為雙向排除項）
     if del_model and isinstance(data, dict):
         data.pop('model', None)
+    if del_local:
+        data = strip_local_only(data)
     # STEP 04: 輸出（保留 key 原順序，避免造成假差異）
     json.dump(data, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write('\n')

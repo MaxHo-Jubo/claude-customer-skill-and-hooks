@@ -101,6 +101,8 @@ weekly-review 需要 Atlassian MCP 來撈本週 Jira 活動（STEP 01.5）。請
 
 ```
 Agent(
+  # 不得帶 name 參數 —— 帶了結果就不回流，子 agent 照樣跑完但你永遠拿不到 JSON，
+  # 且不產生任何錯誤訊息（詳見 harness/model-dispatch.md「結果回流」）
   description: "Scan commits for weekly-review",
   subagent_type: "multi-repo-commit-scanner",
   prompt: """
@@ -126,6 +128,8 @@ Agent(
 ```
 
 > **規則仍然成立**：`--all` 必開（feature branch commit 不可漏）、`--no-merges`、按 `git config user.name` 過濾。這些規則固化在 agent 內，主 agent 不需重複指定。
+
+> **數字要引用哪一個**（agent v1.2.0+）：對外報告一律用 `summary.unique_commits`，不是 `total_commits` —— 後者對用 pathspec 拆 bucket 的 repo 會重複計算。窗口以 **author date** 為準（rebase 不會把上週工作推進本週）；`dedup_removed > 0` 時要在摘要中明說移除幾筆。
 
 **Subagent 回傳結構**（JSON）：
 

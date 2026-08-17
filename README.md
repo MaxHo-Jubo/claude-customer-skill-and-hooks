@@ -53,7 +53,7 @@
 
 ---
 
-## Skills 一覽（26 個自訂 skill）
+## Skills 一覽（27 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -67,10 +67,10 @@
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
-| commit-review | `/commit-review [target]` | 1.0.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供 |
+| commit-review | `/commit-review [target]` | 1.2.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑 |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.6.0 | 同步本機 Claude 設定到 Repo（v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.8.0 | 同步本機 Claude 設定到 Repo（v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
@@ -85,6 +85,7 @@
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
 | ai-case-report | `/ai-case-report` | — | 引導工程師透過對話式訪談逐步填寫 AI 效益案例填報表；Outline MCP 已連線→直接發佈至對應團隊子文件集，未連線→產出 `.md` 檔案供手動上傳 |
+| pr-reviewer | `/pr-reviewer <PR>` | 2.0.0 | PR full review — 主 session 直接 orchestrate，5 面向平行審查（規則合規／shallow bug scan／git blame 歷史／過去 PR 留言／既有註解遵循）+ Haiku 信心評分 + 自動 post 到 GitHub PR（summary review + inline Suggested Change）。v2.0.0 從 subagent 改為 skill，巢狀深度 2→1（巢狀 orchestrate 實測三次三種結果，見 SKILL.md 文末）；判定標準與 lite agent 共用 `references/review-spec.md` |
 
 > **載入狀態**：`ai-md` / `humanizer-zh-tw` 設為 `user-invocable-only`（保留指令但不主動推薦）；`upgrade-to-status` / `method-refactor` / `jira-acceptance` / `claude-max-quota` / `explore-report` / `plan-and-execute` / `spec-design` / `spec-to-e2e-test` / `test-module` 設為 `off`（完全隱藏，2026-07-25 清理）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
 
@@ -104,7 +105,7 @@
 | PostToolUse | 所有工具（catch-all） | —（空 matcher） | `post_tool_error.py` | tool 失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl` |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
 | Stop | 回合結束前 | —（所有回合） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員：marker 未清時 block 回合結束，reason 以指令級注入指派 `commit-review` skill；`sessionId` 優先比對、cwd repoRoot 補位；per-session 最多攔 3 次（保險絲）、plan mode 放行、逾期自動清除、失敗 fail-open |
-| SubagentStop | 子 agent 結束 | —（依 `agent_type` 判定） | `subagent-review-clear.ts` | review 類子 agent（`agent_type` 含 review）完成時自動清除該 repo 的 pending-review marker（便利層，手動 `clear-pending-review.ts` 仍為權威解鎖） |
+| SubagentStop | 子 agent 結束 | — | `subagent-review-clear.ts` | **只記錄 `agent_type` 到 debug log，不再清除 marker**（2026-08-17 移除清除職責）。舊行為「型別含 review 就清」在 Tier 3 並行 6 個 agent 時，第一個完成的即解除閘門；full review 的面向 agent（`pr-1134-full-review` 等）也誤命中。marker 改由 `commit-review` skill §5 在「面向收齊 + Critical 處理完」後顯式清除 |
 | Notification | 通知 | * | (inline printf) | 終端機通知 |
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
@@ -113,10 +114,11 @@
 
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
-| pr-reviewer | sonnet | 1.3.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent）；v1.3.0 新增「新增檔案例外」（規則 9/10/11 命中全新建立檔案時跳過慣例檢查、直接依規則字面判定）+ 規則 9 擴充涵蓋 React hook 變數與 interface/type 成員；v1.2.0 新增「慣例優先原則」+ full 模式自動 post review 到 GitHub PR |
+| pr-reviewer | sonnet | 2.0.0 | Code review agent（**lite 模式專用**）— 對最近一次 commit 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告，由 `commit-review` skill 的 Tier 2/3 chain 觸發。v2.0.0 起 full 模式移至 `/pr-reviewer` **skill**（主 session orchestrate），本 agent 收到 full 請求時直接導向該 skill 不自行執行；判定標準與 full 共用 `skills/pr-reviewer/references/review-spec.md`（17 條規則、慣例優先原則、新增檔案例外、信心評分、輸出格式的唯一出處） |
 | multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、提取的 Jira IDs 與統計；v1.1.0 支援 `path`/`label`/`pathspec` 物件形式，可將 monorepo 依子目錄拆成多個 bucket（如 luna_web 拆 FE/BE）。用於 weekly-review STEP 01 |
 
-- **pr-reviewer 位置**：`~/.claude/agents/pr-reviewer.md`；觸發：`commit-review` skill 的 Tier 2/3 chain 自動呼叫 (lite) 或手動指定 PR (full)；工具：Read/Grep/Glob/Bash/Agent；v1.2.0 起 full 模式自動 post review 到 GitHub PR（依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE）；說明文件：`agents/README-pr-reviewer.md`
+- **pr-reviewer 位置**：lite = `~/.claude/agents/pr-reviewer.md`（觸發：`commit-review` skill 的 Tier 2/3 chain；工具：Read/Grep/Glob/Bash/Agent），full = `~/.claude/skills/pr-reviewer/SKILL.md`（觸發：`/pr-reviewer <PR>`，主 session 直接 orchestrate 5 面向 + 自動 post 到 GitHub PR，依 CRITICAL 數量決定 REQUEST_CHANGES/COMMENT，不自動 APPROVE）；兩者共用 `skills/pr-reviewer/references/review-spec.md`；說明文件：`agents/README-pr-reviewer.md`
+- **lite 留在 agent 的理由**：commit 後自動觸發需 context 隔離。原本第二個理由「`subagent-review-clear.ts` 依型別自動清 marker」已於 2026-08-17 隨該 hook 移除清除職責而失效
 - **multi-repo-commit-scanner 位置**：`~/.claude/agents/multi-repo-commit-scanner.md`；觸發：weekly-review STEP 01 自動呼叫；工具：Bash/Read；平行度預設 8；v1.1.0 起 repo 可用物件形式帶 `pathspec` 拆 monorepo 子目錄（橫跨子目錄的 full-stack commit 各 bucket 皆計入，不去重）
 
 ## Plugins & MCP Servers
@@ -236,6 +238,44 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 私有內容處理政策（2026-08-19 決議）
+
+本 repo 為 **public**。私有內容（公司內部域名、私有 repo 名、本機專案路徑、Jira 編號）的處理分三層：
+
+1. **`settings.json`** — 同步時經 `mask_secrets.py` 遮罩 secret、排除 `autoMode`、過濾 `permissions` 中含私有內容的條目，過濾後再掃描一次，殘留即 fail loud 中止同步。
+2. **全 repo** — commit 前跑 `scripts/check-private-content.py`，比對 `.private-content-baseline.tsv`，**只擋新增命中**。現存 111 筆已凍結在基線內，逐步清理。用基線而非一律阻擋，是因為多數現存命中是有工程價值的內容（踩坑教訓引用的 Jira 編號、commit message 範例），一律阻擋會逼人直接關掉整道防線。
+3. **歷史** — **接受既成事實，不重寫歷史**。2026-04 起每個 commit 的 `settings.json` 含約 50 處私有內容（私有 repo 名、本機專案路徑、部分 commit message），已在 public GitHub 上。內容性質是內部 repo 名與路徑，非憑證、非商業機密；而重寫歷史需 force push 兩個 remote 並放寬 GitLab protected branch，成本與風險不成比例（2026-07-20 曾因只 force 了一個 remote，另一個停在含明文 API key 的舊歷史達 4 天）。**保證的是未來不再新增，不是既往已清除。**
+
+> 若日後有憑證等級的內容誤入版控，處理方式不同：立即 rotate 該憑證，並依情況評估 `git filter-repo`。上述「接受既成事實」只適用於 repo 名／路徑這類內部識別資訊。
+
+### 2026-08-17～19: commit-review 取樣修復（v1.2.0）+ 解鎖端機械閘門 + sync permissions 內容級過濾（v1.8.0）
+
+起因是比對「post-commit review」與「PR full review」的重複度。原本判斷兩者共用 `review-spec.md`、輸入相同時輸出必然相同，屬冗餘；PR 1134 的實測推翻了這個推論——**review 提交時該 PR 只有一個 commit，輸入與 commit 層完全相同，卻多抓出兩個 CRITICAL**（`retrieveServices()` 缺 `.catch()` 造成連線洩漏、`ensureVSMStarted()` 的 promise 永久 reject 需重啟 App），32 分鐘後由 `63bea9ec` 修掉。LLM 的規則檢查是取樣不是判定，跑 5 個獨立視角會抓到單 agent 漏掉的東西。
+
+順著查下去，真正的缺陷不在「取樣太薄」而在三處機制層漏洞：
+
+| # | 缺陷 | 證據 | 修法 |
+|---|------|------|------|
+| 1 | Tier 3 的五面向會縮水 | Tier 3 首次實戰只 spawn 3 個 agent（缺 code-reviewer / pr-test-analyzer / type-design-analyzer，其中 code-reviewer 是 `review-pr.md` 標記 Always applicable 的）；SubagentStop debug log 五面向完成次數 15/14/13/11/10，齊跑應相等 | `commit-review` SKILL.md Tier 3 改為逐一明列 5 個 `subagent_type` + `description`，不再委派給會自行篩選的 `/pr-review-toolkit:review-pr`；prompt 必含 target ref（commit 後 `git diff` 為空，該 command 的預設 scope 對不上） |
+| 2 | marker 在 chain 跑完前被清掉 | `subagent-review-clear.ts` 的 `/review/i` 對 `pr-review-toolkit:comment-analyzer` 也命中 → 並行 6 個 agent，第一個完成的就解除閘門；`pr-1134-full-review` 等 full review 面向 agent 也誤命中（debug log 11 筆） | hook **移除清除職責**，只保留 debug log。判定依據（型別含 review）與待判定事實（chain 是否跑完）不對應，故整段移除而非調 pattern。改由 skill §5 在「面向收齊 + Critical 處理完」後顯式清 |
+| 3 | Tier 3 沒有 fail loud 條款 | full 模式有「收齊前禁止產出報告 / 降級須標在報告開頭 / 禁止自己補做」三句明文，`commit-review` 一句都沒有 | 新增 §3.1（Tier 2/3 皆適用）：三種失敗態（回報錯誤／回傳 null／沒回流）都不可當空結果，降級須標 `<未回傳數>/<應跑數>`，且降級時不得清 marker |
+
+同步更正一則錯誤記錄：memory 曾記載「full 改 skill 後不再觸發 SubagentStop，因此不會再誤清 marker」——debug log 證明主 session spawn 的面向 agent 照樣觸發，誤清問題從未被修掉，到本次才真正解決。
+
+**第二輪（08-19）：review 自己抓出上一輪的三個問題。** 這個 commit 的 Tier 3 chain 跑了 10 個 agent（`/simplify` 4 個 + commit-review 6 個），其中 4 個因 API spend limit 中斷 —— §3.1 的 fail loud 條款第一次真實觸發，降級 4/6 被明確標示而非靜默消失。已回傳的 6 個提出：
+
+| 發現 | 處理 |
+|---|---|
+| **解鎖端 100% 靠自覺**：`clear-pending-review.ts` 無條件 `unlink`，§3.1/§5 的兩個前置條件零機械檢查，而兩個閘門的攔阻訊息還直接把解鎖指令印給模型 | marker 新增 `expectedAspects`（Tier 2→1、Tier 3→6），clear 腳本要求 `--aspects-done=N`，不足 exit 1；`--force "<理由>"` 才能覆寫，每次解鎖寫入 `unlock-audit.log`。五種情境實測（未帶參數／2-of-6／6-of-6／force／舊 marker 相容）行為皆正確 |
+| **排除規則是 key 名導向、宣稱理由是內容導向**：排掉 `autoMode` 卻沒動 `permissions`，而後者實測含 50 處私有 repo 名與本機專案路徑，還夾帶 commit message（洩漏 Jira 編號與工作內容） | `mask_secrets.py` 新增 `find_private_content()` / `strip_private_permissions()`：同步時過濾含私有內容的 permission 條目（213→188），過濾後再掃描一次，**仍有殘留就 fail loud 中止同步**。`~/.claude/` 路徑設顯式豁免（hook 指令必需）。restore 端對稱加上 permissions 單向合併，避免還原時撤銷本機授權（實測 188+25=213 完整保留） |
+| **`15/14/13/11/10` 的證明力被誇大**：該 log 78% 的 `agent_type` 為空且無 session_id，無法把任一行歸屬到某一輪 Tier 3，落差同樣可能只是「部分 stop 記成空」 | hook 檔頭、`commit-review/SKILL.md`、README 三處措辭改為「佐證」，主證據改引 observation 13128（直接記錄只 spawn 3 個 agent 並列出是哪三個）。78% 空值率同時寫成「不改用 hook 計數解鎖」的真正理由 |
+
+另修：`CATALOG.md` 流程圖仍寫「自動清 marker（便利層）」且缺 `stop-review-guard`（文件傳播漏了正典圖）、`settings.json` 的 `statusMessage` 仍是 `"Checking review auto-clear..."`（描述已不存在的行為）、說明文件在解釋「私有 repo 名不能進 public repo」的同一句話裡寫了 repo 名（改佔位符）、`summarize_errors.py:118` 有一份與 `:96` 同型但漏修的缺陷（`.get` default 對空字串無效）。
+
+實測推翻的一個判斷：`MARKER_DIR` import 成本經 benchmark 是 +0.01ms（噪音級）、`mkdirSync` 1.83µs，效能疑慮全是 non-issue；且這個 diff 反而從熱路徑移除了 15.38ms 的 `execSync('git rev-parse')`。
+
+另修 `sync-my-claude-setting` v1.7.0：`settings.json` 的 `autoMode` 區段雙向排除（`mask_secrets.py` 新增 `LOCAL_ONLY_KEYS` 與 `--del-local`）——該區段含公司內部 staging 域名、私有 repo 名稱、本機絕對路徑，與 `CLAUDE.md` `<conn>` 同類，而本 repo 為 public；`*.bak-*` 日期後綴備份一併排除，不再進版控。
 
 ### 2026-07-25: Skills 與 Plugins 清理 — 停用 9 個 skills、移除 daily-review、停用 6 個 plugins、新增 ai-case-report
 

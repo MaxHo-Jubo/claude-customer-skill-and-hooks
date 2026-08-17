@@ -87,11 +87,14 @@ def summarize(records: list[dict], min_count: int) -> None:
         print(f"  {tool:<30} {len(recs):>4} errors  ({pct:.0f}%)")
 
     # --- Recurring patterns (first line of error message) ---
+    # 空 error 必須顯性歸類，不能靜默跳過：hook 阻擋型記錄的 reason 走 stdout，
+    # wrapper 只捕 stderr，所以 error 是空字串。舊版把它們跳過，導致最大宗的
+    # pattern 完全不出現在統計裡，還印出 "Good sign!"（2026-08-14 實測：29/53 筆被漏報）
+    EMPTY_PATTERN = "(empty error message — 多為 hook 阻擋，reason 走 stdout 未被捕獲)"
     by_pattern: dict[str, list] = defaultdict(list)
     for r in records:
-        pattern = first_line(r.get("error", ""))
-        if pattern:
-            by_pattern[pattern].append(r)
+        pattern = first_line(r.get("error", "")) or EMPTY_PATTERN
+        by_pattern[pattern].append(r)
 
     print(f"\n## Recurring error patterns (≥{min_count} occurrences)\n")
     found_any = False
@@ -112,7 +115,8 @@ def summarize(records: list[dict], min_count: int) -> None:
         ts = r.get("ts", "")[:19].replace("T", " ")
         skill = r.get("context") or r.get("skill", "?")
         tool = r.get("tool", "?")
-        error = first_line(r.get("error", "(no message)"))
+        # .get 的 default 只在 key 不存在時觸發；這批記錄是 key 在、值為 ""，故需再 or 一次
+        error = first_line(r.get("error") or "") or "(no message)"
         print(f"  {ts}  [{skill}] {tool}: {error}")
     print()
 

@@ -16,9 +16,7 @@
  * 失敗一律 fail-open（exit 0），絕不因 hook 自身錯誤而擋掉正常 commit。
  */
 import { existsSync } from 'fs';
-import {
-  markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, readValidMarker,
-} from '../scripts/lib/review-marker';
+import { markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, readValidMarker, aspectsForTier } from '../scripts/lib/review-marker';
 
 let input = '';
 process.stdin.setEncoding('utf8');
@@ -84,9 +82,10 @@ process.stdin.on('end', () => {
     const reason = [
       `🔒 pending-review 閘門：Tier ${marker.tier} commit ${(marker.commitHash || '').slice(0, 10)} 的 review 尚未完成，禁止開新 commit。`,
       '',
-      '請先完成該 commit 的 review（/pr-review-toolkit:review-pr 或 pr-reviewer agent），',
+      '請先完成該 commit 的 review（/commit-review），',
       '並等 review 子 agent 回報、處理完 Critical 問題後，執行以下指令解鎖：',
-      '  bun ~/.claude/scripts/clear-pending-review.ts',
+      `  bun ~/.claude/scripts/clear-pending-review.ts --aspects-done=${marker.expectedAspects ?? aspectsForTier(marker.tier)}`,
+      '  （面向未跑滿時腳本會拒絕；確需放行用 --force "<理由>"，會記入 unlock-audit.log）',
       '',
       '若這個 commit 確實不需要 review，在 commit message 加上 [skip-review] 即可略過本閘門。',
     ].join('\n');

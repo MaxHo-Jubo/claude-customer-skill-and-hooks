@@ -1,9 +1,7 @@
 #!/usr/bin/env bun
 import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync } from 'fs';
-import {
-  MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, type ReviewMarker,
-} from './lib/review-marker';
+import { MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, type ReviewMarker, aspectsForTier } from './lib/review-marker';
 import { computeTier } from './lib/tier';
 
 /**
@@ -177,6 +175,7 @@ function writeMarker(tier: number, repoRoot: string, sessionId?: string): string
       tier,
       createdAt: Date.now(),
       sessionId,
+      expectedAspects: aspectsForTier(tier),
     };
     writeFileSync(markerPathForRepo(repoRoot), JSON.stringify(marker, null, 2), 'utf8');
 
@@ -185,7 +184,7 @@ function writeMarker(tier: number, repoRoot: string, sessionId?: string): string
       '',
       `🔒 已寫入 pending-review 閘門（Tier ${tier}，commit ${commitHash.slice(0, 10)}）。`,
       '在完成 review 前，此 repo 的「新 commit」會被 PreToolUse 阻擋。',
-      'review 完成後執行：bun ~/.claude/scripts/clear-pending-review.ts',
+      `review 完成後執行：bun ~/.claude/scripts/clear-pending-review.ts --aspects-done=${aspectsForTier(tier)}`,
     ].join('\n');
   } catch {
     return '';

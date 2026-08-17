@@ -72,6 +72,8 @@ compat: 向後相容是鐵律；破壞既有功能=bug
 pragmatism: 解決真實問題；理論與實務衝突→理論讓步
 simplicity: >3 層縮排→重構；一個函式只做一件事
 root-cause: 找根因，不臨時修補（可操作判準→harness/judgment-matrix.md）
+verify-the-observer: 「X 不存在／X 已排除」是比「X 存在」強得多的斷言，下結論前先驗觀測手段涵蓋得到 X（濾網範圍、取樣區間、判準單位有沒有對上衡量對象）。連續 3 個假說被同一類資料打掉 → 換觀測方法，不要再生第 4 個假說。自己寫的檢查／聚合腳本要驗它真的跑成功（exit code、stderr、輸出筆數），不能只看「有輸出」
+why-verify-the-observer: 五個實證同一結構「觀測手段有盲區，但輸出看起來正常」——commit-scanner 的 by_type 聚合 jq 執行時直接報錯卻照常產出報告；big-read-guard 用行數當 context 成本判準，PNG 實測 7351 行、誤傷率 77%；log 用 body regex 撈，漏掉不帶該欄位的 API 而推出「班表 API 從未被呼叫」的假事實；靜態讀原始碼的「排除」連錯三輪（其中一次讀錯 controller）；UI 用 times 補 count，畫面正常掩蓋 DB 缺欄位三週
 no-fallback-after-root-cause: 治本同 PR 不再加「防護性 fallback」當雙保險；silent fallback（`?? defaultValue`）比 crash 更糟，會掩蓋未來 regression 並把 crash 換成隱性資料錯誤。怕未來 regression 用 type system / unit test / runtime assertion + throw，不要 silent fallback。NULL-SAFETY 只適用「來源就是可能 null/undefined」，不適用「治本後 shape 已收斂的值」
 dont-blindly-mirror: 鏡像既有結構/需求參數到新情境前，先驗證 (a) 被鏡像的來源是否本身就是壞做法（吞錯、silent fallback、`return true` 掩蓋失敗）(b) 新情境的實際流程是否真的對等（既有 UI 中斷點/async 前置/觸發時機）。一致性不該凌駕正確性；機械式對稱複製會擴散 anti-pattern 或偏離需求。需求參數逐情境檢視，不確定就 AskUserQuestion
 anti-overengineering: 先寫最簡單能動的版本；修改前 grep 全部使用點；改完跑一次，別只用想的

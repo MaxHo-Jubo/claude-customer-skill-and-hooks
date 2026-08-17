@@ -47,6 +47,20 @@
 
 派工前自檢一句話：「一個從沒看過這個 repo 的人，拿到這段 prompt 能直接開工嗎？」不能就補件，不要先派再補。
 
+### 結果回流（呼叫參數層；2026-08-13 實測）
+
+三件套講的是 prompt 內容，這條講**呼叫參數** —— 寫錯的話子 agent 照樣跑完，但結果永遠回不來，且不產生任何錯誤訊息。
+
+- **要拿回子 agent 的結果 → 不得帶 `name`**。不帶 `name` 時，子 agent 完成後 harness 會自動以 task-notification 把 `<result>` 推進 parent context（**在 subagent 內部派工也成立**）；帶了 `name` 則結果不回流，用 `SendMessage` 索取只會拿到「已排入佇列」確認。`name` 只留給需要持續對話的常駐 agent。
+  - **當場判別走哪條路徑**：看 tool_result 首行 —— `Async agent launched successfully` = 會回流；`Spawned successfully` = 不回流。派完就能確認，不必等到收不到結果才發現。
+- **Agent tool 沒有 `run_in_background` 參數**（那是 Bash tool 的）。schema 靜默忽略未知參數 —— 寫了不報錯，也不生效。
+- 並行 = 多個 Agent call 放在**同一則訊息**內。發完該輪立即結束等 notification，收齊前不要往下走。
+- **拿不到結果必須 fail loud**：禁止自己補做該面向後當它成功，必須在報告開頭標明降級。掩蓋機制失效比失效本身更貴。
+
+- **巢狀 orchestrate 不可靠**：subagent 內再 spawn subagent、靠 notification 跨兩層回流，實測三次三種結果（全回流 / 繞道 team-lead / 全落空）。需要 fan-out 收斂的流程，讓**主 session 直接 orchestrate**（depth 0→1），不要包一層 agent 進去。
+
+完整實例見 [../skills/pr-reviewer/SKILL.md](../skills/pr-reviewer/SKILL.md) §為什麼是 skill 而不是 agent —— pr-reviewer v1.3.0 花一整節要求一個不存在的參數、v1.4.0 改成要求模型「該輪主動結束」，兩版都拿 prompt 約定去管非確定性的 harness 路由，直到 v2.0.0 改拓撲才解決。
+
 ## 3. 模型分工表
 
 Agent 工具的 `model` 參數可填：`haiku` / `sonnet` / `opus`（本機另有 `fable`）。省略 = 繼承主對話模型（多數情況正確）。

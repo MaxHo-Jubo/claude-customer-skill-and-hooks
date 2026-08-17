@@ -181,6 +181,18 @@
           "review.*(HEAD|commit|這個 commit|這次 commit)"
         ]
       }
+    },
+    "pr-reviewer": {
+      "enforcement": "suggest",
+      "priority": "high",
+      "promptTriggers": {
+        "keywords": ["pr-reviewer", "full review", "PR full review", "審 PR", "review 這個 PR"],
+        "intentPatterns": [
+          "(full|完整).*(review|審查)",
+          "(review|審查|審).*(PR|pull request)\\s*#?\\d+",
+          "(PR|pull request)\\s*#?\\d+.*(review|審查)"
+        ]
+      }
     }
   }
 }

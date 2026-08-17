@@ -1,7 +1,8 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.6.0
+version: 1.8.0
+last_modified: 2026-08-19
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -26,7 +27,7 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 | 來源 (`~/.claude/`) | 目標 (repo) | 類型 |
 |---------------------|-------------|------|
-| `settings.json` | `settings.json` | 檔案（遮罩 secret、`model` 欄位排除，見下方安全規則） |
+| `settings.json` | `settings.json` | 檔案（遮罩 secret、排除 `model` / `autoMode`、permissions 內容級過濾 + fail loud，見下方安全規則） |
 | `CLAUDE.md` | `CLAUDE.md.{YYYYMMDD}`（如 `CLAUDE.md.20260316`） | 檔案（日期後綴） |
 | `skills/` | `skills/` | 目錄（排除 `*.bak`） |
 | `hooks/` | `hooks/` | 目錄（排除 `*.bak`） |
@@ -44,10 +45,10 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 
 **檔案比對：**
 ```bash
-# settings.json：遮罩 secret（見 mask_secrets.py）並排除 model 欄位後比對
+# settings.json：遮罩 secret（見 mask_secrets.py）並排除 model / autoMode 後比對
 # SOURCE 是本機真值需遮罩；TARGET 已是遮罩過的備份，一併過濾以對齊比對，避免顯示明文或假差異
 MASK_PY="$SOURCE/skills/sync-my-claude-setting/mask_secrets.py"
-diff -u <(python3 "$MASK_PY" --del-model "$SOURCE/settings.json") <(python3 "$MASK_PY" --del-model "$TARGET/settings.json") || true
+diff -u <(python3 "$MASK_PY" --del-model --del-local "$SOURCE/settings.json") <(python3 "$MASK_PY" --del-model --del-local "$TARGET/settings.json") || true
 # CLAUDE.md 比對最新的日期後綴版本
 LATEST_CLAUDE=$(ls -1 "$TARGET"/CLAUDE.md.* 2>/dev/null | sort -r | head -1)
 if [ -n "$LATEST_CLAUDE" ]; then
@@ -93,13 +94,13 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
 **目錄比對：**
 ```bash
 # 對每個目錄項目（一律排除 *.bak 臨時備份）
-diff -rq -x '*.bak' "$SOURCE/skills/" "$TARGET/skills/" || true
-diff -rq -x '*.bak' "$SOURCE/hooks/" "$TARGET/hooks/" || true
-diff -rq -x '*.bak' "$SOURCE/scripts/" "$TARGET/scripts/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$SOURCE/skills/" "$TARGET/skills/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$SOURCE/hooks/" "$TARGET/hooks/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$SOURCE/scripts/" "$TARGET/scripts/" || true
 # rules/ 額外排除 repo 專屬的 README.md（本機無此檔，不應列入差異或被刪）
-diff -rq -x '*.bak' -x 'README.md' "$SOURCE/rules/" "$TARGET/rules/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x 'README.md' "$SOURCE/rules/" "$TARGET/rules/" || true
 # harness/ 排除機器專屬檔（harness-diagnosis.md / handover-letter.md 不列入差異）
-diff -rq -x '*.bak' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
 ```
 
 對 `diff -rq` 回報有差異的檔案，逐一執行 `diff -u` 顯示具體內容差異。
@@ -127,17 +128,37 @@ diff -rq -x '*.bak' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/h
 
 直接以 `~/.claude/` 為準覆蓋 repo 內容。
 
+**先自我檢驗過濾器**（防線本身失效時是靜默的——「跑完沒噴東西」與「濾網有洞」輸出完全一樣）：
+```bash
+python3 "$SOURCE/skills/sync-my-claude-setting/test_mask_secrets.py" || {
+  echo "❌ mask_secrets 自我檢驗未通過，同步中止（過濾器可能有洞或豁免被誤傷）"; exit 1;
+}
+```
+
 **檔案複製：**
 ```bash
+set -euo pipefail   # fail loud 必須真的中止：SystemExit 只結束 python，後續 sed/find -delete/rsync 照跑
 # settings.json：遮罩 secret 後複製本機內容，但 model 欄位保留 repo 原有值（不覆蓋）
 python3 -c "
 import json, sys
 sys.path.insert(0, '$SOURCE/skills/sync-my-claude-setting')
-from mask_secrets import mask_secrets
+from mask_secrets import mask_secrets, strip_local_only, strip_private_permissions, find_private_content
 with open('$SOURCE/settings.json') as f:
     src = json.load(f)
 # 遮罩 permissions allow-list 等處可能夾帶的明文 secret，避免洩漏進 repo
 src = mask_secrets(src)
+# 移除本機專屬區段（autoMode：公司內部域名／私有 repo 名／本機路徑），repo 為 public
+src = strip_local_only(src)
+# 移除 permissions 中含私有內容的條目（私有 repo 名／本機專案路徑／夾帶的 commit message）
+src, removed = strip_private_permissions(src)
+if removed:
+    print(f'已過濾 {len(removed)} 條含私有內容的 permission')
+# fail loud：過濾後仍有殘留就中止同步，絕不讓私有內容進 public repo
+leftover = find_private_content(src)
+if leftover:
+    for path, frag, reason in leftover[:20]:
+        print(f'  [{reason}] {frag} @ {path}')
+    raise SystemExit(f'❌ settings.json 仍殘留 {len(leftover)} 處私有內容，同步中止')
 try:
     with open('$TARGET/settings.json') as f:
         tgt_model = json.load(f).get('model')
@@ -193,20 +214,22 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 > - `settings.json` 的 `permissions` allow-list 會記錄使用者執行過的 Bash 命令，可能夾帶帶明文 secret 的命令（如 `claude mcp add ... --api-key <key>`）。複製時一律經 `mask_secrets.py` 遞迴遮罩 secret（已知 key 格式如 `ctx7sk-`/`ghp_`/`glpat-`/`AKIA…`，以及 `--api-key`/`--token`/`--secret`/`--password` 後的值），禁止明文 secret 進 repo。
 > - `mcp-servers.json` 會自動過濾 `env` 欄位並遮罩 `--api-key`/`--token`/`--secret`/`--password` 後的值。
 > - `settings.json` 的 `model` 欄位為本機專屬設定（依機器/當下任務彈性切換），同步時排除、不覆蓋、不還原，repo 端維持自己原本的值。
+> - `settings.json` 的 **`permissions` 條目做內容級過濾**：含私有識別符（私有 repo 名／組織名／內部域名）或本機專案路徑（`~/Documents`、`~/Desktop`、`~/Downloads` 底下）的條目一律不進 repo——這類條目多為一次性具體指令授權，還會夾帶 commit message（洩漏 Jira 編號與工作內容），且在別台機器本來就無效。`~/.claude/` 底下的絕對路徑是 hook / statusline 指令必需，設為顯式豁免。過濾後再跑一次 `find_private_content()` 掃描，**仍有殘留就中止同步（fail loud）**，不靜默放行。這條與「排除 `autoMode`」是同一個政策的兩半：宣稱理由是內容導向，實作就不能只擋 key 名。
+> - `settings.json` 的 **`autoMode` 區段雙向排除**（`mask_secrets.py` 的 `LOCAL_ONLY_KEYS`）。`autoMode.environment` 記錄公司內部 staging 域名、私有 repo 名稱（`<org>/<private-repo>` 形式）、本機絕對路徑、內部 npm registry；`autoMode.soft_deny` 記錄專案 deploy script 名稱。這與 `CLAUDE.md` `<conn>` 是同類環境資訊，而**本 repo 為 public GitHub repo**，故整段不進版控、restore 也不還原（每台機器的自動化權限設定本就該各自持有）。新增本機專屬頂層欄位時，一併加進 `LOCAL_ONLY_KEYS`。
 
 **目錄同步（mirror 模式）：**
 ```bash
 # rsync --delete 確保 repo 側多出的檔案也會被刪除
 # -L: follow symlinks（部分 skill 是 symlink 指向 ~/.agents/skills/）
-# --exclude='*.bak'：本機臨時備份不進 repo（同時保護 repo 側同名檔不被 --delete 清掉）
-rsync -avL --delete --exclude='*.bak' "$SOURCE/skills/" "$TARGET/skills/"
-rsync -avL --delete --exclude='*.bak' "$SOURCE/hooks/" "$TARGET/hooks/"
-rsync -avL --delete --exclude='*.bak' "$SOURCE/scripts/" "$TARGET/scripts/"
+# --exclude='*.bak' --exclude='*.bak-*'：本機臨時備份不進 repo（同時保護 repo 側同名檔不被 --delete 清掉）
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$SOURCE/skills/" "$TARGET/skills/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$SOURCE/hooks/" "$TARGET/hooks/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$SOURCE/scripts/" "$TARGET/scripts/"
 # rules/ 額外保護 repo 專屬的 README.md（本機無此檔，--delete 會誤刪）
-rsync -avL --delete --exclude='*.bak' --exclude='README.md' "$SOURCE/rules/" "$TARGET/rules/"
-rsync -avL --delete --exclude='*.bak' "$SOURCE/agents/" "$TARGET/agents/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='README.md' "$SOURCE/rules/" "$TARGET/rules/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$SOURCE/agents/" "$TARGET/agents/"
 # harness/ 排除機器專屬檔；--exclude 同時保護 repo 側該兩檔不被 --delete 清掉
-rsync -avL --delete --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
 ```
 
 > **harness 機器專屬檔規則**：`harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為**機器專屬檔案，雙向不同步**——每台機器的診斷/交接只屬於那台機器，不互相覆蓋。repo main 現存的兩檔為 M4 機器快照，維持原樣；6 個通用制度檔（README、model-dispatch、judgment-matrix、delegation-templates、knowledge-protocol、commit-review-policy）正常同步。
@@ -306,11 +329,20 @@ jq -r 'to_entries | map(select(.key | startswith("_") | not)) | .[].key' "$SOURC
 
 ### STEP 04: Commit（先不 push）
 
+**commit 前先跑全 repo 私有內容掃描**（`settings.json` 的過濾只覆蓋 7 個同步目標中的 1 個；
+其餘六個目錄是 `rsync` 原封鏡像，這一步是它們唯一的守門員）：
+
 ```bash
 cd "$TARGET"
+python3 ~/.claude/scripts/check-private-content.py || {
+  echo "❌ 發現新增的私有內容，請先改成佔位符（<org>/<repo>、<TICKET>）再 commit"; exit 1;
+}
 git add -A
 git status
 ```
+
+掃描器只擋**新增**命中，現存命中由 `.private-content-baseline.tsv` 凍結（納入版控以追蹤清理進度）。
+確認某筆新增可公開時，用 `--write-baseline` 更新基線；不要為了通過而放寬 pattern。
 
 根據 STEP 01 的差異報告產生 commit message：
 
@@ -346,8 +378,8 @@ Skill(commit-review) args: "tier=N target=HEAD"
 > ```bash
 > # 1. 先改本機（用 Edit 改 ~/.claude/ 下的檔案）
 > # 2. 再同步到 repo（只需同步實際改動的目錄）
-> rsync -aL --exclude='*.bak' "$SOURCE/scripts/" "$TARGET/scripts/"
-> rsync -aL --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
+> rsync -aL --exclude='*.bak' --exclude='*.bak-*' "$SOURCE/scripts/" "$TARGET/scripts/"
+> rsync -aL --exclude='*.bak' --exclude='*.bak-*' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
 > # 3. repo 專屬文件（README.md / CATALOG.md / plugins/README.md）直接改 repo，本機無對應檔
 > ```
 >
@@ -396,17 +428,17 @@ echo "local:  $(git rev-parse --short HEAD)"
 
 ```bash
 # 檔案比對（repo → 本機）
-# settings.json：遮罩 secret 並排除 model 欄位後比對（repo 已遮罩，本機端一併過濾以對齊）
+# settings.json：遮罩 secret 並排除 model / autoMode 後比對（repo 已遮罩，本機端一併過濾以對齊）
 MASK_PY="$SOURCE/skills/sync-my-claude-setting/mask_secrets.py"
-diff -u <(python3 "$MASK_PY" --del-model "$TARGET/settings.json") <(python3 "$MASK_PY" --del-model "$SOURCE/settings.json") || true
+diff -u <(python3 "$MASK_PY" --del-model --del-local "$TARGET/settings.json") <(python3 "$MASK_PY" --del-model --del-local "$SOURCE/settings.json") || true
 diff -u "$TARGET/statusline/statusline-command.sh" "$SOURCE/statusline-command.sh" || true
 
 # 目錄比對（排除 *.bak；rules 排除 repo 專屬 README.md）
-diff -rq -x '*.bak' "$TARGET/skills/" "$SOURCE/skills/" || true
-diff -rq -x '*.bak' "$TARGET/hooks/" "$SOURCE/hooks/" || true
-diff -rq -x '*.bak' "$TARGET/scripts/" "$SOURCE/scripts/" || true
-diff -rq -x '*.bak' -x 'README.md' "$TARGET/rules/" "$SOURCE/rules/" || true
-diff -rq -x '*.bak' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$TARGET/skills/" "$SOURCE/skills/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$TARGET/hooks/" "$SOURCE/hooks/" || true
+diff -rq -x '*.bak' -x '*.bak-*' "$TARGET/scripts/" "$SOURCE/scripts/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x 'README.md' "$TARGET/rules/" "$SOURCE/rules/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
 
 # MCP Server 比對
 # 從 repo 的 mcp-servers.json 與本機 ~/.claude.json 的 mcpServers 比對
@@ -441,20 +473,42 @@ if not (repo_names - local_names) and not (local_names - repo_names):
 
 ```bash
 # 檔案還原
-# settings.json：還原 repo 內容，但 model 欄位保留本機原有值（不覆蓋）
+# settings.json：還原 repo 內容，但 model 與 autoMode 保留本機原有值（不覆蓋、不清除）
 python3 -c "
-import json
+import json, sys
+sys.path.insert(0, '$SOURCE/skills/sync-my-claude-setting')
+from mask_secrets import LOCAL_ONLY_KEYS
 with open('$TARGET/settings.json') as f:
     src = json.load(f)
 try:
     with open('$SOURCE/settings.json') as f:
-        local_model = json.load(f).get('model')
+        local = json.load(f)
 except FileNotFoundError:
-    local_model = None
+    local = {}
+local_model = local.get('model')
 if local_model is not None:
     src['model'] = local_model
 else:
     src.pop('model', None)
+# 本機專屬區段不由 repo 還原：本機有就保留原值，本機沒有就維持不存在
+for key in LOCAL_ONLY_KEYS:
+    src.pop(key, None)
+    if key in local:
+        src[key] = local[key]
+# permissions 單向合併：repo 端已濾掉含私有內容的條目，直接覆蓋會讓本機失去這些授權。
+# 保留本機獨有條目（順序：repo 條目在前，本機獨有者接在後），不因備份缺漏而撤銷既有授權。
+local_perms = local.get('permissions', {})
+if isinstance(local_perms, dict) and isinstance(src.get('permissions'), dict):
+    for section, local_items in local_perms.items():
+        if not isinstance(local_items, list):
+            continue
+        repo_items = src['permissions'].get(section, [])
+        if not isinstance(repo_items, list):
+            continue
+        extra = [x for x in local_items if x not in repo_items]
+        if extra:
+            src['permissions'][section] = repo_items + extra
+            print(f'permissions.{section}: 保留 {len(extra)} 條本機獨有條目')
 with open('$SOURCE/settings.json', 'w') as f:
     json.dump(src, f, indent=2, ensure_ascii=False)
     f.write('\n')
@@ -470,12 +524,12 @@ if [ -n "$LATEST_CLAUDE" ]; then
 fi
 
 # 目錄還原（排除 *.bak；rules 不還原 repo 專屬 README.md 到本機）
-rsync -avL --delete --exclude='*.bak' "$TARGET/skills/" "$SOURCE/skills/"
-rsync -avL --delete --exclude='*.bak' "$TARGET/hooks/" "$SOURCE/hooks/"
-rsync -avL --delete --exclude='*.bak' "$TARGET/scripts/" "$SOURCE/scripts/"
-rsync -avL --delete --exclude='*.bak' --exclude='README.md' "$TARGET/rules/" "$SOURCE/rules/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$TARGET/skills/" "$SOURCE/skills/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$TARGET/hooks/" "$SOURCE/hooks/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' "$TARGET/scripts/" "$SOURCE/scripts/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='README.md' "$TARGET/rules/" "$SOURCE/rules/"
 # harness/ 還原同樣排除機器專屬檔（repo 的診斷/交接是別台機器的，不還原到本機）
-rsync -avL --delete --exclude='*.bak' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
 ```
 
 ### STEP R3: Restore MCP Servers
@@ -512,7 +566,7 @@ else:
 "
 ```
 
-> **安全規則**：restore 不會刪除本機已有但 repo 沒有的 MCP Server（單向新增）。兩邊都有的 server 保留本機版本（含完整 env）。`settings.json` 的 `model` 欄位同樣排除，還原後維持本機原本的值。
+> **安全規則**：restore 不會刪除本機已有但 repo 沒有的 MCP Server（單向新增）。兩邊都有的 server 保留本機版本（含完整 env）。`settings.json` 的 `model` 欄位與 `LOCAL_ONLY_KEYS`（`autoMode`）同樣排除，還原後維持本機原本的值；換機時這些欄位 repo 端本來就沒有，需在新機器自行重新設定。
 
 ---
 
@@ -521,11 +575,13 @@ else:
 - `~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤
 - `settings.local.json` 不同步（本機專屬設定）
 - `settings.json` 的 `model` 欄位不同步、不還原（雙向排除），兩邊各自保留自己原本的值
+- `settings.json` 的 `permissions` 條目經內容級過濾（私有 repo 名／組織名／內部域名／`~/Documents` 等本機專案路徑），過濾後仍有殘留則 **fail loud 中止同步**；`~/.claude/` 路徑為顯式豁免（hook 指令必需）
+- `settings.json` 的 `autoMode` 區段不同步、不還原（`mask_secrets.py` 的 `LOCAL_ONLY_KEYS`）——內含公司內部域名、私有 repo 名稱、本機路徑，而本 repo 為 **public**；新增同類本機專屬頂層欄位時一併加進該常數
 - `harness/harness-diagnosis.md` 與 `harness/handover-letter.md` 為機器專屬檔案，雙向不同步（每台機器的診斷/交接不互相覆蓋）
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除（`*.bak` 與 `rules/README.md` 除外，見安全規則）
 - `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）
-- `*.bak` 臨時備份雙向不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
+- `*.bak` 與 `*.bak-*`（日期／版本後綴備份，如 `pr-reviewer.md.bak-20260813`、`model-dispatch.md.bak-20260813`）雙向不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回
 - **push 在 review 之後（v1.6.0 起）**：STEP 04 只 commit，STEP 05 跑 review，STEP 06 才 push。這樣 review 修出的問題可以 `--amend` 收進同一個 commit，不必另開 fix commit 或改寫已發布歷史
 - **review 修正先落回本機 `~/.claude/` 再 rsync 到 repo**（只改 repo 會被下次同步的本機舊版覆蓋掉）；`README.md`/`CATALOG.md`/`plugins/README.md` 為 repo 專屬，直接改 repo

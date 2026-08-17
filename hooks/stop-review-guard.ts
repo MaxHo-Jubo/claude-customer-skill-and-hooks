@@ -18,7 +18,7 @@
  */
 import { existsSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { MARKER_DIR, readValidMarker, resolveRepoRoot, type ReviewMarker } from '../scripts/lib/review-marker';
+import { MARKER_DIR, readValidMarker, resolveRepoRoot, type ReviewMarker, aspectsForTier } from '../scripts/lib/review-marker';
 
 /**
  * 同一 session 最多被 block 的次數：達上限即放行（改印警告），防止模型連續無視時
@@ -144,7 +144,8 @@ process.stdin.on('end', () => {
       '請立即執行 review chain：',
       `  Skill(commit-review) args: "tier=${hit.marker.tier} target=${hit.marker.commitHash}"`,
       'review 完成（Critical 已處理）後執行解鎖，之後即可正常結束回合：',
-      `  bun ~/.claude/scripts/clear-pending-review.ts ${hit.marker.repoRoot}`,
+      `  bun ~/.claude/scripts/clear-pending-review.ts ${hit.marker.repoRoot} --aspects-done=${hit.marker.expectedAspects ?? aspectsForTier(hit.marker.tier)}`,
+      '  （面向未跑滿時腳本會拒絕解鎖；依 SKILL.md §3.1 應先向使用者回報降級，確需放行用 --force "<理由>"）',
     ].join('\n');
     console.log(JSON.stringify({ decision: 'block', reason }));
     process.exit(0);

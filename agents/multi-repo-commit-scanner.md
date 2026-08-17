@@ -1,7 +1,7 @@
 ---
 name: multi-repo-commit-scanner
-version: 1.1.0
-last_modified: 2026-05-31
+version: 1.2.0
+last_modified: 2026-08-14
 description: >
   多 repo 平行 commit 掃描器。輸入 repo 清單 + 天數，內部用 Bash 背景作業同時掃 N 個 repo
   的 git log，輸出每 repo commits、提取的 Jira IDs 與統計。預設並行度 8（背景 job + wait）。
@@ -32,7 +32,9 @@ parallel: 8                      # 選填，預設 8
 include_branches: all            # 選填，預設 all（用 --all）
 ```
 
-> **monorepo 拆分**：同一個 git repo 用兩筆物件（pathspec=`frontend/` 與 `backend/`）即可拆成兩個 bucket。橫跨兩者的 full-stack commit 會**同時計入兩個 bucket**（不去重，與下方設計要點一致），因此 `summary.total_commits` 對含 pathspec 的 repo 可能略大於實際 commit 數。
+> **monorepo 拆分**：同一個 git repo 用兩筆物件（pathspec=`frontend/` 與 `backend/`）即可拆成兩個 bucket。橫跨兩者的 full-stack commit 會**同時計入兩個 bucket**，因此 `summary.total_commits` 對含 pathspec 的 repo 會略大於實際 commit 數——要真實總數請用 `summary.unique_commits`（跨 bucket 已去重）。
+
+> **`days` 的語意**：以 **author date** 為準往回算，不是 committer date。被 rebase 改寫過的舊 commit 不會因此落進窗口（詳見「設計要點」）。
 
 ## 執行流程
 
@@ -51,7 +53,11 @@ include_branches: all            # 選填，預設 all（用 --all）
 
 ```bash
 # 並行度控制：每次最多 N 個背景 job
-SINCE="${DAYS} days ago"
+# 掃描窗口刻意放寬 REBASE_BUFFER_DAYS：git log --since 過濾的是 committer date，
+# 而 rebase 會把舊 commit 的 committer date 推成今天。真正的窗口過濾在 jq 用 author date（CUTOFF）做。
+REBASE_BUFFER_DAYS=30
+SCAN_SINCE="$((DAYS + REBASE_BUFFER_DAYS)) days ago"
+CUTOFF=$(date -v-"${DAYS}"d +%Y-%m-%d 2>/dev/null || date -d "${DAYS} days ago" +%Y-%m-%d)
 TMPDIR=$(mktemp -d)
 JSONL="$TMPDIR/results.jsonl"
 
@@ -65,29 +71,36 @@ scan_one() {
     return
   fi
   local author_local="${AUTHOR:-$(git -C "$repo" config user.name)}"
-  # tab-separated: sha \t date \t subject，後面用 jq 切
+  # tab-separated: sha \t author_date \t committer_date \t subject，後面用 jq 切
+  # committer date 一併取出，供主 agent 診斷 rebase 造成的日期漂移
   # pathspec 非空 → append `-- <pathspec>`，只取動到該子目錄的 commit（monorepo 拆 FE/BE 用）
   local log
   if [ -n "$pathspec" ]; then
-    log=$(git -C "$repo" log --all --since="$SINCE" --no-merges \
+    log=$(git -C "$repo" log --all --since="$SCAN_SINCE" --no-merges \
           --author="$author_local" \
-          --pretty=format:'%h%x09%ad%x09%s' --date=short -- "$pathspec" 2>/dev/null || echo "")
+          --pretty=format:'%h%x09%ad%x09%cd%x09%s' --date=short -- "$pathspec" 2>/dev/null || echo "")
   else
-    log=$(git -C "$repo" log --all --since="$SINCE" --no-merges \
+    log=$(git -C "$repo" log --all --since="$SCAN_SINCE" --no-merges \
           --author="$author_local" \
-          --pretty=format:'%h%x09%ad%x09%s' --date=short 2>/dev/null || echo "")
+          --pretty=format:'%h%x09%ad%x09%cd%x09%s' --date=short 2>/dev/null || echo "")
   fi
-  jq -nR --arg repo "$repo" --arg name "$name" '
+  jq -nR --arg repo "$repo" --arg name "$name" --arg cutoff "$CUTOFF" '
     [inputs | select(length>0) | split("\t") |
-      {sha:.[0], date:.[1], subject:.[2],
-       jira_ids: ([.[2] | scan("\\[([A-Z]+-[0-9]+)\\]") | .[]] | unique),
-       type: (.[2] | capture("^(?<t>feat|fix|refactor|chore|docs|test|perf|ci)") // {t:"other"} | .t)
+      {sha:.[0], date:.[1], cdate:.[2], subject:.[3],
+       jira_ids: ([.[3] | scan("\\[([A-Z]+-[0-9]+)\\]") | .[]] | unique),
+       type: (.[3] | capture("^(\\[[A-Z]+-[0-9]+\\]\\s*)?(?<t>feat|fix|refactor|chore|docs|test|perf|ci)") // {t:"other"} | .t)
       }
-    ] as $commits |
-    {repo:$repo, name:$name, total:($commits|length),
-     by_type:($commits | group_by(.type) | map({key:.[0].type, value:length}) | from_entries),
-     jira_ids:($commits | map(.jira_ids) | add // [] | unique),
-     commits:$commits}
+    ]
+    # 窗口過濾用 author date（%ad）；--since 依據的 committer date 會被 rebase 改寫而失真
+    | (map(select(.date >= $cutoff))) as $in_window
+    # 去重：rebase / cherry-pick 讓同一個 commit 以不同 sha 出現在多條 ref 上，
+    # 但 author date 與 subject 不會變 → 用兩者當識別鍵
+    | ($in_window | unique_by(.date + " " + .subject)) as $commits
+    | {repo:$repo, name:$name, total:($commits|length),
+       dedup_removed: (($in_window|length) - ($commits|length)),
+       by_type:($commits | group_by(.type) | map({key:.[0].type, value:length}) | from_entries),
+       jira_ids:($commits | map(.jira_ids) | add // [] | unique),
+       commits:$commits}
   ' <<<"$log"
 }
 
@@ -106,14 +119,18 @@ done
 wait
 
 # 聚合輸出
+# total_commits = 各 bucket 加總（含 pathspec 跨 bucket 重複計算）
+# unique_commits = 用 repo+author date+subject 跨 bucket 去重後的真實 commit 數
 jq -s '
   {
     repos: .,
     summary: {
       total_repos: length,
       total_commits: (map(.total // 0) | add),
+      unique_commits: ([.[] | .repo as $r | (.commits // [])[] | $r + " " + .date + " " + .subject] | unique | length),
+      dedup_removed: (map(.dedup_removed // 0) | add),
       all_jira_ids: (map(.jira_ids // []) | add | unique),
-      by_type_aggregate: (map(.by_type // {}) | reduce .[] as $bt ({}; . + ($bt | with_entries(.value = ((. // 0) + ($bt[.key] // 0))))))
+      by_type_aggregate: (map(.by_type // {}) | reduce .[] as $bt ({}; reduce ($bt | to_entries[]) as $e (.; .[$e.key] = ((.[$e.key] // 0) + $e.value))))
     }
   }
 ' "$JSONL"
@@ -134,12 +151,14 @@ jq -s '
       "repo": "/Users/maxhero/Documents/Compal/luna_web",
       "name": "luna_web-FE",
       "total": 17,
+      "dedup_removed": 2,
       "by_type": {"feat": 8, "fix": 6, "refactor": 3},
       "jira_ids": ["ERPD-11870", "LVB-7963"],
       "commits": [
         {
           "sha": "a1b2c3d",
           "date": "2026-05-20",
+          "cdate": "2026-05-22",
           "subject": "[ERPD-11870] feat(FE): 居服系統-...",
           "jira_ids": ["ERPD-11870"],
           "type": "feat"
@@ -155,6 +174,8 @@ jq -s '
   "summary": {
     "total_repos": 8,
     "total_commits": 68,
+    "unique_commits": 61,
+    "dedup_removed": 9,
     "all_jira_ids": ["ERPD-11870", "LVB-7963", "LVB-8037", "..."],
     "by_type_aggregate": {"feat": 25, "fix": 28, "refactor": 10, "chore": 5}
   }
@@ -163,10 +184,10 @@ jq -s '
 
 ### STEP 04: 回報
 
-回傳給主 agent 時，附 200 字內摘要 + 完整 JSON：
+回傳給主 agent 時，附 200 字內摘要 + 完整 JSON。摘要必須引用 `unique_commits`（去重後的真實數字），並在 `dedup_removed > 0` 時明說移除幾筆：
 
 ```
-掃描完成：8 repos、68 commits、15 Jira IDs。最高活躍度：luna_web-FE (17)。
+掃描完成：8 repos、61 commits（去重移除 9 筆 rebase 重複）、15 Jira IDs。最高活躍度：luna_web-FE (17)。
 （完整 JSON 如下）
 ```
 
@@ -175,8 +196,11 @@ jq -s '
 - **無狀態**：不寫檔（除 `$TMPDIR`，shell 結束自動清）；不污染 repo working tree
 - **故障隔離**：任一 repo 失敗（無 .git / 無權限 / git 異常）寫入 `error` 欄位，不中斷其他 repo
 - **作者過濾**：每 repo 用該 repo 的 `git config user.name`（多帳號 monorepo 情境）；主 agent 可明確覆寫
-- **`--all` 必開**：feature branch 上的 commit 不能漏（與 weekly-review STEP 01 既有規則一致）
+- **`--all` 必開**：feature branch 上的 commit 不能漏（與 weekly-review STEP 01 既有規則一致）。代價是 rebase 前後兩條 ref 上的同一批 commit 會各出現一次，由下方去重處理
 - **`--no-merges`**：merge commit 不算工作量
+- **窗口以 author date 為準**：`git log --since` 過濾的是 **committer date**，rebase 會把它改寫成今天。因此掃描窗口放寬 30 天（`REBASE_BUFFER_DAYS`）先撈進來，再於 jq 用 `%ad` 精確過濾。這同時擋掉兩類錯誤：舊 commit 被 rebase 而誤納（author 3 月、committer 8 月），以及上週工作因本週 rebase 而重複計入
+- **去重鍵 = author date + subject**：rebase / cherry-pick 會改 sha 與 committer date，但不動 author date 與 subject。移除筆數寫入 `dedup_removed`，不靜默吞掉
+- **type 解析容許 Jira 前綴**：commit 格式為 `[ERPD-1234] fix(FE): ...`，regex 若只用 `^(feat|fix|...)` 錨定會把所有帶編號的 commit 誤判為 `other`
 - **pathspec 拆分**：物件形式帶 `pathspec` 時，`git log` append `-- <pathspec>`，把同一個 monorepo 依子目錄拆成多個 bucket（如 luna_web 的 frontend/ 與 backend/）。橫跨多子目錄的 commit 會同時計入各 bucket
 - **Jira ID 提取**：regex `\[([A-Z]+-[0-9]+)\]` 對應 CLAUDE.md COMMIT-MSG 規範
 - **type 解析**：取 commit subject 開頭的 conventional commit type，無匹配標 `other`
@@ -185,7 +209,8 @@ jq -s '
 
 - ❌ 不解析 commit body（只看 subject 行）
 - ❌ 不對 Jira API 查詢（那是主 agent 在 STEP 01.5 做）
-- ❌ 不做去重（同一 commit 在不同 branch 出現 → `--all` 會印兩次；full-stack commit 同時動到 frontend/ 與 backend/ → FE/BE 兩 bucket 各算一次；主 agent 視需要去重）
+- ❌ 不做 patch 內容比對去重（去重只看 author date + subject；若真有兩個不同 commit 同日同 subject，會被併成一筆。實務上不會發生，但要精確判定得用 `git patch-id`，成本不划算）
+- ❌ 不跨 bucket 合併 pathspec 結果（full-stack commit 同時動到 frontend/ 與 backend/ → FE/BE 兩 bucket 各算一次，這是刻意的分類行為；`summary.unique_commits` 已提供跨 bucket 去重後的真實總數，主 agent 對外引用該欄位）
 - ❌ 不寫週報（只回傳 JSON，主 agent 自己組裝）
 
 ## 使用範例
@@ -194,6 +219,8 @@ jq -s '
 
 ```
 Agent(
+  # 不得帶 name 參數 —— 帶了結果就不回流，掃描照跑但拿不到 JSON，且無錯誤訊息
+  # （詳見 harness/model-dispatch.md「結果回流」）
   description: "Scan commits for weekly-review",
   subagent_type: "multi-repo-commit-scanner",
   prompt: """

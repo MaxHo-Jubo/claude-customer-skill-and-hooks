@@ -44,6 +44,8 @@ version: 1.0.0
 
 ```
 Agent(
+  # 不得帶 name 參數 —— 帶了結果就不回流，翻譯會照跑但你拿不到輸出檔路徑，
+  # 且不產生任何錯誤訊息（詳見 harness/model-dispatch.md「結果回流」）
   description: "Translate claude-code releases to zh-TW",
   subagent_type: "general-purpose",
   model: "sonnet",

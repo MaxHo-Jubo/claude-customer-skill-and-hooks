@@ -1,212 +1,85 @@
-# pr-reviewer Agent 設計文件
+# pr-reviewer 架構說明
 
-## 概述
+逐條比對 `CODE-REVIEW-RULE.md` 的 code review 機制，取代 `luna_web/.github/workflows/claude-code-review.yml`。
 
-將 `luna_web/.github/workflows/claude-code-review.yml` 的 review 邏輯移植到本機 agent，取代 CI workflow。
+**v2.0.0（2026-08-13）起拆為兩個入口**，判定標準共用同一份規範檔。
 
-- **檔案位置**：`~/.claude/agents/pr-reviewer.md`
-- **規範來源**：`CODE-REVIEW-RULE.md`（讀檔，不嵌入 prompt）
-- **預設模式**：輕量版（lite）
+## 三個檔案的分工
 
-## 兩種模式
+| 檔案 | 角色 | 觸發 |
+|------|------|------|
+| `~/.claude/skills/pr-reviewer/references/review-spec.md` | **判定標準唯一出處**：17 條規則、慣例優先原則、信心評分 prompt、分類閾值、品質評分、輸出格式、語言規則 | 兩個入口都 Read 它 |
+| `~/.claude/skills/pr-reviewer/SKILL.md` | **full 模式**：PR 5 面向平行 review + 信心評分 + 自動 post 到 GitHub PR | `/pr-reviewer`、`Skill(pr-reviewer)`、`scripts/review-pr.sh <PR>` |
+| `~/.claude/agents/pr-reviewer.md` | **lite 模式**：對 HEAD commit 單 agent 逐條合規審查 | commit-review skill 的 Tier 2/3 chain |
 
-### Lite（預設）
+**改判定標準只改 `review-spec.md`**。SKILL.md 與 agent 只寫各自的執行步驟，不複製規則內容。
 
-用途：POST-COMMIT-REVIEW，每次 commit 自動觸發。與 pr-review-toolkit 並行互補。
+## 為什麼 full 是 skill、lite 是 agent
+
+**full → skill**：需要 fan-out 5 個面向再收斂。v1.x 把它包在 subagent 內、由該 subagent 再 spawn 子 agent，形成巢狀 orchestrator，結果全押在 task-notification 跨兩層回流。三次實測三種結果：
+
+| 日期 | 案例 | 子 agent 參數 | 結果 |
+|------|------|--------------|------|
+| 2026-08-07 | PR 10953 | 不帶 name | 5 個全回流，耗時 22 分鐘 |
+| 2026-08-06 | PR 10949 | 不帶 name | 結果沒回到 pr-reviewer，繞道 team-lead 轉述 |
+| 2026-08-13 | PR 10983 | 帶 name | 全數落空，parent 自行重做五個面向後照常輸出 |
+
+改由主 session 直接 orchestrate（巢狀深度 2→1），走最可靠的回流路徑，且每個 STEP 有進度回報。詳見 SKILL.md 文末。
+
+**lite → 留在 agent**：commit 後自動觸發需要 context 隔離（不污染主 session）。
+
+> 2026-08-17 修正：原本第二個理由是「`subagent-review-clear.ts` 依賴 agent 型別含 `review` 自動清 pending-review marker」——該 hook 已停止清除職責（Tier 3 並行時第一個完成的 agent 就會提前解鎖閘門），marker 改由 commit-review skill §5 顯式清除。**context 隔離是 lite 留在 agent 的唯一理由。**
+
+## full 模式流程
 
 ```
-單 Sonnet agent 逐條比對 CODE-REVIEW-RULE.md
-  → 每個 issue 各啟一個 Haiku agent 做信心評分（0-100）
-  → CRITICAL(≥90) / MINOR(80-89) / INFO(<80) 分類
-  → 6 項品質評分（滿分 30）
-  → 輸出結構化報告
+STEP 01  解析 PR + 狀態檢查（Bash，不 spawn agent）
+STEP 02  gh pr diff 落檔，5 個 agent 共讀一份
+STEP 03  change summary（主 session 自己讀 diff）
+STEP 04  5 個面向 agent（同一則訊息、不帶 name）
+           #1 CODE-REVIEW-RULE.md 逐條合規
+           #2 shallow bug scan（只看 diff）
+           #3 git blame historical context
+           #4 previous PR comments
+           #5 code comments compliance
+STEP 05  去重 + 批次信心評分（Haiku，3-5 issue/agent）
+STEP 06  分類（≥90 CRITICAL / 80-89 MINOR / <80 INFO）+ 品質評分
+STEP 07  確認 PR 仍 OPEN（Bash）
+STEP 08  terminal 輸出 + post 到 GitHub（summary review + inline Suggested Change）
+STEP 09  清理 diff 暫存檔
 ```
 
-- diff 來源：`git diff-tree --no-commit-id -r -p HEAD`（處理 merge commit）
-- token 消耗：低（1 Sonnet + N Haiku）
-- 檔案過濾：跳過 `*.md`、`*.json`、`*.yml` 的改動
+v1.x 的 STEP 02/03/07 各 spawn 一個 Haiku agent，v2.0.0 改為直接跑 Bash，省掉 3 輪 agent 往返。
 
-### Full
-
-用途：PR review，手動觸發。單獨執行，不與 pr-review-toolkit 並行。
+## lite 模式流程
 
 ```
-前置步驟：
-  → Haiku agent 檢查 PR 狀態（merged/closed/draft → 中止）
-  → Haiku agent 產出 PR change summary（供後續 agent 共享）
-
-5 平行 Sonnet agent（共享 change summary）：
-  #1 CODE-REVIEW-RULE.md 逐條合規
-  #2 shallow bug scan（只看 diff，不讀額外上下文）
-  #3 git blame historical context
-  #4 previous PR comments（查同檔案的舊 PR 留言）
-  #5 code comments compliance（改動是否符合檔案內既有註解指引）
-
-後置步驟：
-  → 每個 issue 各啟一個 Haiku agent 做信心評分（0-100）
-  → CRITICAL(≥90) / MINOR(80-89) / INFO(<80) 分類
-  → 6 項品質評分（滿分 30）
-  → Haiku agent 確認 PR 仍為 OPEN（已 merge/close → 跳過輸出）
-  → terminal 輸出結構化報告
-  → 自動 post 到 GitHub PR（summary review + inline comments）
+STEP 01  git diff-tree HEAD 取 diff + 檔案過濾
+STEP 02  逐條比對 17 條規則（強制套用慣例優先原則）
+STEP 03  信心評分（Haiku 批次，不帶 name）
+STEP 04  分類
+STEP 05  品質評分
+STEP 06  輸出報告（不產 inline comment、不 post GitHub）
 ```
 
-- diff 來源：`gh pr diff <PR_NUMBER>`（PR 輸入統一用 `gh pr view <input> --json number` 取 PR number）
-- token 消耗：高（2 前置 Haiku + 5 Sonnet + N Haiku + 1 後置 Haiku）
-- 檔案過濾：跳過 `*.md`、`*.json`、`*.yml` 的改動
-- post 行為：review event 依 CRITICAL 數量決定（>0 → REQUEST_CHANGES，否則 COMMENT；不自動 APPROVE）；inline comment 走 `gh api repos/.../pulls/<n>/reviews`，無權限或行號超出 hunk 時保留 terminal 輸出並印錯誤
+## 兩個入口共通的硬規則
 
-## 模式切換
+1. **Agent call 一律不得帶 `name`** — 帶了結果不回流，`SendMessage` 索取只拿得到「已排入佇列」確認。用 `description` 區分用途。
+2. **平行 = 同一則訊息內發多個 Agent call**，發完該輪立即結束等 notification，收齊前禁止產出報告。
+3. **拿不到結果必須 fail loud** — 禁止自己補做該面向後當它成功，必須在報告**開頭**標明降級 N/5。
 
-呼叫 agent 時在 prompt 中指定：
+## 與其他 review 工具的關係
 
-- 不帶參數或帶 `mode: lite` → 輕量版
-- 帶 `mode: full` + PR 資訊（PR number 或 URL）→ 完整版
-
-## Agent 設定
-
-```yaml
----
-name: pr-reviewer
-description: Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告。預設 lite 模式（單 agent + Haiku 信心評分），可切換 full 模式（5 平行 agent，移植自 CI workflow）。
-tools: ["Read", "Grep", "Glob", "Bash", "Agent"]
-model: sonnet
----
-```
-
-## 信心評分機制
-
-每個 issue 獨立啟一個 Haiku agent 評分。
-
-Haiku agent 輸入：diff context + issue 描述 + CODE-REVIEW-RULE.md 相關條目。
-
-Haiku agent 評分量尺（連續 0-100）：
-
-| 分數區間 | 語意 |
-|----------|------|
-| 0 | 完全不可信，false positive 或既有問題 |
-| 1-39 | 低信心，可能是 false positive |
-| 40-59 | 中等信心，可能是真問題但也可能是 nitpick |
-| 60-79 | 高信心，很可能是真問題 |
-| 80-89 | 非常高信心，已驗證的真問題 |
-| 90-100 | 確定，確認的真問題 |
-
-分類閾值：
-
-| 分數區間 | 分類 | 意義 |
-|----------|------|------|
-| ≥90 | CRITICAL | 必須修正 |
-| 80-89 | MINOR | 建議修正 |
-| <80 | INFO | 僅供參考 |
-
-Haiku agent 評分失敗時 fallback：該 issue 歸入 INFO 類別，附註「信心評分失敗」。
-
-### False Positive 過濾（同 CI workflow）
-
-以下不計為 issue：
-- 既有問題（非本次 diff 引入）
-- Linter / typechecker / compiler 會抓的
-- 一般品質意見（除非 CODE-REVIEW-RULE.md 明確要求）
-- 明顯有意為之的功能變更
-- 非修改行的問題
-
-## 品質評分
-
-6 項，每項 1-5 分，滿分 30：
-
-| 項目 | 檢查重點 |
-|------|----------|
-| Magic Number | 未經解釋的數字常數 |
-| 邏輯與註解一致性 | 程式邏輯與註解是否相符 |
-| 函式註解 | JSDoc 完整度 |
-| 變數/常數/props/state 註解 | 用途說明 |
-| 註解錯字 | 有無錯字 |
-| 系統穩定性 | crash 風險 |
-
-分數意義：5=完美 4=不錯 3=還可以 2=不好 1=拒絕接受
-
-## 輸出格式
-
-```markdown
-### Code Review Results
-
-**嚴重 CRITICAL**（必須修正）
-
-1. <問題描述>（原因：CODE-REVIEW-RULE.md 規定「<規則摘要>」/ 因 <上下文> 導致的 bug）（信心：XX/100）
-   <檔案路徑:行號>
-
-**次要 MINOR**（建議修正）
-
-1. <問題描述>（原因：<說明>）（信心：XX/100）
-   <檔案路徑:行號>
-
-**參考 INFO**（僅供參考）
-
-1. <問題描述>（原因：<說明>）（信心：XX/100）
-   <檔案路徑:行號>
-
-若該分類無問題，顯示「無」。
-
-### Quality Score
-
-| 項目 | 分數 |
+| 工具 | 定位 |
 |------|------|
-| Magic Number | X/5 |
-| 邏輯與註解一致性 | X/5 |
-| 函式註解 | X/5 |
-| 變數/常數/props/state 註解 | X/5 |
-| 註解錯字 | X/5 |
-| 系統穩定性 | X/5 |
-| **總分** | **XX/30** |
-```
+| pr-reviewer（本檔） | 公司規範逐條合規 + 結構化評分 |
+| `/pr-review-toolkit:review-pr` | 通用品質/bug/設計（AI 判斷優先） |
+| `/code-review` | Claude Code 內建，correctness + 簡化建議 |
 
-## 邊界情況處理
+pr-reviewer 與 pr-review-toolkit 並行互補，commit-review skill 的 Tier 3 兩者都跑。
 
-| 情況 | 行為 |
-|------|------|
-| CODE-REVIEW-RULE.md 找不到 | 報錯並終止 |
-| diff 為空（只改 .md/.json/.yml 或 no-op commit） | 輸出「無需 review 的程式碼改動」並提前退出 |
-| Haiku 評分 agent 失敗/timeout | 該 issue 歸入 INFO，附註「信心評分失敗」 |
-| Full 模式 5 個 Sonnet agent 其中一個失敗 | 仍輸出 partial result，附註哪個面向失敗 |
-| Full 模式 PR 不存在或無權限 | 報錯並終止 |
-| 非 git repo 目錄 | 報錯並終止 |
+## 已知限制
 
-## CODE-REVIEW-RULE.md 位置解析
-
-agent 啟動時依序找：
-1. 當前 repo 根目錄的 `CODE-REVIEW-RULE.md`
-2. `~/.claude/CODE-REVIEW-RULE.md`（全域 fallback）
-
-找不到則報錯並終止。
-
-## 與 CLAUDE.md 的關係
-
-本 agent 不檢查 CLAUDE.md 合規（目前尚未完全導入 CLAUDE.md 到各專案）。規範來源僅為 CODE-REVIEW-RULE.md。未來若各專案完成 CLAUDE.md 導入，可考慮加入 CLAUDE.md 合規面向。
-
-## 與 POST-COMMIT-REVIEW 流程的整合
-
-```
-eslint（hook command）
-  → /simplify
-  → pr-reviewer agent（lite 模式）  ← 新增
-  → pr-review-toolkit（品質/bug/設計）
-  → 通知
-```
-
-pr-reviewer 與 pr-review-toolkit 並行互補：
-- pr-reviewer：公司規範逐條合規 + 結構化評分
-- pr-review-toolkit：通用品質/bug/設計（AI 判斷優先）
-
-## 與 CI workflow 的關係
-
-此 agent 完成後，`claude-code-review.yml` 預計退役。Full 模式覆蓋 CI workflow 的核心功能（5 平行 agent + 信心評分 + 品質評分 + 自動 post review），差異：
-- 不檢查 CLAUDE.md（刻意，見上方說明）
-- 不處理 `@claude` 留言觸發（本機不需要）
-- 不處理 Auto-sync PR 排除（本機不需要）
-- 結果同時輸出到 terminal 與 GitHub PR（v1.2.0 起內建 post，不需外部 `review-pr.sh`）
-
-## 語言規則
-
-- agent 內部運算用英文
-- 所有輸出用繁體中文
-- 檔案路徑、code identifier 維持英文
+- 不檢查 CLAUDE.md 合規（刻意；各專案尚未完全導入 CLAUDE.md）。規範來源僅 CODE-REVIEW-RULE.md。
+- 不處理 `@claude` 留言觸發、不處理 Auto-sync PR 排除（本機不需要）。
+- `review-pr.sh` 走 `claude -p` 非互動模式並用 `~/.claude-review` 隔離帳號省額度。**該路徑下子 agent 結果能否回流尚未實測**；v2 已加 watchdog 逾時與進度心跳，失敗時會揭露完整 log 而非靜默。互動 session 直接 `/pr-reviewer <PR>` 是已驗證可靠的路徑。
