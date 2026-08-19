@@ -47,6 +47,8 @@
       "Bash(git commit:*)",
       "Bash($ANDROID_HOME/cmdline-tools/latest/bin/avdmanager list device)",
       "Bash($ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list)",
+      "Bash(~/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager list:*)",
+      "Bash(~/Library/Android/sdk/cmdline-tools/latest/bin/avdmanager create:*)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:cs.android.com)",
       "Bash(.claude/scripts/detect-jira-issue.sh:*)",
