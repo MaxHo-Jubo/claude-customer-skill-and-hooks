@@ -1,8 +1,8 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.8.0
-last_modified: 2026-08-19
+version: 1.8.1
+last_modified: 2026-08-20
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -152,7 +152,11 @@ src = strip_local_only(src)
 # 移除 permissions 中含私有內容的條目（私有 repo 名／本機專案路徑／夾帶的 commit message）
 src, removed = strip_private_permissions(src)
 if removed:
-    print(f'已過濾 {len(removed)} 條含私有內容的 permission')
+    # 逐條印出而非只印數量：誤濾（合法工具路徑被當成私有內容刪掉）與正常過濾在只印數量時完全
+    # 無法區分，`~/Library` 與 `~/.maestro` 各靜默復發一次都是這樣漏掉的。這行是唯一的偵測手段。
+    print(f'已過濾 {len(removed)} 條含私有內容的 permission（逐條列出，請掃一眼有無誤濾）：')
+    for entry in removed:
+        print(f'  - {entry}')
 # fail loud：過濾後仍有殘留就中止同步，絕不讓私有內容進 public repo
 leftover = find_private_content(src)
 if leftover:
@@ -214,7 +218,7 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 > - `settings.json` 的 `permissions` allow-list 會記錄使用者執行過的 Bash 命令，可能夾帶帶明文 secret 的命令（如 `claude mcp add ... --api-key <key>`）。複製時一律經 `mask_secrets.py` 遞迴遮罩 secret（已知 key 格式如 `ctx7sk-`/`ghp_`/`glpat-`/`AKIA…`，以及 `--api-key`/`--token`/`--secret`/`--password` 後的值），禁止明文 secret 進 repo。
 > - `mcp-servers.json` 會自動過濾 `env` 欄位並遮罩 `--api-key`/`--token`/`--secret`/`--password` 後的值。
 > - `settings.json` 的 `model` 欄位為本機專屬設定（依機器/當下任務彈性切換），同步時排除、不覆蓋、不還原，repo 端維持自己原本的值。
-> - `settings.json` 的 **`permissions` 條目做內容級過濾**：含私有識別符（私有 repo 名／組織名／內部域名）或本機專案路徑（`~/Documents`、`~/Desktop`、`~/Downloads` 底下）的條目一律不進 repo——這類條目多為一次性具體指令授權，還會夾帶 commit message（洩漏 Jira 編號與工作內容），且在別台機器本來就無效。`~/.claude/` 底下的絕對路徑是 hook / statusline 指令必需，設為顯式豁免。過濾後再跑一次 `find_private_content()` 掃描，**仍有殘留就中止同步（fail loud）**，不靜默放行。這條與「排除 `autoMode`」是同一個政策的兩半：宣稱理由是內容導向，實作就不能只擋 key 名。
+> - `settings.json` 的 **`permissions` 條目做內容級過濾**：含私有識別符（私有 repo 名／組織名／內部域名）或本機專案路徑（`~/Documents`、`~/Desktop`、`~/Downloads` 底下）的條目一律不進 repo——這類條目多為一次性具體指令授權，還會夾帶 commit message（洩漏 Jira 編號與工作內容），且在別台機器本來就無效。家目錄豁免走 **具名 allowlist**（`.claude`／`.nvm`／`.maestro`／`~/Library` 等，見 `mask_secrets.py` 的 `_ALLOWED_HOME_DIRS`），未列入者一律攔截——**不可改成「dot-directory 一律豁免」的規則判準**，v1.8.1 實測過那是偵測能力迴歸（`~/.acme-internal-project` 這類未被 denylist 收錄的私有路徑會被無條件放行，兩層防線同時失守）。誤濾（合法工具路徑被刪）的解法是上面 STEP 02 逐條印出被移除的條目，讓它當場可見，不是放寬判準。過濾後再跑一次 `find_private_content()` 掃描，**仍有殘留就中止同步（fail loud）**，不靜默放行。這條與「排除 `autoMode`」是同一個政策的兩半：宣稱理由是內容導向，實作就不能只擋 key 名。
 > - `settings.json` 的 **`autoMode` 區段雙向排除**（`mask_secrets.py` 的 `LOCAL_ONLY_KEYS`）。`autoMode.environment` 記錄公司內部 staging 域名、私有 repo 名稱（`<org>/<private-repo>` 形式）、本機絕對路徑、內部 npm registry；`autoMode.soft_deny` 記錄專案 deploy script 名稱。這與 `CLAUDE.md` `<conn>` 是同類環境資訊，而**本 repo 為 public GitHub repo**，故整段不進版控、restore 也不還原（每台機器的自動化權限設定本就該各自持有）。新增本機專屬頂層欄位時，一併加進 `LOCAL_ONLY_KEYS`。
 
 **目錄同步（mirror 模式）：**
@@ -575,7 +579,7 @@ else:
 - `~/.claude/` 永遠是 source of truth，repo 只是備份與版本追蹤
 - `settings.local.json` 不同步（本機專屬設定）
 - `settings.json` 的 `model` 欄位不同步、不還原（雙向排除），兩邊各自保留自己原本的值
-- `settings.json` 的 `permissions` 條目經內容級過濾（私有 repo 名／組織名／內部域名／`~/Documents` 等本機專案路徑），過濾後仍有殘留則 **fail loud 中止同步**；`~/.claude/` 路徑為顯式豁免（hook 指令必需）
+- `settings.json` 的 `permissions` 條目經內容級過濾（私有 repo 名／組織名／內部域名／`~/Documents` 等本機專案路徑），過濾後仍有殘留則 **fail loud 中止同步**；家目錄豁免走具名 allowlist（`_ALLOWED_HOME_DIRS`），未列入者一律攔截；被過濾的條目會逐條印出以便辨識誤濾
 - `settings.json` 的 `autoMode` 區段不同步、不還原（`mask_secrets.py` 的 `LOCAL_ONLY_KEYS`）——內含公司內部域名、私有 repo 名稱、本機路徑，而本 repo 為 **public**；新增同類本機專屬頂層欄位時一併加進該常數
 - `harness/harness-diagnosis.md` 與 `harness/handover-letter.md` 為機器專屬檔案，雙向不同步（每台機器的診斷/交接不互相覆蓋）
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo

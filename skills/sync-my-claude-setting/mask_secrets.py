@@ -56,11 +56,29 @@ _PRIVATE_ID_PATTERN = re.compile(
 # 改用反轉的理由：原本是 denylist（只認 Documents/Desktop/Downloads），`~/Projects`、`~/work`、
 # `~/src` 等全部靜默放行，且失敗方向是「漏判即通過」。實測本機 settings.json 只有三類 home 路徑
 # （Documents 26 / .claude 16 / .nvm 1），反轉的落地成本就是豁免清單這一行。
-_HOME_PATH_PATTERN = re.compile(r'(?:/Users/[^/\s"\'()]+|~|\$HOME)/([^/\s"\'()]+)', re.IGNORECASE)
-# 豁免：hook / statusline 指令必須寫絕對路徑指向這些目錄，屬必要而非洩漏
+# 路徑單層片段：**正向白名單**（字母數字底線 + 點 + 連字號，\w 含 unicode 故涵蓋中文目錄名）。
+# 不用「排除已知壞字元」的黑名單寫法：那要逐個補，而每漏一個就是一次靜默誤判——實測連中三次，
+# 反引號（markdown 的 `~/Library`）、逗號（`~/Library`, `~/.maestro` 並列）、反斜線（settings.json
+# 裡的 `$HOME/.nvm\`）都曾把目錄名污染成 "Library`" / ".nvm\" 而比對不到豁免清單。白名單的失敗
+# 方向也是安全的：遇到非法字元就在該處截斷，截斷後的值同樣不在豁免清單，仍會被攔截。
+# 抽成具名常數而非在 pattern 內重複寫兩次：同時用於 /Users/<user> 段與被擷取的第一層目錄段，
+# 兩處必須一致；分開寫就是「改一處漏一處」等著發生。
+_PATH_SEGMENT = r'[\w.-]+'
+_HOME_PATH_PATTERN = re.compile(
+    rf'(?:/Users/{_PATH_SEGMENT}|~|\$HOME)/({_PATH_SEGMENT})', re.IGNORECASE
+)
+# 豁免：hook / statusline 指令必須寫絕對路徑指向這些目錄，屬必要而非洩漏。
+# **必須維持具名 allowlist，不可改成「dot-directory 一律豁免」的規則判準。** 曾試過後者（想一併解掉
+# 下面 why-visible 說的誤濾復發），實測是偵測能力迴歸：`~/.acme-internal-project`、`~/.secret-client-work`
+# 這類尚未被 _PRIVATE_ID_PATTERN 收錄的私有路徑會被無條件放行，兩層防線同時失守。這道防線守的是
+# public repo，失敗方向必須是「寧可誤濾也不漏放」——誤濾會被下面的可見化立刻抓到，漏放不會。
+# why-visible: 誤濾能復發三次（`~/Library` 見 df94390、`~/.maestro` 見 v1.8.1）的根因不是清單不夠長，
+# 是**過濾動作不可見**——條目靜默消失、無任何警告。根治在 SKILL.md STEP 02 逐條印出被移除的內容，
+# 不是把 allowlist 換成猜得到未來的規則。新工具目錄被誤濾時，當場就會在同步輸出看到，補一行即可。
 _ALLOWED_HOME_DIRS = (
     '.claude', '.claude-max-2', '.claude-review', '.agents',  # Claude 設定與隔離帳號目錄
     '.nvm', '.npm', '.cache', '.config', '.local', '.ssh',    # 標準工具目錄（路徑本身不含專案資訊）
+    '.maestro',                                               # Maestro 行動 App UI 測試工具（v1.8.1 補）
     'library',                                                # macOS ~/Library（系統路徑）
 )
 # marker 檔名等 dash-encoded 路徑（scripts/lib/review-marker.ts 的 markerPathForRepo 產物），
@@ -107,7 +125,8 @@ def strip_local_only(obj):
 def find_private_content(obj, path='$'):
     """
     遞迴掃描 JSON 結構，找出仍殘留的私有內容（組織名／私有 repo／內部域名／本機專案路徑）。
-    `~/.claude/` 路徑不算命中（hook 指令必需）。
+    家目錄路徑僅在第一層目錄列於 `_ALLOWED_HOME_DIRS` 時豁免（hook / statusline 指令與標準工具目錄
+    必需）；未列入者一律命中，包含 `~/.<未知>/` 形式——dot-directory 不構成豁免理由。
     @param obj 待掃描的 JSON 結構
     @param path 目前節點的 JSONPath，供回報定位
     @return list of (path, 命中的字串片段, 觸發原因)
@@ -123,6 +142,7 @@ def find_private_content(obj, path='$'):
         # 不用「先 sub 掉豁免片段再比對」的寫法：那會讓 `~/.claude/state/.../-Users-x-Documents-y.json`
         # 這種夾帶在豁免路徑後方的內容整段漏網（實測過）。
         for match in _HOME_PATH_PATTERN.finditer(obj):
+            # 第一層目錄不在具名豁免清單即視為本機專案路徑（未知一律攔截，見 _ALLOWED_HOME_DIRS 檔頭）
             if match.group(1).lower() not in _ALLOWED_HOME_DIRS:
                 hits.append((path, match.group(0), 'local-project-path'))
         # STEP 01.03: dash-encoded 路徑（marker 檔名形式，斜線已被換成 dash）

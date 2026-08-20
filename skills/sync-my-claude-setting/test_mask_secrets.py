@@ -28,6 +28,17 @@ CONTENT_CASES = [
     ("bash ~/.claude/hooks/hook-error-wrapper.sh SubagentStop", False, "豁免：hook 波浪號路徑"),
     ("cat /Users/maxhero/.claude-max-2/CLAUDE.md", False, "豁免：多帳號目錄"),
     ("/Users/maxhero/.nvm/versions/node/v20.20.0/bin/claude", False, "豁免：nvm 路徑"),
+    ("Bash(~/.maestro/bin/maestro test:*)", False, "豁免：.maestro 已列入清單"),
+    ('Bash(export PATH="$PATH":"$HOME/.maestro/bin")', False, "豁免：$HOME + 已列入的工具目錄"),
+    ("Bash(ls ~/Library/Android/sdk/cmdline-tools)", False, "豁免：~/Library 已列入清單"),
+    # 以下三條釘住「dot-directory 本身不構成豁免」——曾試過改成規則判準，實測為偵測能力迴歸
+    ("Bash(git -C ~/.acme-internal-project push)", True, "未列入的 dot-directory 私有專案須命中"),
+    ("Bash(cat ~/.secret-client-work/notes.md)", True, "未列入的 dot-directory 私有工作目錄須命中"),
+    ("Bash(git -C /Users/maxhero/.new-private-repo status)", True, "絕對路徑形式的未知 dot-directory 須命中"),
+    ("說明文件寫 `~/Library` 這種 markdown 形式", False, "豁免：反引號不得吃進目錄名"),
+    ("清單含 `~/Library`, `~/.maestro` 兩處", False, "豁免：逗號不得吃進目錄名"),
+    ("Bash(export NVM_DIR=$HOME/.nvm\\)", False, "豁免：反斜線不得吃進目錄名"),
+    ("文件提到 `~/Documents/Compal/x` 路徑", True, "反引號包住的私有路徑仍須命中"),
     ("Bash(npx eslint src/)", False, "豁免：無路徑的一般指令"),
     ("Bash(gh pr view 1134 --json state)", False, "豁免：無私有內容"),
 ]
