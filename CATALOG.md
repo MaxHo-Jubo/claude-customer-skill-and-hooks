@@ -102,7 +102,7 @@
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.8.1）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.8.2）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
@@ -114,6 +114,7 @@
   5. Review — 依 hook 判定的 Tier 跑 `commit-review` skill；Tier 0 只需通知
   6. Push — review 完成、修正 `--amend` 收進同一個 commit 後才推送，並驗證兩個 remote 對齊
 - **push 移到 review 之後（v1.6.0 新增）**：舊制 STEP 04 是「Commit & Push」，review 在推送後才跑，修正只能另開 fix commit（2026-07-20 實際踩到）。改為 commit → review → push 三步分離後，review 修出的問題可直接 `--amend` 收進同一個 commit。同時新增兩條硬性規則：（1）**review 修正必須先落回本機 `~/.claude/` 再 rsync 到 repo**——只改 repo 端會被下次同步的本機舊版覆蓋掉，修正憑空消失；（2）**push 被 non-fast-forward 拒絕時先查成因再動作**，不反射性 force push（此 repo 曾因 `filter-repo` 清 secret 重寫歷史，只 force push 了一個 remote，另一個停在含明文 API key 的舊歷史達 4 天）
+- **偵測回報完整性（v1.8.2 修正）**：`find_private_content()` 的 private-identifier 與 dash-encoded 偵測從 `.search()` 改為 `.finditer()`。`search` 每個字串只回報第一個命中——掃 JSON 時每個值是獨立節點故影響小，但 `check-private-content.py` 是把**整份檔案當單一字串**掃，一個檔案有 43 個私有識別符也只看得到 1 個，且清掉一個就遞補下一個、永遠見不到全貌（實測即為此：清掉 `CLAUDE.md` 的一個私有 repo 名後，才冒出同檔第二個識別符，其後還有兩個隱形）。修正後全 repo 去重命中從 91 筆增至 146 筆，新增 55 筆，全部為識別符級揭露（Jira 編號／私有 repo 名／內部域名），逐筆確認無 secret 或憑證後納入基線。注意此處的數字對本檔自身敏感——描述掃描結果的文字若直接寫出具體識別符，會讓下次掃描多出對應筆數，故一律以類別稱之。`test_mask_secrets.py` 新增 `COUNT_CASES` 測試組專測回報筆數——原有的 bool 案例抓不到這種缺陷（有命中就算過），已驗證改回 `search` 會令測試失敗
 - **誤濾根治：過濾動作可見化（v1.8.1 修正）**：STEP 02 從只印「已過濾 N 條」改為**逐條印出被移除的 permission 內容**。誤濾（合法工具路徑被當私有內容刪除）與正常過濾在只印數量時完全無法區分，`~/Library` 的 Android SDK 兩條（commit df94390 手動補回）與 `~/.maestro` 的 maestro 兩條先後靜默消失，都是這樣漏掉的。同版把 `.maestro` 補進 `_ALLOWED_HOME_DIRS`
 - **豁免判準維持具名 allowlist，不改規則判準（v1.8.1 決策記錄）**：本版曾試圖把 `_ALLOWED_HOME_DIRS` 換成「第一層是 dot-directory 一律豁免」以一勞永逸解掉誤濾，被 commit review 擋下並用程式碼實測證實是**偵測能力迴歸**：`~/.acme-internal-project`、`~/.secret-client-work` 這類未被 `_PRIVATE_ID_PATTERN` 收錄的私有路徑會被無條件放行（改動前攔截、改動後放行），denylist 是靜態硬編碼清單、對未收錄的新 repo 名同樣無效，等於兩層防線同時失守。這道防線守的是 **public repo**，失敗方向必須是「寧可誤濾也不漏放」——誤濾會被上一條的可見化當場抓到，漏放不會。`test_mask_secrets.py` 新增 3 條負向案例釘住此邊界，已驗證改回規則判準會令測試失敗
 - **路徑 pattern 修正（v1.8.1）**：`_HOME_PATH_PATTERN` 的單層字元類抽為 `_PATH_SEGMENT` 具名常數（同時用於 `/Users/<user>` 段與被擷取的第一層目錄段，分開寫就是改一處漏一處），並排除反引號與逗號——說明文件寫 `` `~/Library` `` 時反引號會被吃進第一層目錄名（變成 ``Library` ``）而比對不到豁免清單，實測會令 `check-private-content.py` 誤報並擋下 commit

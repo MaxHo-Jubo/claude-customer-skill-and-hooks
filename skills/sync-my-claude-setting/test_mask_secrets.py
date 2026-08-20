@@ -52,8 +52,23 @@ MASK_CASES = [
 ]
 
 
+# 回報完整性案例：(輸入, 預期命中數, 說明)
+# 存在理由：`find_private_content` 若對 denylist 用 `search` 而非 `finditer`，每個字串只回報第一個
+# 命中。掃 JSON 時每個值是獨立節點故影響小，但 check-private-content.py 把整份檔案當單一字串掃，
+# 實測因此漏報 84%（41 檔看得到 41 筆、實際 262 筆）。上面的 bool 案例抓不到這種缺陷——有命中就過。
+COUNT_CASES = [
+    ("luna_web 與 erpv3_web_backend 兩個 repo", 2, "同字串多個私有 repo 名須全數回報"),
+    ("[ERPD-11696] 與 [LVB-7866] 兩個編號", 2, "同字串多個 Jira 編號須全數回報"),
+    ("~/Documents/a 與 ~/Desktop/b", 2, "同字串多個本機專案路徑須全數回報"),
+    # 下面這條專測 STEP 01.03（dash-encoded）。上面三條都測不到它：前兩條走 denylist、
+    # 第三條走的 _HOME_PATH_PATTERN 本來就是 finditer，退回 search 也照樣通過。
+    ("marker: -Users-maxhero-Documents-x.json 與 -Users-maxhero-Desktop-y.json", 2,
+     "同字串多個 dash-encoded 路徑須全數回報"),
+]
+
+
 def main():
-    """跑完兩組案例，全數通過回 0，否則印出失敗項並回 1。"""
+    """跑完三組案例，全數通過回 0，否則印出失敗項並回 1。"""
     # STEP 01: 私有內容偵測
     failures = []
     for text, should_hit, desc in CONTENT_CASES:
@@ -65,13 +80,20 @@ def main():
         if (mask_secrets(text) != text) != should_mask:
             failures.append(f'[mask] {desc}：預期{"遮罩" if should_mask else "不變"}，實際相反 → {text!r}')
 
-    # STEP 03: 回報
+    # STEP 03: 回報完整性（同字串多命中須全數回報，非只回第一個）
+    for text, expected, desc in COUNT_CASES:
+        actual = len(find_private_content(text))
+        if actual != expected:
+            failures.append(f'[count] {desc}：預期 {expected} 筆，實際 {actual} 筆 → {text!r}')
+
+    # STEP 04: 回報
     if failures:
         print(f'❌ {len(failures)} 個 case 不符預期：')
         for f in failures:
             print(f'   {f}')
         return 1
-    print(f'✅ 全部通過（內容偵測 {len(CONTENT_CASES)} 案 + secret 遮罩 {len(MASK_CASES)} 案）')
+    print(f'✅ 全部通過（內容偵測 {len(CONTENT_CASES)} 案 + secret 遮罩 {len(MASK_CASES)} 案 '
+          f'+ 回報完整性 {len(COUNT_CASES)} 案）')
     return 0
 
 

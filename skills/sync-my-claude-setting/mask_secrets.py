@@ -134,9 +134,10 @@ def find_private_content(obj, path='$'):
     hits = []
     # STEP 01: 字串節點才需比對
     if isinstance(obj, str):
-        # STEP 01.01: 私有識別符（denylist）
-        m = _PRIVATE_ID_PATTERN.search(obj)
-        if m:
+        # STEP 01.01: 私有識別符（denylist）。**必須用 finditer 逐一回報，不可用 search**——
+        # check-private-content.py 把整份檔案當單一字串掃，search 只回報第一個命中，實測全 repo
+        # 因此漏報 84%（41 檔看得到 41 筆、實際 262 筆），且清掉一個就遞補下一個、永遠見不到全貌。
+        for m in _PRIVATE_ID_PATTERN.finditer(obj):
             hits.append((path, m.group(0), 'private-identifier'))
         # STEP 01.02: 家目錄路徑（allowlist 反轉）——逐一檢查每個命中的第一層目錄是否在豁免清單。
         # 不用「先 sub 掉豁免片段再比對」的寫法：那會讓 `~/.claude/state/.../-Users-x-Documents-y.json`
@@ -146,8 +147,7 @@ def find_private_content(obj, path='$'):
             if match.group(1).lower() not in _ALLOWED_HOME_DIRS:
                 hits.append((path, match.group(0), 'local-project-path'))
         # STEP 01.03: dash-encoded 路徑（marker 檔名形式，斜線已被換成 dash）
-        m = _DASH_PATH_PATTERN.search(obj)
-        if m:
+        for m in _DASH_PATH_PATTERN.finditer(obj):
             hits.append((path, m.group(0), 'dash-encoded-path'))
         return hits
     # STEP 02: list 逐項遞迴
