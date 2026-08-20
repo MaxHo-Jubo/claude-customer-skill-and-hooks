@@ -88,7 +88,7 @@ tool: 編輯用 Edit、建檔用 Write | banned: sed -i（跨平台行為不一�
 if-braces: 一律用 { }，禁止單行 if
 step-comments: 函式內部從 STEP 01 起算、最多 4 階、格式「STEP XX: 說明」；React functional component 本體免、內部成員函式要；插入重排規則見 rules/common/coding-style.md
 comments: 變數/常數註解用途（含 hook 變數如 useState/useRef、interface/type 本身與成員）；函式用 JSDoc（JS/TS）
-new-file-comment-rule: 全新建立的檔案，STEP/JSDoc/變數/interface 註解規則 review 時不比對既有 codebase 慣例、一律照規則字面檢查（實測依據見 CODE-REVIEW-RULE.md「新增檔案不適用既有慣例豁免」；根因是 luna_web react_18 STEP 註解全庫採用率僅 4.6%，比慣例會誤判為主流而放行）
+new-file-comment-rule: 全新建立的檔案，STEP/JSDoc/變數/interface 註解規則 review 時不比對既有 codebase 慣例、一律照規則字面檢查（實測依據見 CODE-REVIEW-RULE.md「新增檔案不適用既有慣例豁免」；根因是 <主力前端 repo> react_18 STEP 註解全庫採用率僅 4.6%，比慣例會誤判為主流而放行）
 naming: 區域變數短名稱，全域介面描述性名稱
 
 </code-style>
