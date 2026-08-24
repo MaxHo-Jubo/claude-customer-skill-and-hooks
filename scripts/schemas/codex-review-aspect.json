@@ -1,0 +1,48 @@
+{
+  "$comment": "單一 review 面向的 codex 輸出格式。由 scripts/codex-review.ts 以 --output-schema 傳給 codex exec 強制執行。OpenAI structured output 要求：所有 property 都須列入 required，且每層 additionalProperties 為 false。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["aspect", "summary", "findings"],
+  "properties": {
+    "aspect": {
+      "type": "string",
+      "description": "面向代號，須與 runner 傳入的 key 完全一致（rules / code-review / silent-failure / comments / tests / types），供 runner 交叉比對是否審錯目標"
+    },
+    "summary": {
+      "type": "string",
+      "description": "本面向的一句話結論。沒發現問題也必須明確寫出檢查了什麼、為何判定無問題，不可留空"
+    },
+    "findings": {
+      "type": "array",
+      "description": "本面向發現的問題清單；確實沒有問題時給空陣列，不可為了湊數編造",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "file", "line", "problem", "suggestion"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["CRITICAL", "IMPORTANT", "MINOR"],
+            "description": "CRITICAL=會造成錯誤行為或資料損壞，須立即修；IMPORTANT=違反明文規則或有明確風險；MINOR=可讀性與風格建議"
+          },
+          "file": {
+            "type": "string",
+            "description": "相對 repo root 的檔案路徑，不加開頭斜線"
+          },
+          "line": {
+            "type": "integer",
+            "description": "問題所在的行號（檔案中的實際行號，非 diff 內的相對位置）；無法定位到單行時填該區塊起始行"
+          },
+          "problem": {
+            "type": "string",
+            "description": "問題描述。指出實際會出什麼錯，不要只複述程式碼在做什麼"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "修正方向。引用超過 20 行的程式碼改寫成「路徑:起-迄行號」，不要整段貼回"
+          }
+        }
+      }
+    }
+  }
+}

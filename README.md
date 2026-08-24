@@ -67,7 +67,7 @@
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
-| commit-review | `/commit-review [target]` | 1.2.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑 |
+| commit-review | `/commit-review [target]` | 1.4.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.8.2 | 同步本機 Claude 設定到 Repo（v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
@@ -238,6 +238,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-08-24: commit-review 新增 codex 引擎路徑（v1.4.0）並同步至 repo
+
+`commit-review` skill 新增第二條執行路徑 `engine=codex`：Tier 2/3 原本 spawn Claude subagent 逐面向 review，改為 `scripts/codex-review.ts` 平行跑 `codex exec`（六面向定義集中在 `scripts/lib/codex-aspects.ts`），輸出強制走 `scripts/schemas/codex-review-aspect.json` 的 JSON schema 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT。相較舊有 agent 路徑「面向是否回流全靠模型自律回報」，codex 路徑用 exit code + 輸出檔非空 + schema shape 做機械判定，取代原本只能觀察 SubagentStop debug log 佐證的間接手段。
+
+引擎由 `scripts/lib/review-engine.ts` 的 `resolveEngine()` 在 post-commit hook **上鎖當下**決定一次並寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重探——同一輪 review 不換引擎。決策順序：`CLAUDE_COMMIT_REVIEW_ENGINE` 環境變數覆寫 → 實際執行 `codex --version` 探測（不只看 binary 存不存在，踩過 `which` 找得到但執行 ENOENT）→ 探測失敗降級 `agent` 並在 systemMessage 印出真實錯誤。預設值為 `codex`，手動模式 `/commit-review engine=agent` 可強制走原路徑。
+
+本次為本機 `~/.claude/`（8/23 建置、8/24 同步）→ repo 的單向同步，範圍限定在 commit-review 相關 8 個檔案（`skills/commit-review/SKILL.md`、`hooks/stop-review-guard.ts`、`scripts/{post-commit-review.ts,codex-review.ts}`、`scripts/lib/{review-marker.ts,codex-aspects.ts,review-engine.ts}`、`scripts/schemas/codex-review-aspect.json`），未觸及本機與 repo 在其他項目（gitnexus 系列 skills/hooks、`skillOverrides`、plugin 清單等）既存的雙機分岔（見 `project_multi_machine_sync_divergence` 記憶）。
 
 ### 私有內容處理政策（2026-08-19 決議）
 

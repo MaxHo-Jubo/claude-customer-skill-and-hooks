@@ -19,6 +19,7 @@ import { homedir } from 'os';
 import { join, resolve, isAbsolute } from 'path';
 import { execSync } from 'child_process';
 import { readFileSync, unlinkSync, appendFileSync } from 'fs';
+import type { ReviewEngine } from './review-engine';
 
 /** marker 檔案存放目錄 */
 export const MARKER_DIR = join(homedir(), '.claude', 'state', 'pending-review');
@@ -50,6 +51,14 @@ export interface ReviewMarker {
    * MARKER_MAX_AGE_MS，讀取端一律用 `?? aspectsForTier(tier)` 推導，不放行。
    */
   expectedAspects: number;
+  /**
+   * 本輪 review 要用的執行引擎，由 resolveEngine() 於上鎖當下探測並寫入。
+   * 與 expectedAspects 同樣是「把政策釘在上鎖時點」——engine 一次決定、全程一致，Stop gate
+   * 之後只讀不重新探測，否則同一輪 review 可能因 codex 可用性中途變化而被指派成兩種引擎。
+   * 舊 marker（本功能上線前建立）無此欄位，讀取端一律以 LEGACY_MARKER_ENGINE 推導——那是還原
+   * 它們建立當下的實際行為，不是「不知道就給預設值」。
+   */
+  engine?: ReviewEngine;
   /**
    * Stop gate 有界保險絲：sessionId → 該 session 已被 block 的次數。
    * 採 per-session 計數而非全域單一計數：同 repo 的其他 session（尤其 skill spawn 的
@@ -124,14 +133,25 @@ export function isGitPushCommand(command: string): boolean {
 }
 
 /**
- * 依 repo 根目錄推導對應的 marker 檔案路徑。
+ * 把 repo 根目錄的絕對路徑正規化成可安全當檔名的 token。
  * 沿用專案目錄慣例：路徑分隔符換成 '-'（如 /Users/maxhero/... → -Users-maxhero-...）。
+ * 抽成共用函式而非只在 markerPathForRepo 內部使用，是為了讓任何需要用 repoRoot 當檔名
+ * 一部分的地方（如 codex-review.ts 的報告輸出目錄）都用同一份正規化規則——只取 basename
+ * 會讓兩個 basename 相同、路徑不同的 repo 共用同一個輸出位置並互相覆寫。
+ * @param repoRoot git repo 根目錄絕對路徑
+ * @returns 安全可當檔名的 token
+ */
+export function repoRootToken(repoRoot: string): string {
+  return repoRoot.replace(/[/\\]/g, '-');
+}
+
+/**
+ * 依 repo 根目錄推導對應的 marker 檔案路徑。
  * @param repoRoot git repo 根目錄絕對路徑
  * @returns marker 檔案完整路徑
  */
 export function markerPathForRepo(repoRoot: string): string {
-  const sanitized = repoRoot.replace(/[/\\]/g, '-');
-  return join(MARKER_DIR, `${sanitized}.json`);
+  return join(MARKER_DIR, `${repoRootToken(repoRoot)}.json`);
 }
 
 /**

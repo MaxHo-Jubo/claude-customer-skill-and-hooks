@@ -1,8 +1,8 @@
 ---
 name: commit-review
 description: "Commit 後分級 review chain（Tier 0~3）。被動由 post-commit hook 指派，也可手動 /commit-review [target] 對任意 commit 補跑。當使用者提到 /commit-review、「跑 review」、「補跑 review」、「review 這個 commit」、「push 前 review」時觸發。不適用於：PR 級完整審查（用 /pr-reviewer <PR>）、需求驗收（用 /jira-acceptance）。"
-version: 1.2.0
-last_modified: 2026-08-19
+version: 1.4.0
+last_modified: 2026-08-23
 ---
 
 # Commit Review
@@ -16,24 +16,47 @@ commit 後依風險分級（Tier 0~3）執行對應深度的 review chain。這�
 
 ### 被動（hook 指派）
 commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派：
-`Skill(commit-review) args: "tier=N target=HEAD"`
+`Skill(commit-review) args: "tier=N target=HEAD engine=<agent|codex>"`（Tier 1 不含 `engine=`——
+該 Tier 不 spawn review agent，engine 對它沒有意義，hook 也不會為它探測）
 此模式 **tier 已知，直接採用不重算**（判定單一來源，與 hook 同一份 lib/tier.ts）。
 
+Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值取決於環境變數覆寫與 codex 探測結果，
+**不保證是 codex**——探測失敗會降級成 `engine=agent`）。此模式**直接採用不重新決定**——與 tier 同理，判定單一來源。
+
 ### 手動（使用者主動）
-- `/commit-review` — 對 HEAD 跑
+- `/commit-review` — 對 HEAD 跑（預設 codex 引擎）
 - `/commit-review HEAD~3` — 對指定 commit 跑
 - `/commit-review <hash>` — 對指定 commit 跑
+- `/commit-review engine=agent` — 改走原本的 Claude agent 路徑（可與 target 併用，如 `/commit-review HEAD~3 engine=agent`）
 
 用途：marker 逾期補跑、想重跑、push 前主動 review、對舊 commit 補 review。手動模式 args 不含 tier → 自己算（見下 §1）。
 
 ## 執行步驟
 
-### 1. 決定 target 與 tier
-- 解析 args：`tier=N`（被動帶入）、`target=<ref>`（預設 HEAD）。
+### 1. 決定 target、tier 與 engine
+- 解析 args：`tier=N`（被動帶入）、`target=<ref>`（預設 HEAD）、`engine=<agent|codex>`（被動帶入；未帶時預設 `codex`）。
 - **args 含 tier** → 直接用（被動模式，不重算）。
 - **args 不含 tier** → 手動模式，執行 `bun ~/.claude/scripts/compute-tier.ts <target>`，讀取輸出的 `TIER=N`。
   - **exit code 非 0 → 停止並回報使用者**（通常是 ref 打錯），不得逕自採用任何 TIER 值。
 - target 解析不出 → fallback HEAD。
+- **engine 只影響 Tier 2/3 的面向 review 由誰執行**（§3.2 vs §3.3），其餘步驟（eslint、`/simplify`、修 Critical、blast radius、解鎖、通知）兩條路徑完全相同。Tier 0/1 不受 engine 影響。
+
+### 1.1 兩種 review 引擎
+
+| | `engine=agent`（原有路徑，降級與人工覆寫用） | `engine=codex`（預設） |
+|---|---|---|
+| 執行者 | Claude subagent（`Agent()` spawn） | `codex exec` 子進程（`scripts/codex-review.ts` 平行發動） |
+| 面向數保證 | 由本 skill 逐一列出並 spawn | 由 runner 的迴圈長度保證，缺檔即失敗 |
+| 結果交回 | subagent 回覆全文經 task-notification 回流，**整份進主 session context** | schema 強制成 JSON 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT |
+| 面向失敗判定 | 靠有沒有收到回流（§3.1，只能自律） | exit code + 輸出檔非空 + schema shape guard，**機械判定** |
+
+**預設為 `codex`**。引擎由 post-commit hook 在**上鎖當下**決定一次（`scripts/lib/review-engine.ts` 的 `resolveEngine()`），寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重新探測——同一輪 review 不得換引擎。決策順序：
+
+1. 環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE=agent|codex` 覆寫（要長期固定某一路徑就設它）
+2. 探測 codex 是否真的可執行（實際跑 `codex --version`，不是只看 binary 在不在——實測踩過 `which` 找得到但執行 ENOENT）
+3. 探測失敗 → 降級為 `agent`，**並在 systemMessage 印出實際錯誤**，不靜默改道
+
+手動模式未帶 `engine=` 時同樣預設 codex；要跑原路徑就明寫 `engine=agent`。
 
 ### 2. 免跑條件（任一成立 → 只跑 §7 通知）
 對照 commit-review-policy.md 免跑條件：commit and push 的一部分 / 空 commit / commit 失敗 / amend 既有 commit 且新增 diff < 10 行。
@@ -48,6 +71,9 @@ commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派�
 3. §7 通知。
 
 **Tier 2 標準**
+
+> **`engine=codex` 時**：下列第 3-4 步改為執行 §3.2 的 codex 路徑（面向數 1），其餘步驟一字不變。
+
 1. eslint（同上規則）。
 2. `/simplify`（對本次變更）。
 3. pr-reviewer **agent**（lite 模式）：`Agent(subagent_type: "pr-reviewer")`，不帶 `name` 參數（帶了結果不回流）。
@@ -58,6 +84,8 @@ commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派�
 7. §7 通知。
 
 **Tier 3 大改動** — Tier 2 全部（eslint / `/simplify` / pr-reviewer lite / 修 CRITICAL），外加下列五面向平行 review。
+
+> **`engine=codex` 時**：本節的五面向 spawn 與 Tier 2 的 lite agent 合併為 §3.2 的一次 codex 執行（面向數 6），下方的 agent 對照表與 prompt 要求改由 runner 內建（`scripts/lib/codex-aspects.ts`），其餘步驟一字不變。下方那段「不得改用 review-pr 委派」的教訓對 codex 路徑同樣成立——那正是 codex 路徑不讓單一 codex 自行 spawn 六個 subagent 的理由。
 
 > **不得改用 `/pr-review-toolkit:review-pr` 委派**（2026-08-17 起）。該 command 有自己的 "Determine Applicable Reviews" 篩選（`commands/review-pr.md:36-43`），**傳五個 aspect 參數不等於跑五個面向**，決定權在被委派方；且該 command 的 workflow 明定用於 commit **之前**，預設 scope 是 `git diff`（未 commit 變更），在 commit 後跑會是空的。
 >
@@ -91,6 +119,8 @@ commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派�
 
 ### 3.1 平行 agent 的失效處理（Tier 2/3 皆適用）
 
+> 本節的**回流判定**（下列三種失敗態、收齊與否）針對 `engine=agent`。`engine=codex` 的面向失敗改由 runner 機械判定（§3.2），但本節的**降級處理規則**——報告開頭標明缺口、不得自己重做、不得清 marker——兩條路徑一體適用。
+
 **收齊全部子 agent 結果之前，禁止宣告 review 完成、禁止清 marker、禁止進入下一步。** 未收齊就結束該輪繼續等 task-notification。
 
 下列三種都算該面向失敗，**不可當成空結果放過**：
@@ -108,6 +138,39 @@ commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派�
 
 理由：面向靜默消失與「該面向沒發現問題」在輸出上完全無法區分，這正是 `~/.claude/CLAUDE.md` core-principles 的 `verify-the-observer` 所指的盲區——PR 1134 的兩個 CRITICAL（`.then()` 缺 `.catch()` 造成連線洩漏與需重啟 App）在 commit 層是 Tier 3 卻未被攔下，兩天後才由 PR full review 抓出。
 
+### 3.2 codex 引擎路徑（`engine=codex` 時取代面向 spawn）
+
+一行指令取代 Tier 2 的 lite agent 或 Tier 3 的六面向 spawn：
+
+```bash
+bun ~/.claude/scripts/codex-review.ts --tier=<N> --target=<ref>
+```
+
+常用選項：`--aspects=rules,tests`（只跑指定面向，用於補跑單一失敗面向）、`--show-minor`（連 MINOR 明細一起印，預設只計數）、`--effort=<none|low|medium|high>`（預設 high）、`--timeout=<秒>`（預設 900）。
+
+**面向與 agent 路徑一一對應**（定義在 `scripts/lib/codex-aspects.ts`，Tier 2 只跑 `rules`）：
+
+| codex 面向 | 對應 agent 路徑的 subagent |
+|---|---|
+| `rules` | `pr-reviewer`（lite） |
+| `code-review` | `pr-review-toolkit:code-reviewer` |
+| `silent-failure` | `pr-review-toolkit:silent-failure-hunter` |
+| `comments` | `pr-review-toolkit:comment-analyzer` |
+| `tests` | `pr-review-toolkit:pr-test-analyzer` |
+| `types` | `pr-review-toolkit:type-design-analyzer` |
+
+**面向失敗判定改為機械檢查**，取代 §3.1 對 codex 路徑而言已不適用的那部分：runner 對每個面向做三層驗證——子進程 exit code、輸出檔存在且非空、JSON 通過 schema shape guard（含 `aspect` 欄位須與請求的面向代號一致，防審錯目標）。任一層不過即該面向失敗，**不會被當成「該面向沒發現問題」**。
+
+依 exit code 決定後續，**不得只看畫面上有沒有 findings**：
+
+- **exit 0** → 全部面向通過，`passedAspects` 數即解鎖用的 N。
+- **exit 1** → 降級。runner 已印出未回傳的面向名稱，照 §3.1 的降級規則處理：報告開頭標明降級與缺口、**不得清 marker**、回報使用者後由其決定補跑（`--aspects=<缺的面向>`）或 `--force` 解鎖。**補跑不會自動累計**：`--aspects=<缺的面向>` 這次執行印出的解鎖指令只反映**本次**通過的面向數（例如缺 1 個就補跑 1 個，印出的會是 `--aspects-done=1`），不會記得前一輪已通過的面向。要解鎖須自己把前一輪的 `passedAspects` 加上本次補跑通過的面向數，湊滿 `expectedAspects` 後手動組出正確的 `--aspects-done=N` 執行；不得照抄補跑指令印出的 N 直接執行（那個 N 幾乎必然小於 `expectedAspects`，會被 `clear-pending-review.ts` 拒絕，但也不要誤以為調高就能矇混過去）。
+- **exit 2** → 用法或前置條件錯誤（ref 打錯、非 git repo、schema 檔遺失），修正後重跑，不得跳過本步驟往下走。
+
+輸出位置：`~/.claude/state/codex-review/<repo>/<short-sha>/`，含每個面向的 `aspect-<key>.json`（結構化結果）、`aspect-<key>.log`（codex 原始輸出，失敗時查這個）與 `summary.json`（彙整）。**stdout 的彙整已是為主 session 準備的精簡版，除非要追查失敗面向，否則不需要再去讀那些檔案**——這正是 codex 路徑省 context 的地方。
+
+> **codex 的三個陷阱已由 runner 以程式規避，修改 runner 時不得拿掉**（皆為實測）：stdin 是 pipe 會讓 `codex exec` 掛住等輸入；`--ephemeral` 會讓 `collaboration.spawn_agent` 以 `no thread with id` 失敗；codex 的 stdout 會出現欄位齊全但值為空的**中間態 JSON**，只有 `-o` 寫出的最後一則 message 才是結果。另 `codex exec review` 子指令預設 `sandbox=workspace-write`（review 有權改 code）且 `reasoning effort=none`，故 runner 改用通用的 `codex exec` 並顯式指定唯讀與推理強度。
+
 ### 4. Blast radius（Tier 2/3 必跑）
 依 commit-review-policy.md「Blast Radius 分析」節執行：codebase-memory-mcp 對本次改動 symbol 跑 `trace_path`(inbound)。資訊性輸出、不自動改；揭露遺漏 caller 回報 user；project 未索引 → 標「impact 未取得」跳過；注意「方法當 callback 參照傳遞」盲區，callers 回空需 grep 補查。
 
@@ -120,7 +183,7 @@ commit 後 PostToolUse hook 已機械算好 Tier，透過 systemMessage 指派�
 1. 該 Tier 的所有面向 agent 結果**已收齊**（§3.1；Tier 1 無子 agent，此條自動成立）
 2. review 發現的 Critical 已處理完（amend 或留 uncommitted）
 
-滿足後執行（**必須帶 `--aspects-done=N`**，N = 實際收齊的面向數）：
+滿足後執行（**必須帶 `--aspects-done=N`**，N = 實際收齊的面向數；`engine=codex` 時 N 取 runner 的 `passedAspects` 數——exit 0 時它等於面向總數，runner 最後一行已把完整指令印出來，直接照抄即可，**不要自己心算或估一個數字**）：
 
 ```bash
 bun ~/.claude/scripts/clear-pending-review.ts --aspects-done=<N>

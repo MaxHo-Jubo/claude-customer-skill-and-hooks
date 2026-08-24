@@ -19,6 +19,7 @@
 import { existsSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { MARKER_DIR, readValidMarker, resolveRepoRoot, type ReviewMarker, aspectsForTier } from '../scripts/lib/review-marker';
+import { buildSkillInvocation, LEGACY_MARKER_ENGINE } from '../scripts/lib/review-engine';
 
 /**
  * 同一 session 最多被 block 的次數：達上限即放行（改印警告），防止模型連續無視時
@@ -111,6 +112,13 @@ process.stdin.on('end', () => {
     const counts = hit.marker.stopBlockCounts || {};
     /** 本 session 在此 marker 上已被 block 的次數 */
     const count = counts[sessionId] || 0;
+    /**
+     * 本 marker 記錄的 review 引擎。engine 由 post-commit hook 在上鎖當下探測並寫入，
+     * 此處只讀不重新探測——同一輪 review 的引擎必須一致，否則會出現「上鎖時指派 codex、
+     * Stop 時改指派 agent」這種同輪換引擎的情況。
+     * 舊 marker 無此欄位時取 LEGACY_MARKER_ENGINE，那是還原它們建立當下的實際行為。
+     */
+    const engine = hit.marker.engine ?? LEGACY_MARKER_ENGINE;
 
     // STEP 06: 保險絲——本 session 已達 block 上限，放行並印大聲警告（每次回合結束都會再提醒）
     if (count >= MAX_STOP_BLOCKS) {
@@ -118,7 +126,7 @@ process.stdin.on('end', () => {
         systemMessage: [
           `⚠️ pending-review Stop 閘門：本 session 已被攔 ${MAX_STOP_BLOCKS} 次仍未完成 review`,
           `（Tier ${hit.marker.tier} commit ${hash10}），保險絲達上限、本次放行。`,
-          `請儘速執行 Skill(commit-review) args: "tier=${hit.marker.tier} target=${hit.marker.commitHash}"。`,
+          `請儘速執行 ${buildSkillInvocation(hit.marker.tier, hit.marker.commitHash, engine)}。`,
         ].join(''),
       }));
       process.exit(0);
@@ -142,7 +150,7 @@ process.stdin.on('end', () => {
     const reason = [
       `🔒 pending-review 閘門（Stop）：Tier ${hit.marker.tier} commit ${hash10}（${hit.marker.repoRoot}）的 review 尚未完成，本回合不得結束。`,
       '請立即執行 review chain：',
-      `  Skill(commit-review) args: "tier=${hit.marker.tier} target=${hit.marker.commitHash}"`,
+      `  ${buildSkillInvocation(hit.marker.tier, hit.marker.commitHash, engine)}`,
       'review 完成（Critical 已處理）後執行解鎖，之後即可正常結束回合：',
       `  bun ~/.claude/scripts/clear-pending-review.ts ${hit.marker.repoRoot} --aspects-done=${hit.marker.expectedAspects ?? aspectsForTier(hit.marker.tier)}`,
       '  （面向未跑滿時腳本會拒絕解鎖；依 SKILL.md §3.1 應先向使用者回報降級，確需放行用 --force "<理由>"）',

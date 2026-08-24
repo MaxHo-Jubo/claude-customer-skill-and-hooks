@@ -268,12 +268,16 @@
 - **特性**：`disable-model-invocation: true`（不會被自動觸發，僅手動執行）
 - **依賴**：無外部依賴
 
-#### `/commit-review [target]` — Commit 後分級 review chain（v1.2.0）
+#### `/commit-review [target]` — Commit 後分級 review chain（v1.4.0）
 
 - **位置**：`~/.claude/skills/commit-review/SKILL.md`
 - **用法**：
-  - 被動（hook 指派）：commit 後 `post-commit-review.ts` 已算好 Tier，透過 systemMessage 下 `Skill(commit-review) args: "tier=N target=HEAD"`；**此模式 tier 已知直接採用、不重算**（判定單一來源）
-  - 手動：`/commit-review`（對 HEAD）、`/commit-review HEAD~3`、`/commit-review <hash>` — 用於 marker 逾期補跑、想重跑、push 前主動 review、對舊 commit 補 review；手動模式自己跑 `bun ~/.claude/scripts/compute-tier.ts <target>` 算 tier
+  - 被動（hook 指派）：commit 後 `post-commit-review.ts` 已算好 Tier 與 engine，透過 systemMessage 下 `Skill(commit-review) args: "tier=N target=HEAD engine=<agent|codex>"`；**此模式 tier 與 engine 已知直接採用、不重算/不重探測**（判定單一來源）
+  - 手動：`/commit-review`（對 HEAD，預設 `engine=codex`）、`/commit-review HEAD~3`、`/commit-review <hash>`、`/commit-review engine=agent`（強制走原 Claude agent 路徑，可與 target 併用）— 用於 marker 逾期補跑、想重跑、push 前主動 review、對舊 commit 補 review；手動模式自己跑 `bun ~/.claude/scripts/compute-tier.ts <target>` 算 tier
+- **兩種 review 引擎（v1.4.0 新增）**：
+  - `engine=agent`（原有路徑，降級與人工覆寫用）：Tier 2/3 面向由 Claude subagent（`Agent()`）逐一 spawn，結果經 task-notification 整份回流主 session；面向是否收齊靠 §3.1 fail loud 條款自律回報
+  - `engine=codex`（**預設**）：面向由 `scripts/codex-review.ts` 平行發動 `codex exec` 子進程執行（六面向定義在 `scripts/lib/codex-aspects.ts`），輸出強制走 `scripts/schemas/codex-review-aspect.json` schema 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT；面向失敗用 exit code + 輸出檔非空 + schema shape guard 機械判定，不靠模型自律
+  - 引擎由 `scripts/lib/review-engine.ts` 的 `resolveEngine()` 在 post-commit hook **上鎖當下**決定一次、寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重探測（同一輪 review 不換引擎）。決策順序：環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE` 覆寫 → 實際執行 `codex --version` 探測（非只查 binary 是否存在，踩過 `which` 找得到但執行 ENOENT）→ 探測失敗降級 `agent` 並在 systemMessage 印出實際錯誤，不靜默改道
 - **定位**：整套 pending-review 機制的**執行層**。分級判定由 hook 負責、強制力由 `commit-gate-guard.ts`（PreToolUse deny）提供，本 skill 只負責「跑對應 Tier 的步驟」
 - **判準權威**：`~/.claude/harness/commit-review-policy.md`（分級判定表、免跑條件、Blast Radius 節、禁止事項）。skill 不重複判定表，只定義每個 Tier 的執行步驟——兩者職責切開，避免同一份步驟寫在 hook 字串／skill／policy 三處而分歧
 - **Tier 對應 chain**：
@@ -286,7 +290,7 @@
 - **為何不用 `/pr-review-toolkit:review-pr` 委派（v1.1.0 改動）**：該 command 有自己的 "Determine Applicable Reviews" 篩選（`commands/review-pr.md:36-43`），傳五個 aspect 參數不等於跑五個面向；且其 workflow 明定用於 commit **之前**，預設 scope 是 `git diff`（未 commit 變更），commit 後跑會是空的。實測 Tier 3 首次執行只 spawn 3 個 agent，SubagentStop debug log 五面向完成次數 15/14/13/11/10 亦不齊
 - **marker 解鎖（v1.1.0 改動，v1.2.0 加上機械檢查）**：skill §5 是**唯一自動解鎖路徑**，前置條件為「面向結果收齊 + Critical 處理完」。SubagentStop hook 已停止清除職責（原本任一含 `review` 的 agent 完成就清，並行時第一個回來的即解鎖）
 - **解鎖端機械閘門（v1.2.0 新增）**：marker 帶 `expectedAspects`（Tier 2 = 1、Tier 3 = 6，由 `post-commit-review.ts` 依 tier 機械填入），`clear-pending-review.ts` 要求 `--aspects-done=N` 且 `N >= expectedAspects`，不足則 exit 1 並印出缺口；降級時須 `--force "<理由>"` 且會在 `~/.claude/state/pending-review/unlock-audit.log` 標記 `FORCE=`。舊 marker 無此欄位時向後相容放行並提示。改動理由：此前 clear 腳本無條件 `unlink`，整套閘門是「上鎖機械、解鎖靠自覺」，而兩個閘門的攔阻訊息還直接把解鎖指令印給模型——等於在最想結束回合的時刻遞上鑰匙
-- **依賴**：`scripts/compute-tier.ts`（手動模式算 tier）、`scripts/lib/tier.ts`（與 hook 共用的判定邏輯）、pr-reviewer agent（lite）、pr-review-toolkit 的 5 個面向 agent、codebase-memory-mcp（blast radius）
+- **依賴**：`scripts/compute-tier.ts`（手動模式算 tier）、`scripts/lib/tier.ts`（與 hook 共用的判定邏輯）、`scripts/lib/review-engine.ts`（引擎決策）、`scripts/codex-review.ts` + `scripts/lib/codex-aspects.ts` + `scripts/schemas/codex-review-aspect.json`（`engine=codex` 路徑）、`codex` CLI（需在 PATH 可執行）、pr-reviewer agent（lite，`engine=agent` 路徑用）、pr-review-toolkit 的 5 個面向 agent（`engine=agent` 路徑用）、codebase-memory-mcp（blast radius）
 
 ---
 
@@ -465,7 +469,7 @@
 | `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
 | `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
-| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker 含 `sessionId`（供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD` 的 chain（步驟明細在 skill，hook 不列舉） |
+| `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier ≥1 另以 `lib/review-engine.ts` 的 `resolveEngine()` 探測本輪 review 引擎（`codex`/`agent`，決策見下方 `commit-review` 章節），Tier 2/3 寫入 pending-review marker 含 `sessionId`/`engine`（供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD engine=<agent\|codex>` 的 chain（步驟明細在 skill，hook 不列舉） |
 | —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
@@ -482,7 +486,7 @@
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| —（所有回合結束） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員——marker 未清時 block 回合結束，reason 以指令級注入（user role）指派 `commit-review` skill，補上「commit 後只打字回覆、systemMessage 被無視」的生命週期缺口。比對雙鍵：`marker.sessionId` 優先（本 session 欠的 review，不 spawn git）、cwd repoRoot 補位（跨 session 接手）。防 brick：per-session 有界計數（同 session 最多攔 3 次，達上限放行印警告）、plan mode 放行、逾期 marker 自動清除、計數寫回失敗放行；失敗一律 fail-open |
+| —（所有回合結束） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員——marker 未清時 block 回合結束，reason 以指令級注入（user role）指派 `commit-review` skill，補上「commit 後只打字回覆、systemMessage 被無視」的生命週期缺口。比對雙鍵：`marker.sessionId` 優先（本 session 欠的 review，不 spawn git）、cwd repoRoot 補位（跨 session 接手）。指派字串的 engine 直接讀 `marker.engine`（只讀不重探測，同一輪 review 不換引擎；舊 marker 無此欄位時以 `LEGACY_MARKER_ENGINE` 推導）。防 brick：per-session 有界計數（同 session 最多攔 3 次，達上限放行印警告）、plan mode 放行、逾期 marker 自動清除、計數寫回失敗放行；失敗一律 fail-open |
 
 ### SubagentStop
 
@@ -509,10 +513,13 @@
 | `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
 | `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
-| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）與 `stopBlockCounts`（per-session block 計數）欄位 |
+| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）、`stopBlockCounts`（per-session block 計數）與 `engine?`（本輪 review 引擎，選填以相容舊 marker）欄位 |
 | `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
+| `lib/review-engine.ts` | review 引擎決策共用 lib（v1.4.0 新增）— `resolveEngine()`：環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE` 覆寫 → 實際執行 `codex --version` 探測（非只查 binary 存在）→ 失敗降級 `agent`；`buildSkillInvocation(tier, commitHash, engine)` 集中組出 `Skill(commit-review) args: "..."` 字串，取代原本分散在 `post-commit-review.ts`/`stop-review-guard.ts` 兩處各自組字串會分歧的寫法；`LEGACY_MARKER_ENGINE` 供舊 marker（無 `engine` 欄位）向後相容推導 |
+| `lib/codex-aspects.ts` | codex review 六面向定義（v1.4.0 新增）— 對應原 Tier 3 的 5 個 subagent 面向 + Tier 2 的 lite 面向，每項含 prompt 與輸出對應的 schema key，供 `codex-review.ts` 逐一組 `codex exec` 呼叫 |
+| `codex-review.ts` | codex review 平行 runner（v1.4.0 新增）— 依 `lib/codex-aspects.ts` 平行發動多個 `codex exec` 子進程，輸出強制驗證 `schemas/codex-review-aspect.json` schema 後落檔；exit code 非 0 或輸出檔缺漏/不合 schema 一律視為該面向失敗（機械判定，不靠模型自報） |
 | `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts [target]`，輸出 `TIER=N` 與 `FILES=… LINES=… SENSITIVE=… COMMIT=…` 兩行，供 `commit-review` skill 手動模式取得 tier；ref 無效時印錯誤並 exit 1（skill 見非 0 exit 即停止，不得採用 TIER 值） |
-| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier ≥1 另呼叫 `lib/review-engine.ts` 的 `resolveEngine()` 決定本輪 review 引擎，Tier 2/3 寫入 pending-review marker（含 `sessionId`/`engine`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |

@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync } from 'fs';
 import { MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, type ReviewMarker, aspectsForTier } from './lib/review-marker';
 import { computeTier } from './lib/tier';
+import { resolveEngine, buildSkillInvocation, type EngineDecision, type ReviewEngine } from './lib/review-engine';
 
 /**
  * PostToolUse hook：git commit 後依 commit-review-policy.md 機械判定 Tier，
@@ -130,21 +131,30 @@ process.stdin.on('end', () => {
     // 未經證實的斷言，而 marker 同時因缺 repoRoot 寫不進去 → 閘門靜默失效。
     const tier: number | null = repoRoot ? computeTier(repoRoot) : null;
 
-    // STEP 09: Tier 2/3 寫入 pending-review marker，供 PreToolUse 閘門阻擋下一個 commit、
+    // STEP 09: 決定本輪 review 引擎（只在 Tier 2~3 探測——SKILL.md 明定「engine 只影響
+    // Tier 2/3 的面向 review」，Tier 0/1 不消費這個值：Tier 0 不經 skill、Tier 1 不 spawn
+    // review agent。探測是同步、up to 5s 的子進程呼叫，Tier 1 是最常見的非瑣碎 commit 類型，
+    // 對它跑一次用不到的探測是純浪費，與 Tier 0 已排除的理由完全同類。
+    // 探測結果隨即寫入 marker，Stop gate 之後只讀不重探，確保同一輪 review 引擎一致。
+    /** 本輪引擎決策；Tier 0/1 或判定失敗時為 null（不需要引擎） */
+    const engineDecision: EngineDecision | null =
+      tier !== null && tier >= 2 ? resolveEngine() : null;
+
+    // STEP 10: Tier 2/3 寫入 pending-review marker，供 PreToolUse 閘門阻擋下一個 commit、
     // Stop 閘門阻擋回合結束。sessionId 一併寫入，作為 stop-review-guard 的第一比對鍵。
     // 例外：命令含 [skip-review] 或 --amend 時不寫（與 commit-gate-guard 放行條件對稱，
     // 否則 skip-review 的 commit 雖自身放行，卻仍替下一個 commit 上鎖）。
     let gateNote = '';
     const skipMarker = /\[skip-review\]/i.test(command) || /--amend/.test(command);
-    if (tier !== null && tier >= 2 && repoRoot && !skipMarker) {
+    if (tier !== null && tier >= 2 && repoRoot && !skipMarker && engineDecision) {
       /** 本次 hook 事件所屬 session id；缺漏時不寫入欄位（stop gate 退回 repoRoot 比對） */
       const sessionId = typeof data.session_id === 'string' && data.session_id ? data.session_id : undefined;
-      gateNote = writeMarker(tier, repoRoot, sessionId);
+      gateNote = writeMarker(tier, repoRoot, engineDecision.engine, sessionId);
     }
 
-    // STEP 10: 依 Tier 輸出對應 systemMessage
+    // STEP 11: 依 Tier 輸出對應 systemMessage
     console.log(JSON.stringify({
-      systemMessage: buildMessage(tier, eslintResult, gateNote),
+      systemMessage: buildMessage(tier, eslintResult, gateNote, engineDecision),
     }));
   } catch {
     process.exit(0);
@@ -155,10 +165,11 @@ process.stdin.on('end', () => {
  * 寫入 pending-review marker 檔。
  * @param tier 本次 commit 的 Tier（2 或 3）
  * @param repoRoot 目標 repo 根目錄
+ * @param engine 本輪 review 引擎，釘在上鎖時點供 Stop gate 讀取，不由後者重新探測
  * @param sessionId 觸發 commit 的 session id；undefined 時 JSON 序列化自動略去該欄位
  * @returns 給 systemMessage 用的閘門說明字串；寫入失敗回傳空字串（fail-open，不阻斷）
  */
-function writeMarker(tier: number, repoRoot: string, sessionId?: string): string {
+function writeMarker(tier: number, repoRoot: string, engine: ReviewEngine, sessionId?: string): string {
   try {
     // STEP 01: 取得目標 repo 的 commit hash
     const commitHash = execSync('git rev-parse HEAD', {
@@ -176,6 +187,7 @@ function writeMarker(tier: number, repoRoot: string, sessionId?: string): string
       createdAt: Date.now(),
       sessionId,
       expectedAspects: aspectsForTier(tier),
+      engine,
     };
     writeFileSync(markerPathForRepo(repoRoot), JSON.stringify(marker, null, 2), 'utf8');
 
@@ -196,9 +208,15 @@ function writeMarker(tier: number, repoRoot: string, sessionId?: string): string
  * @param tier Tier 數字；null 代表 repoRoot 解析失敗、判定前提不成立
  * @param eslintResult eslint 執行結果字串
  * @param gateNote 閘門說明字串（Tier 2/3 才有值）
+ * @param engineDecision 本輪引擎決策；Tier 0 與判定失敗路徑為 null（該路徑不指派 skill）
  * @returns 完整 systemMessage
  */
-function buildMessage(tier: number | null, eslintResult: string, gateNote: string): string {
+function buildMessage(
+  tier: number | null,
+  eslintResult: string,
+  gateNote: string,
+  engineDecision: EngineDecision | null,
+): string {
   // STEP 01: 判定前提不成立——如實說明，不得降級成 Tier 0 而謊稱「無需 review」。
   // 此路徑 marker 也寫不進去（缺 repoRoot），閘門等同失效，必須讓使用者看見。
   if (tier === null) {
@@ -215,17 +233,41 @@ function buildMessage(tier: number | null, eslintResult: string, gateNote: strin
   if (tier === 0) {
     return `📋 Post-commit（Tier 0 純文件）\n\n${eslintResult}\n\n只需通知，無需 review。`;
   }
-  // STEP 03: Tier 1~3 一律交給 commit-review skill 執行對應 chain。
-  // 步驟明細收斂在 skill（不再於此列舉，避免 hook 字串／skill／policy 三處分歧）：
-  // Tier 1 不 spawn agent、Tier 2/3 跑 pr-reviewer／review-pr。tier 由本 hook 算好帶入，
-  // skill 被動模式直接採用不重算（判定單一來源）；eslint 結果一併附上供 skill 據以修正。
+  // STEP 03: Tier 1 不 spawn review agent、不消費 engine（STEP 09 本就沒為它探測），
+  // 指派字串照 SKILL.md §1.1「Tier 0/1 不受 engine 影響」不含 engine 欄位。
+  if (tier === 1) {
+    return [
+      '📋 Post-commit（Tier 1）',
+      '',
+      eslintResult,
+      '',
+      'Claude 應執行 commit-review skill 跑 Tier 1 的檢查（不 spawn review agent）：',
+      '  Skill(commit-review) args: "tier=1 target=HEAD"',
+    ].join('\n');
+  }
+  // STEP 04: Tier 2/3 一律需要 engine（STEP 09 已為它們探測）。走到這裡仍是 null，
+  // 代表 STEP 09 的判斷條件與這裡的 tier 判斷分歧——如實回報而非挑一個引擎猜，
+  // 否則分歧會被藏在一次看似正常的指派裡。
+  if (!engineDecision) {
+    return [
+      `⚠️ Post-commit（Tier ${tier}，引擎未決定）`,
+      '',
+      eslintResult,
+      '',
+      '本次未能決定 review 引擎，未指派 skill。請手動執行：/commit-review',
+      gateNote,
+    ].join('\n');
+  }
+
   return [
-    `📋 Post-commit（Tier ${tier}）`,
+    `📋 Post-commit（Tier ${tier}｜engine=${engineDecision.engine}）`,
     '',
     eslintResult,
     '',
+    // 只在覆寫或降級時印理由；走預設且探測通過時 reason 為 null，不製造每次 commit 都出現的噪音
+    ...(engineDecision.reason ? [`ℹ️ ${engineDecision.reason}`, ''] : []),
     `Claude 應執行 commit-review skill 跑 Tier ${tier} 的 review chain：`,
-    `  Skill(commit-review) args: "tier=${tier} target=HEAD"`,
+    `  ${buildSkillInvocation(tier, 'HEAD', engineDecision.engine)}`,
     gateNote,
   ].join('\n');
 }
