@@ -25,6 +25,7 @@
 - 遇品味/美感決策 → harness/judgment-matrix.md §4（弱模型禁自行拍板）
 - git commit 成功後 → harness/commit-review-policy.md（Tier 0~3 分級審查，取代舊「強制六步」）
 - 被 user 糾正 / 要寫教訓 / 要改制度檔 → harness/knowledge-protocol.md（權限分級＋踩坑格式＋精簡門檻）
+- 質疑 session 注入成本 / 評估 plugin 去留 / 清理死引用 → harness/harness-diagnosis.md（本機實測診斷，status DONE，機器專屬不隨 sync；注入量數字是 2026-07-03 的，context-mode 已停用＋CLAUDE.md 已改 v2.1，絕對值須重量測，方法論與壞引用清單仍有效）
 
 </harness>
 
@@ -145,5 +146,6 @@ rules/typescript/{coding-style,testing,patterns,hooks,security}.md
 subagent 調度與工具鏈守則 → harness/model-dispatch.md（取代舊版 SUBAGENT-USAGE / TOOL-USAGE 段落與已移除的 rules/common/agents.md）
 commit 後審查 → harness/commit-review-policy.md（取代舊版 POST-COMMIT-REVIEW 段落）
 CLAUDE.md / skills 肥大體檢 → Claude Code 內建 /doctor（官方 context-engineering 指南建議定期 rightsize）
+術語看不懂時查 → GLOSSARY.md（fail-open/fail-closed/zero-result/silent fallback 等業界術語，及 verify-the-observer/graph-first/Tier 分級等本機自創術語）
 
 </ref>
