@@ -1,8 +1,8 @@
 ---
 name: commit-review
 description: "Commit 後分級 review chain（Tier 0~3）。被動由 post-commit hook 指派，也可手動 /commit-review [target] 對任意 commit 補跑。當使用者提到 /commit-review、「跑 review」、「補跑 review」、「review 這個 commit」、「push 前 review」時觸發。不適用於：PR 級完整審查（用 /pr-reviewer <PR>）、需求驗收（用 /jira-acceptance）。"
-version: 1.4.0
-last_modified: 2026-08-23
+version: 1.4.1
+last_modified: 2026-08-24
 ---
 
 # Commit Review
@@ -24,20 +24,21 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 **不保證是 codex**——探測失敗會降級成 `engine=agent`）。此模式**直接採用不重新決定**——與 tier 同理，判定單一來源。
 
 ### 手動（使用者主動）
-- `/commit-review` — 對 HEAD 跑（預設 codex 引擎）
+- `/commit-review` — 對 HEAD 跑（未指定 engine 時，見 §1 執行 `resolve-engine.ts` 探測決定，不是寫死 codex）
 - `/commit-review HEAD~3` — 對指定 commit 跑
 - `/commit-review <hash>` — 對指定 commit 跑
-- `/commit-review engine=agent` — 改走原本的 Claude agent 路徑（可與 target 併用，如 `/commit-review HEAD~3 engine=agent`）
+- `/commit-review engine=agent` — 明寫引擎，跳過探測直接採用（可與 target 併用，如 `/commit-review HEAD~3 engine=agent`）
 
 用途：marker 逾期補跑、想重跑、push 前主動 review、對舊 commit 補 review。手動模式 args 不含 tier → 自己算（見下 §1）。
 
 ## 執行步驟
 
 ### 1. 決定 target、tier 與 engine
-- 解析 args：`tier=N`（被動帶入）、`target=<ref>`（預設 HEAD）、`engine=<agent|codex>`（被動帶入；未帶時預設 `codex`）。
+- 解析 args：`tier=N`（被動帶入）、`target=<ref>`（預設 HEAD）、`engine=<agent|codex>`（選填；帶了就直接採用，跳過下方探測）。
 - **args 含 tier** → 直接用（被動模式，不重算）。
 - **args 不含 tier** → 手動模式，執行 `bun ~/.claude/scripts/compute-tier.ts <target>`，讀取輸出的 `TIER=N`。
   - **exit code 非 0 → 停止並回報使用者**（通常是 ref 打錯），不得逕自採用任何 TIER 值。
+- **args 不含 engine 且 tier ≥ 2**（手動模式最常見情形）→ 執行 `bun ~/.claude/scripts/resolve-engine.ts`，讀取輸出的 `ENGINE=<agent|codex>`；`REASON=` 非空時原樣轉告使用者。**不得省略此步驟、逕自假設 codex 可用**——這是手動模式先前的缺口：被動模式由 hook 在上鎖當下探測，手動模式若只採 SKILL.md 文字上的預設值而不實際探測，codex 未安裝時會導致該次面向全部判定失敗（見 §3.2 exit 1），而非像被動模式一樣自動退回 agent。
 - target 解析不出 → fallback HEAD。
 - **engine 只影響 Tier 2/3 的面向 review 由誰執行**（§3.2 vs §3.3），其餘步驟（eslint、`/simplify`、修 Critical、blast radius、解鎖、通知）兩條路徑完全相同。Tier 0/1 不受 engine 影響。
 
@@ -50,13 +51,15 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 | 結果交回 | subagent 回覆全文經 task-notification 回流，**整份進主 session context** | schema 強制成 JSON 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT |
 | 面向失敗判定 | 靠有沒有收到回流（§3.1，只能自律） | exit code + 輸出檔非空 + schema shape guard，**機械判定** |
 
-**預設為 `codex`**。引擎由 post-commit hook 在**上鎖當下**決定一次（`scripts/lib/review-engine.ts` 的 `resolveEngine()`），寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重新探測——同一輪 review 不得換引擎。決策順序：
+**預設為 `codex`**，但「預設」指的是 `resolveEngine()`（`scripts/lib/review-engine.ts`）探測通過時的結果，不是不探測就假設可用。決策順序：
 
 1. 環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE=agent|codex` 覆寫（要長期固定某一路徑就設它）
 2. 探測 codex 是否真的可執行（實際跑 `codex --version`，不是只看 binary 在不在——實測踩過 `which` 找得到但執行 ENOENT）
-3. 探測失敗 → 降級為 `agent`，**並在 systemMessage 印出實際錯誤**，不靜默改道
+3. 探測失敗 → 降級為 `agent`，**並印出實際錯誤**，不靜默改道
 
-手動模式未帶 `engine=` 時同樣預設 codex；要跑原路徑就明寫 `engine=agent`。
+兩種觸發模式共用同一份 `resolveEngine()`，差別只在探測時間點與傳遞方式：
+- **被動**：post-commit hook 在**上鎖當下**探測一次，寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重新探測——同一輪 review 不得換引擎。
+- **手動**：未帶 `engine=` 時，於**本次呼叫當下**執行 `bun ~/.claude/scripts/resolve-engine.ts` 探測（見 §1）；要略過探測、直接指定就明寫 `engine=agent` 或 `engine=codex`。
 
 ### 2. 免跑條件（任一成立 → 只跑 §7 通知）
 對照 commit-review-policy.md 免跑條件：commit and push 的一部分 / 空 commit / commit 失敗 / amend 既有 commit 且新增 diff < 10 行。
