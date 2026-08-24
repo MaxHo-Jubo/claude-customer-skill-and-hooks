@@ -61,6 +61,19 @@ WRITE-PRESERVE-COMMENTS:
   rule: Write 整檔重寫既有檔案時必須完整保留所有原註解（檔案層 JSDoc / 函式 JSDoc / @type / STEP 編號）
   action: 優先用 Edit 局部替換；必須 Write 時先 Read 完整檔案並用 `git show HEAD:path` 為 baseline；commit 前自己 grep `/\*\*` 數量與 `STEP 0` 出現次數是否與重寫前一致
 
+EDIT-REPLACE-SCOPE:
+  rule: Edit 的 `old_string` **不得包含任何你不打算刪除的宣告**。新增程式碼一律用「插入」而非「替換」——`old_string` 只取一個穩定錨點，`new_string` = 新內容 + 錨點原文；舊程式碼永遠不進 `old_string`，就不可能被吃掉
+  anchor-must-include-jsdoc: 錨點若是一個函式，要取它的 **JSDoc 第一行（`/**`）**，不是 `function` 那行。取簽名行會把新內容插進 JSDoc 與函式之間——該函式從此沒有註解，而原本的 JSDoc 變成下一個函式的第二個註解（兩個 `/**` 相鄰）。這種錯位語法完全合法、測試全綠、宣告差集也查不到（宣告都還在），只有讀 diff 或掃「`*/` 後緊接 `/**`」才會發現
+  anchor-check: 插入後掃一次錯位：`python3 -c "…"` 或最簡單的 `grep -n -A1 '^ \*/$' <file> | grep -B1 '/\*\*'`；另可驗「每個 `^function` 的前一行必須是 ` */` 或空行」
+  anchor-why: 本規則寫進 rules 的同一個 session 內就被自己違反一次——iBee 的 `resetQuotaUiToIdle` 因此掉了 JSDoc，而它的註解跑去當 `isHandshakeTicketSpent` 的第二個 JSDoc。規則只寫「取簽名行」是不夠的
+  when-really-replacing: 真要改寫既有函式時，`old_string` 從該函式 JSDoc 第一行到它的 `}` 為止。發現範圍會跨到前後其他的 `const`/`let`/`function` → 那是訊號，拆成兩次操作，不要一次替換
+  self-check: 下 Edit 前問一句「old_string 裡有沒有我不打算刪掉的識別字？」有就重切範圍。這是**寫入時**的檢查，取代不了也不該退化成事後補救
+  post-check: 用 Write 整檔重寫、或做了大段替換後，跑一次頂層宣告差集（不是只比對註解數量）——
+    `git show HEAD:$f | grep -oE "^(const|let|var|function|async function) +[A-Za-z_$][A-Za-z0-9_$]*" | awk '{print $NF}' | sort -u > /tmp/o.txt`
+    對新版做同樣的事存 /tmp/n.txt，然後 `comm -23 /tmp/o.txt /tmp/n.txt`；差集非空就逐個確認是刻意改名還是漏刪（用 grep 查使用點是否還在）
+  why: iBee 1.0.15 新增 `sendCancelQuery` 時，把「舊函式 `resetQuotaUiAfterHandshakeFail` + 它前面兩個宣告」整段當 `old_string`、新函式當 `new_string`，等於用替換做插入的工作。三個宣告消失、8 處使用點全留著。語法合法（`node --check` 過），而且 diff 因新舊都是「JSDoc + function + STEP 註解 + addEventListener」的同構結構而被對齊成「函式被改寫了」，`/**`、`* @returns {void}`、`*/`、`}` 全成了無前綴的 context 行——**看 diff 完全看不出來**。執行期在 listener 內拋 ReferenceError 並靜默中斷，症狀是「按了查詢什麼都沒發生、連錯誤提示都沒有」，從 UI 完全反推不到原因
+  why-post-check: 事後只有機械比對會告訴你「你不知道自己刪了什麼」。grep 單一識別字不夠——前提是你已經知道要找哪一個
+
 GLOBAL-MUTATION:
   rule: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
 
