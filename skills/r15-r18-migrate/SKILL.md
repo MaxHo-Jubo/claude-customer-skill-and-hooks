@@ -1,7 +1,7 @@
 ---
 name: r15-r18-migrate
 description: 把一個 React 15 頁面 entry 以最小改動遷移到 React 18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），一次處理一個 entry 並產出 commit 與結構化結果；觸發語 `/r15-r18-migrate <entry-id> [--resume]`。
-version: 1.1.0
+version: 1.1.1
 ---
 
 # R15 → R18 最小改動遷移（單 entry）

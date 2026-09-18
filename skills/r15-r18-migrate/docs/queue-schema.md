@@ -20,7 +20,7 @@
 | `integration_branch` | 整合分支名稱；所有頁面 branch 從這個分支的 HEAD 切出，完成後 fast-forward merge 回去 |
 | `base_branch` | 最終要合併回去的正式分支（例如 `master`） |
 | `limits` | `{ entry_max_files, entry_max_lines, checkpoint_max_modules, checkpoint_max_lines, module_timeout_min, module_budget_usd }`——單個 entry 允許的最大檔數/行數、多少模組或多少行累積後自動開一個斷點、單模組跑多久算超時、單模組預算上限。這組值由 runner 啟動時從環境變數寫入，skill 執行期只讀不寫 |
-| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是最近一次 runner 未預期例外的簽名 `<例外類別>@<檔>:<行>`，暫停原因不是 crash 時為 `null`；`hold`（1.1.0）為 `true` 表示同簽名例外已發生兩次、runner 鎖定，每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉 |
+| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是這次暫停的簽名，給「同簽名連續第二次就鎖定」用：runner 未預期例外時是 `<例外類別>@<檔>:<行>`，整合分支推送失敗時（1.1.1）是 `integration_push_failed`，其餘暫停原因為 `null`；`hold`（1.1.0）為 `true` 表示 runner 鎖定——同簽名例外已發生兩次，或（1.1.1）第一次就必須人工確認的狀況：殘留行程、ff-merge 後 HEAD 不符、本機整合分支領先遠端——每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉；`reason` 是 integration 類時另需 `unblock --integration-tip`（見 `docs/environment.md`「整合分支守則」） |
 | `integration_tip_sha` | runner 每次 push 整合分支後寫入的 HEAD SHA。每次要處理新模組之前，runner 會把這個值跟遠端整合分支的實際 tip 比對；不同就代表有人在 runner 不知道的情況下動過整合分支，runner 會暫停並發通知，不會繼續往下處理。首次啟動時這個值是 `null`，runner 會直接把當下的遠端 tip 寫進來當基線 |
 | `checkpoints[]` | 斷點清單，見下方「checkpoint 物件」 |
 | `modules[]` | entry 清單，見下方「entry 物件」 |
@@ -36,7 +36,7 @@
 | `title` | 斷點標題（給 PR 用） |
 | `status` | `pending` \| `opened` \| `failed` \| `released` \| `merged` |
 | `branch` | 這個斷點凍結出來的分支名稱 |
-| `pr_url` | 對應的 PR 連結 |
+| `pr_url` | 對應的 PR 連結；`status` 是 `opened` 但這裡是空字串＝`gh pr create` 退出碼 0 卻沒印連結，runner 不知道 PR 有沒有真的開成，通知會請人到 GitHub 看 `branch` 那支分支（1.1.1 已知缺口，1.1.2 改成查既有 PR 沿用） |
 | `opened_at` / `last_remind_at` | 時間戳 |
 
 `hard` 斷點卡住時，靠外部下 release 指令來放行，不是靠人工直接改這個欄位。

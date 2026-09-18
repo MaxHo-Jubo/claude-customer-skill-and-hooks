@@ -99,19 +99,28 @@ def verify_release_branch() -> None:
         raise SystemExit(f"找不到 {RELEASE_BRANCH} 分支，請確認在 luna_web repo 內執行")
 
 
-def load_author_commits(weeks: int):
-    """撈出 release 分支上、指定週數內、作者是 Max_Ho 的 commit。"""
-    r = subprocess.run(
-        [
-            "git", "log", RELEASE_BRANCH,
-            f"--author={AUTHOR_PATTERN}", "-i", "--extended-regexp",
-            f"--since={weeks} weeks ago",
-            "--reverse",
-            "--date=iso-strict",
-            f"--format=%H{FIELD_SEP}%ct{FIELD_SEP}%cd{FIELD_SEP}%s",
-        ],
-        capture_output=True, text=True,
-    )
+def load_author_commits(weeks):
+    """撈出 release 分支上、作者是 Max_Ho 的 commit。
+
+    weeks 為 None 時不加 --since，回傳完整歷史；有給值時只回傳該時間窗內的 commit。
+
+    只用時間窗撈出的結果做「完成性判斷」（這個 issue 兩個 component 是否都上架）是
+    危險的：較舊、落在窗外的另一個 component commit 會被漏看，讓只有一邊上架的
+    issue 被誤判成兩邊都上架（詳見 main() 的呼叫方式）。weeks 只應該拿來篩「這次
+    要不要理這個 jira_id」，不能拿來篩「這個 jira_id 底下有哪些 commit」。
+    """
+    args = [
+        "git", "log", RELEASE_BRANCH,
+        f"--author={AUTHOR_PATTERN}", "-i", "--extended-regexp",
+    ]
+    if weeks is not None:
+        args.append(f"--since={weeks} weeks ago")
+    args += [
+        "--reverse",
+        "--date=iso-strict",
+        f"--format=%H{FIELD_SEP}%ct{FIELD_SEP}%cd{FIELD_SEP}%s",
+    ]
+    r = subprocess.run(args, capture_output=True, text=True)
     if r.returncode != 0:
         raise SystemExit(f"git log 失敗: {r.stderr.strip()}")
 
@@ -246,21 +255,29 @@ def main():
     weeks = max(1, min(8, args.weeks))
     verify_release_branch()
     sync_release_branch()
-    commits = load_author_commits(weeks)
+    recent_commits = load_author_commits(weeks)  # 只用來篩「這次要不要理這個 jira_id」
+    all_commits = load_author_commits(None)  # 完整歷史，判斷完成性時不能被時間窗截斷
     releases = load_component_releases()
 
-    by_jira = {}
-    for c in commits:
+    recent_jira_ids = set()
+    for c in recent_commits:
+        m = JIRA_RE.match(c["subject"])
+        if m:
+            recent_jira_ids.add(m.group(1))
+
+    by_jira_full = {}
+    for c in all_commits:
         m = JIRA_RE.match(c["subject"])
         if not m:
             continue
-        by_jira.setdefault(m.group(1), []).append(c)
+        by_jira_full.setdefault(m.group(1), []).append(c)
 
     candidates = []
     pending = []
     manual_review = []
 
-    for jira_id, jira_commits in sorted(by_jira.items()):
+    for jira_id in sorted(recent_jira_ids):
+        jira_commits = by_jira_full.get(jira_id, [])
         all_resolved = []
         all_pending = []
         unknown_commits = []

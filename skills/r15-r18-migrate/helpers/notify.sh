@@ -17,6 +17,21 @@
 
 set -uo pipefail
 
+# ---------------------------------------------------------------- locale
+# 下面的長度上限（max_text_chars）靠 ${#text} 與 ${text:0:N}，bash 3.2 在 locale 不是 UTF-8 時是 byte 語意
+# （沒設、或設成 C／POSIX 都一樣）：300 個「字」對中文只剩約 100 個字，「診斷:」一行加鎖定前綴就吃光。
+# runner 用 CPython 啟動這支腳本時 PEP 538 已經把 LC_CTYPE=C.UTF-8 帶給子行程，所以那條路徑本來就是
+# 字元語意；這段守的是手動執行、或別的呼叫端（launchd 的環境沒有 LANG）。三個 locale 變數都不含 UTF-8
+# 時補一個（macOS 與 Linux 都有 C.UTF-8；萬一系統沒有，bash 安靜退回 C，跟現在一樣、不會更糟）。
+# 用 LC_ALL 而不是 LC_CTYPE：LC_ALL=C 這種設定會蓋過 LC_CTYPE，改 LC_CTYPE 沒用。判斷不看變數的名字
+# （名字寫 UTF-8 不代表這台有那個 locale，例如 glibc 寫法 en_US.utf8 在 macOS 沒有，bash 會安靜退回 C；
+# 優先序 LC_ALL > LC_CTYPE > LANG 也不必自己算），直接量：一個中文字算出來是 1 才是字元語意
+locale_probe="中"
+if [ "${#locale_probe}" -ne 1 ]; then
+  export LC_ALL=C.UTF-8
+fi
+# ---- locale-end（測試 source 到這一行為止，不要移動）
+
 # ---------------------------------------------------------------- 常數
 
 # LINE Messaging API 推播端點
