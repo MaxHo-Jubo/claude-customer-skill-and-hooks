@@ -9,7 +9,7 @@
 | 檔案 | 用途 | 何時讀 |
 |------|------|--------|
 | [model-dispatch.md](model-dispatch.md) | 模型調度與動態升降級守則：指揮官不下場、派工三件套、升降級路徑、隔離驗證、本機工具鏈守則 | 每次要 spawn subagent 前；用搜尋/追蹤工具前 |
-| [judgment-matrix.md](judgment-matrix.md) | 判斷力外化矩陣：換路徑信號、完成判準、熔斷條件（每條附正例/反例） | 卡關時、宣告完成前、想問 user 前 |
+| [judgment-matrix.md](judgment-matrix.md) | 判斷力外化矩陣：換路徑信號、完成判準、熔斷條件、品味極限、動手前診斷閘門（每條附正例/反例） | 除錯動手前、卡關時、宣告完成前、想問 user 前 |
 | [delegation-templates.md](delegation-templates.md) | 標準化派工 Prompt 模板：搜尋研究 / 功能實作 / 代碼重構 / 代碼審查 / 隔離驗收 / 失敗升級 | 派工時直接複製填空 |
 | [commit-review-policy.md](commit-review-policy.md) | Commit 後審查分級制（Tier 0~3，取代舊「強制六步」） | 每次 git commit 成功後 |
 | [knowledge-protocol.md](knowledge-protocol.md) | 知識迭代與反思協議：哪些檔可自改、踩坑格式、精簡觸發條件 | 被糾正時、想改 harness 檔案時 |

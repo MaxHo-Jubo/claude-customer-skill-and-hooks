@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "repo_dir": "<repo-dir>",
+  "integration_branch": "feat/r18-migration",
+  "base_branch": "master",
+  "limits": {
+    "entry_max_files": 12,
+    "entry_max_lines": 4000,
+    "checkpoint_max_modules": 8,
+    "checkpoint_max_lines": 3000,
+    "module_timeout_min": 150,
+    "module_budget_usd": 15
+  },
+  "runner_state": {
+    "state": "idle",
+    "reason": null,
+    "since": null,
+    "pid": null,
+    "host": null,
+    "consecutive_failures": 0
+  },
+  "integration_tip_sha": null,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "after": {
+        "wave": 0
+      },
+      "mode": "soft",
+      "pr_base": "master",
+      "title": "<斷點標題：這個 wave 涵蓋的範圍>",
+      "status": "pending",
+      "branch": null,
+      "pr_url": null,
+      "opened_at": null,
+      "last_remind_at": null
+    }
+  ],
+  "modules": [
+    {
+      "id": "<entry-id>",
+      "type": "page",
+      "members": [],
+      "wave": 1,
+      "r15_paths": [
+        "frontend/react_15/<module>/actions.js",
+        "frontend/react_15/<module>/index.jsx",
+        "frontend/react_15/<module>/components/<Component>.jsx"
+      ],
+      "r18_dir": "frontend/react_18/src/pages/<module>/",
+      "route": {
+        "kind": "top",
+        "fe_config_prefix": "<路由前綴，必要時加 $ 結尾錨>",
+        "r18_router_file": "frontend/react_18/src/routes/<XxxRoute>.tsx",
+        "r15_entry": "<R15 進入點：路徑:行號>"
+      },
+      "feature_flag": {
+        "key": "<camelCase 功能名>R18",
+        "default": false
+      },
+      "sidebar_entries": [],
+      "shared_deps": [
+        {
+          "r15_path": "frontend/react_15/utils/<util>.js",
+          "r18_equivalent": "frontend/react_18/src/shared/utils/<util>.js"
+        },
+        {
+          "r15_path": "frontend/react_15/actions/<xxx>Action.js",
+          "r18_equivalent": null
+        }
+      ],
+      "depends_on": [
+        "<其他 entry-id>"
+      ],
+      "jira": "<JIRA-KEY>",
+      "branch": "<JIRA-KEY>/refactor/<BRANCH_USER>/<entry-id>",
+      "status": "pending",
+      "blocked_reason": null,
+      "attempts": 0,
+      "last_session_id": null,
+      "last_commit": null,
+      "last_error": null,
+      "pr_url": null,
+      "pr_failed": false,
+      "r15_hashes": {},
+      "checkpoint_id": null,
+      "started_at": null,
+      "finished_at": null,
+      "cost_usd_total": 0
+    }
+  ]
+}

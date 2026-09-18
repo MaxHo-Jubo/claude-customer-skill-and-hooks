@@ -4,7 +4,8 @@
 
 HOOK-TYPES:
   PreToolUse: before tool execution(validation/parameter modification)
-  PostToolUse: after tool execution(auto-format/checks)
+  PostToolUse: after successful tool execution(auto-format/checks)
+  PostToolUseFailure: after a tool call fails(error logging；讀 `error`/`is_interrupt`)
   Stop: session ends(final verification)
 
 HOOK-OUTPUT:
@@ -16,9 +17,9 @@ HOOK-OUTPUT:
   implication: PostToolUse systemMessage 可同時作為使用者安全網與 Claude 自動觸發來源；CLAUDE.md 規則仍為主要驅動層
 
 HOOK-FAILURE-BLINDSPOT:
-  fact: **PostToolUse hook 只在 tool 成功時觸發；失敗的 tool call 完全不觸發**（2026-08-14 實測：`exit 42` 的 Bash、讀不存在檔案的 Read，兩者皆未觸發 hook；同期成功的命令都有觸發）
-  implication: 任何「用 PostToolUse 捕捉 tool 失敗」的設計從根本上不可行，不是判定條件寫錯的問題。`~/.claude/hooks/post_tool_error.py` 就是這樣一個空轉了 115 天的錯誤記錄器——它每次成功的 tool call 都跑一次 python3 然後 exit 0，對失敗一無所知
-  action: 需要記錄 tool 失敗時，改用 Stop hook 掃 transcript，或接受這層無法自動捕捉；不要留一個永不觸發的記錄器，它會讓 ERRORS.jsonl 的「0 筆」被誤讀成「沒有錯誤」而非「沒有記錄」
+  fact: **PostToolUse 只在 tool 成功時觸發；失敗走獨立事件 `PostToolUseFailure`**（2026-09-14 以 Claude Code 2.1.270 隔離 `--settings` 實測：`exit 42` 的 Bash、讀不存在檔案的 Read 皆觸發 PostToolUseFailure，輸入含 `error`（如 `"Exit code 42\nboom"`）、`is_interrupt`、`duration_ms`，沒有 `tool_response`；被權限/sandbox 擋下的呼叫兩種事件都不觸發）
+  action: 記錄 tool 失敗時掛 `PostToolUseFailure`、讀 `error` 欄位。`~/.claude/hooks/post_tool_error.py` 原本掛在 PostToolUse、讀 `tool_response.exit_code`，空轉到 2026-09-14 才改掛。不要留一個永不觸發的記錄器，它會讓 ERRORS.jsonl 的「0 筆」被誤讀成「沒有錯誤」而非「沒有記錄」
+  why: 2026-08-14 版本只確認「PostToolUse 不觸發」，就推論「用 hook 捕捉失敗從根本上不可行、改用 Stop hook 掃 transcript」，沒查有沒有其他事件——否定結論前沒驗觀測範圍（見 CLAUDE.md verify-the-observer）
 
 AUTO-ACCEPT:
   enable: trusted, well-defined plans

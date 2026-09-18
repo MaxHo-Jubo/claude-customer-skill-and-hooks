@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-07-25（Skills 與 Plugins 清理——停用 9 個 skills、移除 `daily-review`、停用 6 個 plugins、新增 `ai-case-report` skill 與 `mcp-outline` plugin；前次 2026-07-24 新增 `stop-review-guard.ts` Stop hook）
+> 上次更新：2026-09-18（新增 `jira-release-sync`／`finalize-release`／`r15-r18-migrate` 三個 skill；`post_tool_error.py` 改掛 `PostToolUseFailure` 事件；新增 `luna-web-readonly` MCP Server；前次內容更新 2026-08-24 commit-review codex 引擎路徑，見 README.md 變更紀錄）
 
 ---
 
@@ -86,6 +86,29 @@
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
+#### `/jira-release-sync` — 發版狀態同步（v1.5.0）
+
+- **位置**：`~/.claude/skills/jira-release-sync/SKILL.md`（含 `scan_commits.py`、`scan_commits_luna.py`）
+- **用法**：`/jira-release-sync`（掃預設 1 週）、`/jira-release-sync --weeks 3`（clamp 到 1~8）、「掃描已上架的commit留言jira」、「同步發版狀態到jira」
+- **功能**：掃描一段期間內的 commit，判定哪些 `[ISSUE-ID]` commit 已隨某版本上架，自動在對應 Jira issue 留言版本資訊、轉換狀態為 Resolved、附上結案日。**不寫入 Fix Version 欄位**（使用者帳號無新增 Version 權限，版本資訊已含在留言文字內）
+- **兩套完全不同的判定規則（依路徑判定 `REPO_MODE`，不可混用）**：
+  - **`app-store` 模式**（`HomeCareStaffRN`／`DayCareStaff`／`FamilyMember`）：只掃 master/main 祖先歷史；「已上架」用 `git merge-base --is-ancestor` 判斷，**不用日期比較**——commit 自己的 committer date 不等於它真正併入 master 的時間（實測邊界案例：LVB-8340 fix commit 的 committer date 晚於某版號 commit 的 committer date，但透過 PR 實際更早併入 master，日期比較會誤判成沒搭上該版、ancestry 判斷才正確）；版本 merge commit 定義為 subject 符合 `Merge pull request #N from {org}/{X.Y.Z}`（分支名純版本號）；不限作者（目的是同步「這個 App 版本上架了什麼」）
+  - **`luna` 模式**（`luna_web`）：只掃 `release` 分支（不是 master，luna_web 的 master 是開發分支、早已與 release 分岔）；**限 author 為 Max_Ho**（`max[_ ]?ho` 大小寫不敏感 pattern，需要 `--extended-regexp` 因為 `git log --author` 預設 BRE 不解析 `?` 量詞）；版本釋出點是 release 分支上精確格式的 git tag（`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD`，排除 `-test`／`-2`／舊無點格式）；frontend／backend 分開部署，同一 issue 橫跨兩者時**兩邊都要各自上架才算完成**，只有一邊上架列進「尚未完全上架」不當候選；腳本每次執行先 `git fetch origin release:release`（fast-forward only），本地落後會直接中止讓人工排查（2026-09-17 實測踩過本地落後 158 個 commit、漏掉一次 master merge 導致整批 issue 完全不出現在任何清單）
+- **留言格式**：HTML mention（`contentFormat: "html"`，`<span data-type="mention" data-user-id="...">`）固定標註 4 人（許少宇／andyzeng／weihuang／Yenwen Chen 陳妍妏）；2026-09-17 實測修正：`contentFormat` 只接受 `"markdown"`/`"html"`，原文件寫的 `"adf"` 是錯的會被參數驗證擋掉
+- **執行流程**（7 步）：STEP 00 前置檢查（Atlassian MCP 連線、判定 REPO_MODE/APP_NAME）→ STEP 01 掃描候選（呼叫對應腳本）→ STEP 02 查現況去重（已 Resolved 直接跳過）→ STEP 03 組裝候選（動作詞：LVB=修正／ERPD=上線）→ STEP 04 輸出候選清單等待確認（**寫入類 Jira 工具在確認前一律不得呼叫**）→ STEP 05 逐筆執行寫入（留言 + 找 Resolved 轉換 + 執行轉換 + best-effort 回填結案日：系統欄位唯讀多數會失敗，退回專案自訂「結案日」欄位，LVB 有（`customfield_10502`，僅該專案驗證過不可寫死當全域常數）、ERPD 沒有）→ STEP 06 輸出最終結果表
+- **已知限制**：Jira `resolutiondate` 系統欄位多數專案唯讀，只能轉態當下自動蓋今天日期，不保證回填成功為真正的 release_date；沒有「結案日」自訂欄位的專案（如 ERPD）結案日只能停在留言文字裡
+- **依賴**：Atlassian MCP、git repository、`scan_commits.py`（app-store）/`scan_commits_luna.py`（luna）
+
+#### `/finalize-release` — 發版最後兩步驟一鍵觸發（v2.0.0）
+
+- **位置**：`~/.claude/skills/finalize-release/SKILL.md`
+- **用法**：`/finalize-release`；觸發語：「發版最後階段」、「把版號merge掉並同步jira」
+- **功能**：使用者確認 App Store／Google Play 都已手動發布完成後，依序完成：找待處理版號 PR（`headRefName` 符合 `^\d+\.\d+\.\d+$`）→ 唯一確認點 → merge PR（**一定用 `--merge`，禁止 squash/rebase**——`jira-release-sync` 的 `scan_commits.py` 靠 merge commit subject 精確符合才能判版，squash/rebase 不會產生這個 subject）→ 執行 `jira-release-sync`（`weeks` 預設 2，比其自身預設 1 週保守）
+- **支援範圍**：僅居服App（`HomeCareStaffRN/fastlane/Fastfile`）、日照App（`DayCareStaff/fastlane/Fastfile`）；家屬App 無 GitHub Actions（送審仍人工本機跑 fastlane），判定不到即回報原因並停止，不猜
+- **確認點只有一個**：PR merge 是對外可見、有點難撤銷的動作，STEP 02 確認後連續執行到底，中途不再問
+- **不觸碰的範圍**：iOS/Android 正式發布一律使用者自己到 App Store Connect／Google Play Console 網頁手動點擊；曾規劃過的 fastlane lane（`release_pending_ios_version`／`release_pending_android_version`）已於 2026-09-04 全部放棄
+- **依賴**：`gh` CLI（PR 查詢/merge）、`jira-release-sync` skill（STEP 04 直接呼叫其完整流程，含它自己的候選清單確認 gate，不跳過）
+
 #### `/weekly-review` — 每週工作回顧（v1.8.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
@@ -100,7 +123,7 @@
   7. Skill 修補建議（依賴 STEP 06）— 讀取 SKILL.md，產出 before/after 建議，不自動修改
   8. Amendment 成效追蹤（Subagent B，與 STEP 06 平行）— 比對 `AMENDMENTS.md` 修補前後錯誤頻率
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
-- **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（ERRORS.jsonl）、`summarize_errors.py`
+- **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（`PostToolUseFailure` 事件，2026-09-14 前誤掛 `PostToolUse` 從未寫入，見下方 Hooks 章節）、`summarize_errors.py`
 
 #### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.8.2）
 
@@ -368,6 +391,25 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
+#### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.1.0）
+
+- **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness）、`CHANGELOG.md`）
+- **用法**：`/r15-r18-migrate <entry-id>`、`/r15-r18-migrate <entry-id> --resume`
+- **定位**：headless 無人看管模式下，由外層排程程式（runner）逐 entry 呼叫；本 skill 一次只處理 `queue.json` 裡的一個 entry，在**目前所在分支**完成遷移並 commit，然後輸出結構化 JSON 結果。分支切換、合併、推送、開 PR、建置複驗、通知全部是 runner 的職責，本 skill 一律不做；任何猶豫都收斂成 `blocked`，不能靠猜、不得提問
+- **硬性不變量**：保留 class component（不轉 functional／hooks／TypeScript）、命名沿用 R15（action 常數、reducer 檔名、state 欄位一律照搬不加前綴）、機制沿用 R18（saga 基礎層零改動）、註解逐字照搬（不補 STEP／JSDoc）、R15 檔一律不刪（回退手段是把 feature flag 關回 false）
+- **五階段流程**：
+  1. **Phase 0 輸入契約**（五項檢查，任一不過即 blocked）：讀 entry → 驗必要欄位（`type=page` 另驗 route/feature_flag；`tab-reuse entry`——`r15_paths` 可為空陣列的唯一例外——見下）→ 算規模比對 `limits` 上限 → 驗 git 狀態（分支需等於 `entry.branch`，工作目錄無範圍外髒檔）→ `--resume` 判定（已有 commit 就直接跳 Phase 3，不重做 Phase 1-2，避免共用註冊檔出現重複行）
+  2. **Phase 1 合約抽取**：三群 subagent 平行抽表（元件檔／action+reducer 檔／第三方 API 掃描），逐函式/action/reducer/元件四張表，每列附 `路徑:行號` 來源、禁止推測；主流程親自核對 action 對應與 success 副作用完整性（不外包）
+  3. **Phase 2 遷移實作**（六步固定順序）：Redux 層（`ajax` 物件內嵌 callback/dispatch/redirect，放頂層會被靜默忽略）→ 元件層（機械式 API 對照替換，目標路徑已有同名檔一律不覆寫、`blocked(needs_human)`）→ 路由與開關（三層：後端前綴、機構預設三個 template 都要加、R18 guard）→ 註解與命名 → 建置（vite build，紅燈最多修 2 次）→ 無對照項目盤點
+  4. **Phase 3 等價性驗證**：差異測試（action/reducer 兩版深相等）→ 靜態比對（L1-L3 + 三個 MUST-CHECK，含 cleanFail on hide／Modal 自動關閉）→ 合約表回填（R18 對應 + 等價 ✅/⚠️/❌）→ 頁面 E2E（可選，無環境列 `unverified_items`，禁止假 PASS）
+  5. **Phase 4 收尾**：逐行讀 `git diff` 自檢清單 → 固定格式 commit message（`[<JIRA>] feat(FE): <FeaturePath>-R18遷移-<entry>`）→ 產報告 → 輸出結構化 JSON（`status`/`blocked_reason`/`build`/`warnings_count`/`unverified_items`/`failed_at` 等，`STATUS:` fallback 行）
+- **tab-reuse entry（零檔 tab，v1.0.4 新增）**：`type=page` 且 `route.kind=sub` 且 `shared_deps` 恰一筆且 `r18_equivalent` 非空時，`r15_paths` 可為空——R15 的 tab 直接渲染其他 entry 已搬的元件，本 entry 只做路由與開關，Phase 1/2 對應步驟大幅縮減或整個跳過
+- **八種 `blocked_reason`**（字面值不得增減）：`inventory_incomplete`／`too_large`／`git_state`／`build_env`／`no_mapping`／`unsupported_ajax_field`／`build_failed`／`needs_human`；blocked 時保留已完成工作、更新 progress、輸出結構化結果，**不回退不清理**
+- **流程邊界（硬性）**：不執行 `checkout`/`switch`/`merge`/`rebase`/`push`/`reset`/`restore`/`stash`/`clean`/`cherry-pick`/`worktree`/`commit --amend`，不 `gh pr merge|close`，不 `rm -rf`；`git add` 範圍嚴格限定本 entry 路徑 + 明列的共用註冊檔
+- **v1.1.0（2026-09-18）完整錯誤回報機制**：CLI 改 `stream-json --verbose` 逐事件落檔（逾時被殺 stdout 不再是空的）；新模組 `helpers/diagnostics.py` 在判讀失敗當下自動凍結診斷包（stream/meta/子行程 log/progress/queue 快照 + 給 Claude 讀的 `SUMMARY.md`，命中 secret pattern 整行 `[REDACTED]`）；`helpers/stream_events.py` 抽出 stream-json 解析供 runner 與 diagnostics 共用；runner 未預期例外統一走 `handle_runner_crash`（寫 traceback、`enter_paused` 而非直接 raise，同簽名第二次進入 `hold` 狀態靜默退出直到手動 unblock）；新子命令 `diagnose`
+- **`skill-rules.json` 未註冊**：與 `finalize-release` 一樣純手動 slash command 觸發，不會被自動建議
+- **依賴**：`helpers/runner.py`（外層 runner，不屬本 skill 執行範圍但共用同一目錄）、`helpers/diff-test/` jest harness、`helpers/boot-smoke.cjs`（Playwright）、vite build、git repository
+
 #### `/cup-build-test` — CUP 項目測試建立（v1.3.0）
 
 - **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
@@ -470,11 +512,18 @@
 | `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
 | `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier ≥1 另以 `lib/review-engine.ts` 的 `resolveEngine()` 探測本輪 review 引擎（`codex`/`agent`，決策見下方 `commit-review` 章節），Tier 2/3 寫入 pending-review marker 含 `sessionId`/`engine`（供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD engine=<agent\|codex>` 的 chain（步驟明細在 skill，hook 不列舉） |
-| —（catch-all） | `post_tool_error.py` | 所有 tool 失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl` |
 
 > **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
+
+### PostToolUseFailure
+
+| Matcher | 腳本 | 用途 |
+|---------|------|------|
+| —（catch-all，所有工具呼叫失敗） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl`（輸入含 `error`／`is_interrupt`／`duration_ms`，無 `tool_response`；使用者中斷、權限/sandbox 阻擋的呼叫兩種事件都不觸發） |
+
+> **與 PostToolUse 的區別（2026-09-14 實測確認，Claude Code 2.1.270）**：`PostToolUse` 只在 tool **成功**時觸發，失敗走獨立的 `PostToolUseFailure` 事件。`post_tool_error.py` 原本誤掛在 `PostToolUse` 讀 `tool_response.exit_code`，因為失敗的呼叫根本不會觸發該事件而空轉——2026-08-14 那次只驗證了「PostToolUse 不觸發」就推論「用 hook 捕捉 tool 失敗從根本不可行」，沒有查是否存在其他事件；改掛 `PostToolUseFailure` 後才實際生效。詳見 `rules/common/hooks.md` `HOOK-FAILURE-BLINDSPOT`。
 
 ### PreCompact
 
@@ -536,7 +585,7 @@
 | Agent | 模型 | 版本 | 用途 |
 |-------|------|------|------|
 | pr-reviewer | sonnet | 2.0.0 | Code review agent — 逐條比對 CODE-REVIEW-RULE.md 並產出結構化報告；v1.3.0 新增「新增檔案例外」；v1.2.0 新增慣例優先原則 + full 模式自動 post GitHub PR review |
-| multi-repo-commit-scanner | haiku | 1.1.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計；v1.1.0 支援 pathspec 物件形式拆 monorepo 子目錄 |
+| multi-repo-commit-scanner | haiku | 1.2.0 | 多 repo 平行 commit 掃描器 — 內部用 Bash 背景作業同時掃 N 個 repo 的 git log，輸出每 repo commits、Jira IDs、統計；v1.1.0 支援 pathspec 物件形式拆 monorepo 子目錄；v1.2.0 排除 `refs/stash`（避免 stash commit 被誤計入） |
 
 ### pr-reviewer — Code Review Agent（v2.0.0，lite 模式專用）
 
@@ -554,7 +603,7 @@
 - **依賴**：CODE-REVIEW-RULE.md（repo 根目錄或 `~/.claude/`）、gh CLI（full 模式）
 - **說明文件**：`agents/README-pr-reviewer.md`（設計文件，非 agent；~~v1.2.0 起說明「不需外部 `review-pr.sh`」~~（已過時：`review-pr.sh` 仍在維護，提供 watchdog 逾時、進度心跳與 headless 觸發，見 `scripts/review-pr.sh`））
 
-### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.1.0）
+### multi-repo-commit-scanner — 多 Repo Commit 掃描器（v1.2.0）
 
 - **位置**：`~/.claude/agents/multi-repo-commit-scanner.md`
 - **模型**：haiku（輕量任務，Bash + jq 為主）
@@ -569,6 +618,7 @@
 - **輸出**：JSON 結構 — `repos[]`（每 repo/bucket 的 commits、jira_ids、by_type、total）+ `summary`（total_repos / total_commits / all_jira_ids / by_type_aggregate）
 - **平行機制**：Bash `&` 背景 job + `wait -n` 控並發；單一 Bash call 內完成 N repo 掃描與 jq 聚合
 - **pathspec 拆分（v1.1.0）**：物件帶 `pathspec` 時 `git log` append `-- <pathspec>`，把同一 git repo 依子目錄拆成多個 bucket（如 luna_web 的 `frontend/` 與 `backend/`）；橫跨多子目錄的 full-stack commit 同時計入各 bucket（不去重）
+- **排除 stash（v1.2.0）**：`git log` 加 `--exclude=refs/stash`（必須寫在 `--all` 前面才生效）——`--all` 會連 stash 一起掃，stash 的「index on <branch>: ...」commit 只有一個 parent、`--no-merges` 擋不掉，且訊息帶 branch 名會被抽出 Jira 編號而誤計（2026-09-14 週報 LVB-8384 stash 被算成 1 筆）
 - **規則固化**：`--all` 必開（feature branch commit 不漏）/ `--no-merges` / Jira ID regex `\[([A-Z]+-[0-9]+)\]` / type 解析 conventional commit
 - **故障隔離**：任一 repo 失敗寫 `error` 欄位、不中斷其他 repo
 - **觸發方式**：weekly-review STEP 01 自動呼叫（取代過去主 agent 逐 repo 序列跑 `git log`）
@@ -612,12 +662,13 @@
 
 > 設定檔：[`mcp-servers.json`](mcp-servers.json)
 
-#### 獨立設定的 MCP Servers（2 個）
+#### 獨立設定的 MCP Servers（3 個）
 
 | Server | 類型 | 用途 |
 |--------|------|------|
 | pr-watcher | stdio | PR 監控 MCP Server（`npx tsx pr-watcher-MCP/src/server.ts`） |
 | codebase-memory-mcp | stdio | 程式碼知識圖譜／語意搜尋 MCP Server（取代 GitNexus）；`index_repository`/`search_graph`/`search_code`/`trace_path`/`query_graph`/`get_architecture` 等工具 |
+| luna-web-readonly | stdio | luna_web MongoDB 唯讀查詢 MCP Server（2026-09 新增，`node .../luna_web/mongodb-mcp/server.js`）；連線字串經 `${VAR}` 展開，不寫明文憑證 |
 
 > **已移除的 MCP Servers（2026-03-27）：**
 > 以下 server 從 `mcp-servers.json` 移除，但本機仍有對應工具：
@@ -676,19 +727,19 @@
 | 規則檔 | 重點規則 |
 |--------|---------|
 | `coding-style.md` | IMMUTABILITY、FILE-ORG、ERROR-HANDLING、INPUT-VALIDATION、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY |
-| `security.md` | SECRET-MGMT、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
+| `security.md` | SECRET-MGMT（含 `mcp-config`：MCP 連線字串用 `${VAR}` 展開、`pre-commit-scan` 正規表示式掃描）、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
 | `testing.md` | 80% coverage、TDD（RED→GREEN→IMPROVE）、unit/integration/e2e |
 | `git-workflow.md` | commit format、PR workflow |
 | `performance.md` | model selection（haiku/sonnet/opus）、context window 管理、thinking 設定 |
 | `patterns.md` | skeleton project、repository pattern、API response envelope |
-| `hooks.md` | hook types（Pre/Post/Stop）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、auto-accept、TodoWrite |
+| `hooks.md` | hook types（Pre/Post/Stop/PostToolUseFailure）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、HOOK-FAILURE-BLINDSPOT（失敗走獨立事件，非 PostToolUse）、auto-accept、TodoWrite |
 | `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
 
 ### typescript/
 
 | 規則檔 | 重點規則 |
 |--------|---------|
-| `coding-style.md` | IMMUTABILITY（spread）、ERROR-HANDLING（async/await）、INPUT-VALIDATION（Zod）、CONSOLE-LOG、REACT（re-render/useEffect cleanup）、REACT-NATIVE（FlatList/StyleSheet.create） |
+| `coding-style.md` | IMMUTABILITY（spread）、ERROR-HANDLING（async/await）、INPUT-VALIDATION（Zod）、CONSOLE-LOG、REACT（re-render/useEffect cleanup/class-context-consumption）、REACT-NATIVE（FlatList/StyleSheet.create） |
 | `testing.md` | E2E: Playwright |
 | `patterns.md` | ApiResponse\<T\>、useDebounce hook、Repository\<T\> |
 | `hooks.md` | PostToolUse: prettier/tsc/console-log-warn；Stop: console-log-audit |
@@ -725,7 +776,12 @@ auto memory ──→ weekly-review（整理 + skill 錯誤分析）
 
 ~/.claude/ ──→ sync-my-claude-setting（同步到 repo）
 
+finalize-release ──→ jira-release-sync（STEP 04 直接呼叫其完整流程，含內部候選清單確認 gate）
+  app-store 模式（居服/日照/家屬 App）與 luna 模式（luna_web）判定規則互不共用，見 skill 詳細說明
+
 health（獨立稽核，無外部依賴）
+
+r15-r18-migrate（headless，由外層 runner 逐 entry 呼叫，不屬本 repo 內流程依賴）
 
 post-commit-review hook ──→ commit-review skill（唯一執行層，2026-07-20 抽取）
   hook 只做：偵測 commit → lib/tier.ts 算 Tier → 上 marker → systemMessage 指派 skill

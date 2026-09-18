@@ -1,0 +1,8 @@
+{
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "hooks": {},
+  "enabledPlugins": {},
+  "includeCoAuthoredBy": false
+}

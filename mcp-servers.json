@@ -10,5 +10,12 @@
     "type": "stdio",
     "command": "/Users/maxhero/.local/bin/codebase-memory-mcp",
     "args": []
+  },
+  "luna-web-readonly": {
+    "type": "stdio",
+    "command": "node",
+    "args": [
+      "/Users/maxhero/Documents/Compal/luna_web/mongodb-mcp/server.js"
+    ]
   }
 }

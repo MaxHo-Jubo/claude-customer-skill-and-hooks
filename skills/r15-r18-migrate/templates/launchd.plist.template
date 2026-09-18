@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd 常駐設定範本。
+
+  使用方式：
+    1. 複製本檔到使用者層的 LaunchAgents 目錄，副檔名改為 .plist
+    2. 把四個 __佔位符__ 換成實際值（全部用絕對路徑，launchd 不展開 $HOME 或 ~）：
+         __LABEL__                 服務代號，例如 local.r18-migration
+         __SKILL_DIR__             本 skill 的根目錄
+         __ENV_FILE_PATH__         env 檔完整路徑（chmod 600）
+         __MIGRATION_STATE_DIR__   狀態目錄完整路徑，兩個 log 會寫在這底下
+    3. launchctl load 後即開始常駐
+
+  行為說明：
+    KeepAlive=true    runner 進入暫停狀態時會主動以非零退出碼結束，launchd 會自動重啟；
+                      重啟後若暫停原因仍未解除，runner 會靜默退出、不重複發通知。
+    ThrottleInterval  兩次啟動之間的最短間隔（秒），避免暫停原因未解除時瘋狂重啟。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__SKILL_DIR__/helpers/run-migration.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>R15_R18_MIGRATE_ENV</key>
+        <string>__ENV_FILE_PATH__</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>300</integer>
+
+    <key>StandardOutPath</key>
+    <string>__MIGRATION_STATE_DIR__/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__MIGRATION_STATE_DIR__/launchd-stderr.log</string>
+</dict>
+</plist>

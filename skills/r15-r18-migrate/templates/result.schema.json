@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "r15-r18-migrate skill result",
+  "description": "skill 每次呼叫的最後一則輸出；runner 以 --json-schema 強制此形狀，並據此決定 entry 的下一個狀態。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "module",
+    "branch",
+    "commit",
+    "blocked_reason",
+    "build",
+    "warnings_count",
+    "unverified_items",
+    "report_path",
+    "notes",
+    "failed_at"
+  ],
+  "properties": {
+    "status": {
+      "description": "done=四個 Phase 全完成且已 commit；blocked=依 blocked_reason 停止，需人工處理；error=非預期失敗；rate_limited=skill 內部派工的 subagent 撞到額度且無法完成。",
+      "type": "string",
+      "enum": ["done", "blocked", "error", "rate_limited"]
+    },
+    "module": {
+      "description": "本次處理的 entry id，與 queue.json modules[].id 一致。",
+      "type": "string"
+    },
+    "branch": {
+      "description": "本次 commit 所在的分支名，與 entry.branch 一致；skill 不切換分支，只回報現況。",
+      "type": "string"
+    },
+    "commit": {
+      "description": "Phase 4 產生的 commit hash；未 commit 時為 null。",
+      "type": ["string", "null"]
+    },
+    "blocked_reason": {
+      "description": "status=blocked 時必填；其餘狀態一律 null。",
+      "type": ["string", "null"],
+      "enum": [
+        "inventory_incomplete",
+        "too_large",
+        "git_state",
+        "build_env",
+        "no_mapping",
+        "unsupported_ajax_field",
+        "build_failed",
+        "needs_human",
+        null
+      ]
+    },
+    "build": {
+      "description": "Phase 2 步驟 5 的建置結果；skipped 僅限尚未走到建置就 blocked 的情況。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "cmd"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "skipped"]
+        },
+        "cmd": {
+          "description": "實際執行的建置指令原文；skipped 時填預定要跑的指令。",
+          "type": "string"
+        }
+      }
+    },
+    "warnings_count": {
+      "description": "合約表回填為 warning（需人工複查）的列數，等同報告「⚠ 清單」的項目數。",
+      "type": "integer",
+      "minimum": 0
+    },
+    "unverified_items": {
+      "description": "本次未能執行的驗證項目（例如頁面 E2E 無 dev server）；禁止以假 PASS 取代。",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "report_path": {
+      "description": "本次報告檔的絕對路徑，位於狀態目錄下的 <entry>-report.md。",
+      "type": "string"
+    },
+    "notes": {
+      "description": "給人看的一句話結論；blocked 時必須寫清楚卡在哪一個檔案／哪一列合約表。",
+      "type": "string"
+    },
+    "failed_at": {
+      "description": "失敗定位。status 為 blocked／error 時必填物件（phase 必填；step／file 查得到就填，查不到填 null）；done／rate_limited 一律 null。runner 的 diagnose 用它統計哪個 Phase 最常失敗。",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["phase", "step", "file"],
+      "properties": {
+        "phase": {
+          "description": "卡住的 Phase 編號：0=輸入契約、1=合約抽取、2=遷移實作、3=等價性驗證、4=收尾。",
+          "type": "string",
+          "enum": ["0", "1", "2", "3", "4"]
+        },
+        "step": {
+          "description": "Phase 內的步驟或檢查項（例如「步驟 5 建置」「(2) 驗必要欄位」「(b) 靜態比對」）；無細分時 null。",
+          "type": ["string", "null"]
+        },
+        "file": {
+          "description": "最直接相關的 repo 相對路徑（例如出錯的元件檔、撞到的目標路徑）；沒有單一檔案時 null。",
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

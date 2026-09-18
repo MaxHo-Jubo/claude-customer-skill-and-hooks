@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-PostToolUse hook — appends a structured JSONL record to ~/.claude/.learnings/ERRORS.jsonl
-whenever a tool call exits with a non-zero code.
+PostToolUseFailure hook — appends a structured JSONL record to ~/.claude/.learnings/ERRORS.jsonl
+whenever a tool call fails.
 
-Claude Code runs this automatically after every tool execution.
+Claude Code fires PostToolUseFailure only for failed tool calls; PostToolUse only fires on success,
+so registering this script under PostToolUse never saw a single failure (fixed 2026-09-14).
+Permission/sandbox-blocked calls fire neither event and are not recorded.
 Pipe: Claude Code → stdin (JSON) → this script → appends to ERRORS.jsonl
 
-Input schema (from Claude Code):
+Input schema (Claude Code 2.1.270, verified 2026-09-14):
 {
+  "hook_event_name": "PostToolUseFailure",
   "tool_name": "Bash",
   "tool_input": {"command": "..."},
-  "tool_response": {
-    "exit_code": 1,
-    "stdout": "...",
-    "stderr": "..."
-  }
+  "tool_use_id": "...",
+  "error": "Exit code 42\\nboom",
+  "is_interrupt": false,
+  "duration_ms": 12
 }
 """
 import json
@@ -32,6 +34,8 @@ ERROR_TRUNCATE = 500
 SKILL_PATH_RE = re.compile(r"/skills/([^/]+)/")
 # hook/script 路徑 pattern
 HOOK_PATH_RE = re.compile(r"/(?:hooks|scripts)/([^/]+?)(?:\.\w+)?$")
+# Bash 失敗時 error 欄位開頭的 exit code 格式（如 "Exit code 42\nboom"）；其他工具沒有
+EXIT_CODE_RE = re.compile(r"^Exit code (\d+)")
 
 
 def infer_context(tool_input: dict, tool_name: str) -> str:
@@ -79,15 +83,23 @@ def main() -> None:
     if not isinstance(hook_input, dict):
         sys.exit(0)
 
-    tool_response = hook_input.get("tool_response") or {}
-    if not isinstance(tool_response, dict):
+    # 使用者中斷不是工具失敗，不記錄
+    if hook_input.get("is_interrupt"):
         sys.exit(0)
 
-    exit_code = tool_response.get("exit_code")
+    # 失敗原因；PostToolUseFailure 必帶此欄位
+    error_raw = hook_input.get("error")
+    if not isinstance(error_raw, str) or not error_raw.strip():
+        # 缺 error 代表掛錯事件或 schema 改了——報錯讓 hook-error-wrapper 記下，不可靜默略過（舊版就是這樣空轉）
+        print(
+            f"post_tool_error: 輸入缺少 error 欄位（hook_event_name={hook_input.get('hook_event_name')}）",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    # Only log actual failures (non-zero exit code)
-    if not isinstance(exit_code, int) or exit_code == 0:
-        sys.exit(0)
+    # 只有 Bash 類失敗帶 exit code，Read/MCP 等工具失敗記為 None
+    exit_match = EXIT_CODE_RE.match(error_raw)
+    exit_code = int(exit_match.group(1)) if exit_match else None
 
     # Global learnings directory under ~/.claude/
     log_path = Path.home() / ".claude" / ".learnings" / "ERRORS.jsonl"
@@ -95,10 +107,8 @@ def main() -> None:
     # Ensure the directory exists (idempotent)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build the error message from stdout + stderr
-    stdout = tool_response.get("stdout", "") or ""
-    stderr = tool_response.get("stderr", "") or ""
-    error_text = (stdout + "\n" + stderr).strip()
+    # Truncate the error message (keeps the log lean)
+    error_text = error_raw.strip()
     if len(error_text) > ERROR_TRUNCATE:
         error_text = error_text[:ERROR_TRUNCATE] + "…"
 

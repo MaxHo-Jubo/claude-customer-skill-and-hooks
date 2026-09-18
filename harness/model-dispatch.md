@@ -57,6 +57,7 @@
 - 並行 = 多個 Agent call 放在**同一則訊息**內。發完該輪立即結束等 notification，收齊前不要往下走。
 - **拿不到結果必須 fail loud**：禁止自己補做該面向後當它成功，必須在報告開頭標明降級。掩蓋機制失效比失效本身更貴。
 
+- **平行 fan-out 要掛逾時看門狗**（2026-09-14 新增，採納 /insights「Review 閘門」建議並改寫）：同一則訊息內一次派 ≥ 3 個 agent 時，同一則訊息再加一個 Bash `run_in_background` 的 `sleep 1800` 當計時器（2026-09-14 實測：背景 sleep 結束會以 task-notification 喚醒 session；前景 sleep 會被擋）。agent 先收齊 → `TaskStop` 停掉計時器。計時器先回來 → 列出還沒回流的 agent，`TaskStop` 停掉它們（依 TaskStop 工具說明可接受背景 agent 的 ID；停 agent 這步尚未實測），缺的面向改派單一 opus agent 補跑，並依上一條 fail loud 在報告開頭標明降級。門檻取 30 分鐘而不是建議原文的 10 分鐘：pr-reviewer 正常 5-15 分鐘，PR 10953 跑了 22 分鐘仍全數回流，10 分鐘會誤殺正常執行。實例：erpv3_web_frontend data-fix 腳本那次 `/code-review` 平行審查卡了約 50 分鐘，user 手動砍掉後才改派單一 opus
 - **巢狀 orchestrate 不可靠**：subagent 內再 spawn subagent、靠 notification 跨兩層回流，實測三次三種結果（全回流 / 繞道 team-lead / 全落空）。需要 fan-out 收斂的流程，讓**主 session 直接 orchestrate**（depth 0→1），不要包一層 agent 進去。
 
 完整實例見 [../skills/pr-reviewer/SKILL.md](../skills/pr-reviewer/SKILL.md) §為什麼是 skill 而不是 agent —— pr-reviewer v1.3.0 花一整節要求一個不存在的參數、v1.4.0 改成要求模型「該輪主動結束」，兩版都拿 prompt 約定去管非確定性的 harness 路由，直到 v2.0.0 改拓撲才解決。
@@ -130,6 +131,8 @@ cross-verify: 工具結果與上下文/已知事實矛盾時（如文件引用�
 edit-tool: 同檔案重複 pattern 修改用 replace_all（避免 context-mismatch error）；single occurrence 才用 old_string/new_string。
 
 upstream-trace: 斷言「沒有 X 檢查/攔截/防線」前，先找當前函式/頁面的所有進入點（誰呼叫它、誰 navigate 過來），往呼叫鏈上游至少追一層；當前檔案內找不到不代表流程中沒有，上游進入點可能早就做過該檢查。grep 進入點 + 讀上游守衛邏輯，是斷言「無防線」的前置必要動作。
+
+cwd-persistence: Bash 在專案目錄內 `cd` 會延續到之後的呼叫（2026-09-14 實測：cd 進子目錄後連 primary working directory 都跟著變；cd 到專案目錄外才會被 reset）。所以指令一律用絕對路徑或工具自帶的目錄參數（`git -C <abs>`、`npm --prefix <abs>`），真的需要 cwd 時就在同一次呼叫內寫 `cd <abs> && …`，不要依賴上一次呼叫留下的 cwd。不照 insights 原文「每段開頭 cd」，是因為複合指令裡的 `cd` 可能多觸發權限確認。實例：luna_web 比對指令跑在殘留的 react_18 目錄、FamilyMember 相對路徑因 cwd 停在 android/ 而失敗
 
 verify-vcs-state: 斷言「某 PR/commit/程式碼已在 master/目標分支」前，必須驗 origin/master ancestry（git cat-file / git merge-base --is-ancestor）；working tree 看得到 ≠ 目標分支已有。
 

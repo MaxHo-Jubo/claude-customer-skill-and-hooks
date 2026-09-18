@@ -31,6 +31,7 @@ CONTENT_CASES = [
     ("Bash(~/.maestro/bin/maestro test:*)", False, "豁免：.maestro 已列入清單"),
     ('Bash(export PATH="$PATH":"$HOME/.maestro/bin")', False, "豁免：$HOME + 已列入的工具目錄"),
     ("Bash(ls ~/Library/Android/sdk/cmdline-tools)", False, "豁免：~/Library 已列入清單"),
+    ('state_dir="$HOME/r18-migration-state/my-repo"', False, "豁免：r18-migration-state 是 r15-r18-migrate runner 的狀態目錄名，已列入清單"),
     # 以下三條釘住「dot-directory 本身不構成豁免」——曾試過改成規則判準，實測為偵測能力迴歸
     ("Bash(git -C ~/.acme-internal-project push)", True, "未列入的 dot-directory 私有專案須命中"),
     ("Bash(cat ~/.secret-client-work/notes.md)", True, "未列入的 dot-directory 私有工作目錄須命中"),

@@ -76,11 +76,11 @@ scan_one() {
   # pathspec 非空 → append `-- <pathspec>`，只取動到該子目錄的 commit（monorepo 拆 FE/BE 用）
   local log
   if [ -n "$pathspec" ]; then
-    log=$(git -C "$repo" log --all --since="$SCAN_SINCE" --no-merges \
+    log=$(git -C "$repo" log --exclude=refs/stash --all --since="$SCAN_SINCE" --no-merges \
           --author="$author_local" \
           --pretty=format:'%h%x09%ad%x09%cd%x09%s' --date=short -- "$pathspec" 2>/dev/null || echo "")
   else
-    log=$(git -C "$repo" log --all --since="$SCAN_SINCE" --no-merges \
+    log=$(git -C "$repo" log --exclude=refs/stash --all --since="$SCAN_SINCE" --no-merges \
           --author="$author_local" \
           --pretty=format:'%h%x09%ad%x09%cd%x09%s' --date=short 2>/dev/null || echo "")
   fi
@@ -197,6 +197,7 @@ jq -s '
 - **故障隔離**：任一 repo 失敗（無 .git / 無權限 / git 異常）寫入 `error` 欄位，不中斷其他 repo
 - **作者過濾**：每 repo 用該 repo 的 `git config user.name`（多帳號 monorepo 情境）；主 agent 可明確覆寫
 - **`--all` 必開**：feature branch 上的 commit 不能漏（與 weekly-review STEP 01 既有規則一致）。代價是 rebase 前後兩條 ref 上的同一批 commit 會各出現一次，由下方去重處理
+- **排除 `refs/stash`**：`--all` 會連 stash 一起掃；stash 的「index on <branch>: ...」commit 只有一個 parent，`--no-merges` 擋不掉，且訊息帶 branch 名會被抽出 Jira 編號而誤計（2026-09-14 週報 LVB-8384 stash 被算成 1 筆）。`--exclude` 必須寫在 `--all` 前面才生效
 - **`--no-merges`**：merge commit 不算工作量
 - **窗口以 author date 為準**：`git log --since` 過濾的是 **committer date**，rebase 會把它改寫成今天。因此掃描窗口放寬 30 天（`REBASE_BUFFER_DAYS`）先撈進來，再於 jq 用 `%ad` 精確過濾。這同時擋掉兩類錯誤：舊 commit 被 rebase 而誤納（author 3 月、committer 8 月），以及上週工作因本週 rebase 而重複計入
 - **去重鍵 = author date + subject**：rebase / cherry-pick 會改 sha 與 committer date，但不動 author date 與 subject。移除筆數寫入 `dedup_removed`，不靜默吞掉

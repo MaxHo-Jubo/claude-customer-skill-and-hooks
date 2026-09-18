@@ -11,7 +11,7 @@ context: fork
 
 ## 前置依賴
 
-- **PostToolUse hook**: `~/.claude/hooks/post_tool_error.py` — 自動記錄所有 tool 失敗到 `~/.claude/.learnings/ERRORS.jsonl`
+- **PostToolUseFailure hook**: `~/.claude/hooks/post_tool_error.py` — 自動記錄 tool 失敗到 `~/.claude/.learnings/ERRORS.jsonl`（使用者中斷、權限阻擋不記）。2026-09-14 前誤掛在 PostToolUse、從未寫入，所以在那之前的 ERRORS.jsonl 只有 hook 層（hook-error-wrapper）的紀錄
 - **摘要腳本**: `~/.claude/scripts/summarize_errors.py` — 錯誤統計報告
 - 安裝方式見 `skill-error-tracker/setup_skill_error_tracker.sh`
 

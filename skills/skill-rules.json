@@ -4,7 +4,15 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["jira", "issue", "ticket", "工單", "ERPD", "LVB", "CUP"],
+        "keywords": [
+          "jira",
+          "issue",
+          "ticket",
+          "工單",
+          "ERPD",
+          "LVB",
+          "CUP"
+        ],
         "intentPatterns": [
           "(fetch|get|show|看|查|拉).*(jira|issue|ticket|工單)",
           "(create|建立).*(branch|分支).*(jira|issue)",
@@ -16,7 +24,13 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["spec-module", "產生 spec", "寫 spec", "建立 spec", "生成規格"],
+        "keywords": [
+          "spec-module",
+          "產生 spec",
+          "寫 spec",
+          "建立 spec",
+          "生成規格"
+        ],
         "intentPatterns": [
           "(generate|create|write|產生|寫|建立).*(spec|規格文件)",
           "(spec|規格).*(module|模組)"
@@ -27,7 +41,11 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["explore-report", "探索報告", "exploration"],
+        "keywords": [
+          "explore-report",
+          "探索報告",
+          "exploration"
+        ],
         "intentPatterns": [
           "(explore|scan|探索|掃描).*(directory|dir|目錄|資料夾|模組)",
           "(report|報告).*(codebase|程式碼)"
@@ -38,7 +56,12 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["test-module", "寫測試", "產生測試", "mutation test"],
+        "keywords": [
+          "test-module",
+          "寫測試",
+          "產生測試",
+          "mutation test"
+        ],
         "intentPatterns": [
           "(generate|write|create|寫|產生|建立).*(test|測試)",
           "(test|測試).*(module|模組|coverage|覆蓋)",
@@ -50,7 +73,12 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["code review", "review PR", "PR review", "審查"],
+        "keywords": [
+          "code review",
+          "review PR",
+          "PR review",
+          "審查"
+        ],
         "intentPatterns": [
           "(review|審查|檢查).*(PR|pull request|code|程式碼)",
           "(PR|pull request).*(review|審查)"
@@ -61,7 +89,12 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["simplify", "簡化", "review changed", "check quality"],
+        "keywords": [
+          "simplify",
+          "簡化",
+          "review changed",
+          "check quality"
+        ],
         "intentPatterns": [
           "(simplify|簡化).*(code|程式碼)",
           "(review|檢查).*(changed|修改過的).*(code|程式碼)"
@@ -72,7 +105,12 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["confluence", "搜尋知識庫", "internal docs", "公司文件"],
+        "keywords": [
+          "confluence",
+          "搜尋知識庫",
+          "internal docs",
+          "公司文件"
+        ],
         "intentPatterns": [
           "(search|find|搜尋|找).*(confluence|knowledge|知識庫|內部文件)",
           "(我們|公司).*(有沒有|有無|有).*(文件|doc|document)"
@@ -83,7 +121,13 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["triage", "duplicate issue", "重複 issue", "bug report", "bug 回報"],
+        "keywords": [
+          "triage",
+          "duplicate issue",
+          "重複 issue",
+          "bug report",
+          "bug 回報"
+        ],
         "intentPatterns": [
           "(triage|分類).*(bug|issue|問題)",
           "(duplicate|重複).*(issue|bug|ticket)",
@@ -95,7 +139,12 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["status report", "狀態報告", "project status", "進度報告"],
+        "keywords": [
+          "status report",
+          "狀態報告",
+          "project status",
+          "進度報告"
+        ],
         "intentPatterns": [
           "(generate|produce|產生|建立).*(status|progress|進度|狀態).*(report|報告)",
           "(project|專案).*(status|進度|狀態)"
@@ -106,7 +155,12 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["meeting notes", "會議記錄", "action items", "待辦事項"],
+        "keywords": [
+          "meeting notes",
+          "會議記錄",
+          "action items",
+          "待辦事項"
+        ],
         "intentPatterns": [
           "(extract|capture|擷取|抓).*(action|task|待辦).*(meeting|會議)",
           "(meeting|會議).*(notes|記錄).*(task|ticket|工單)"
@@ -117,7 +171,11 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["spec to backlog", "spec 轉 backlog", "spec 建 ticket"],
+        "keywords": [
+          "spec to backlog",
+          "spec 轉 backlog",
+          "spec 建 ticket"
+        ],
         "intentPatterns": [
           "(convert|轉換|轉).*(spec|規格).*(backlog|ticket|工單)",
           "(spec|規格).*(to|轉).*(jira|backlog|ticket)"
@@ -128,7 +186,13 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["上次怎麼", "之前怎麼", "past session", "remember", "有印象"],
+        "keywords": [
+          "上次怎麼",
+          "之前怎麼",
+          "past session",
+          "remember",
+          "有印象"
+        ],
         "intentPatterns": [
           "(上次|之前|以前|過去).*(怎麼|如何).*(做|解|修|處理)",
           "(remember|記得|記憶).*(how|怎麼|what|什麼)",
@@ -140,7 +204,13 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["優化方法", "精簡方法", "重構方法", "method refactor", "refactor method"],
+        "keywords": [
+          "優化方法",
+          "精簡方法",
+          "重構方法",
+          "method refactor",
+          "refactor method"
+        ],
         "intentPatterns": [
           "(優化|精簡|重構|refactor|simplify).*(method|方法|函式|function)",
           "(method|方法|函式).*(優化|精簡|重構|refactor|cleanup)",
@@ -152,7 +222,11 @@
       "enforcement": "suggest",
       "priority": "low",
       "promptTriggers": {
-        "keywords": ["update CLAUDE.md", "更新 CLAUDE.md", "revise claude"],
+        "keywords": [
+          "update CLAUDE.md",
+          "更新 CLAUDE.md",
+          "revise claude"
+        ],
         "intentPatterns": [
           "(update|revise|更新|修改).*(CLAUDE\\.md|claude md)"
         ]
@@ -162,7 +236,14 @@
       "enforcement": "suggest",
       "priority": "medium",
       "promptTriggers": {
-        "keywords": ["translate-claude-code-releases", "翻譯 release", "翻譯更新", "翻譯 changelog", "release notes", "更新內容"],
+        "keywords": [
+          "translate-claude-code-releases",
+          "翻譯 release",
+          "翻譯更新",
+          "翻譯 changelog",
+          "release notes",
+          "更新內容"
+        ],
         "intentPatterns": [
           "(翻譯|translate).*(release|更新|changelog|版本|更新內容)",
           "claude\\s*code.*(更新|更新了什麼|新版|版本)",
@@ -174,7 +255,14 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["commit-review", "跑 review", "補跑 review", "commit review", "review 這個 commit", "push 前 review"],
+        "keywords": [
+          "commit-review",
+          "跑 review",
+          "補跑 review",
+          "commit review",
+          "review 這個 commit",
+          "push 前 review"
+        ],
         "intentPatterns": [
           "(跑|補跑|重跑|執行).*(commit\\s*)?review",
           "commit.*(review|審查)",
@@ -186,11 +274,37 @@
       "enforcement": "suggest",
       "priority": "high",
       "promptTriggers": {
-        "keywords": ["pr-reviewer", "full review", "PR full review", "審 PR", "review 這個 PR"],
+        "keywords": [
+          "pr-reviewer",
+          "full review",
+          "PR full review",
+          "審 PR",
+          "review 這個 PR"
+        ],
         "intentPatterns": [
           "(full|完整).*(review|審查)",
           "(review|審查|審).*(PR|pull request)\\s*#?\\d+",
           "(PR|pull request)\\s*#?\\d+.*(review|審查)"
+        ]
+      }
+    },
+    "jira-release-sync": {
+      "enforcement": "suggest",
+      "priority": "medium",
+      "promptTriggers": {
+        "keywords": [
+          "jira-release-sync",
+          "同步發版",
+          "已上架",
+          "結案",
+          "Resolved",
+          "掃描commit留言jira",
+          "上架留言"
+        ],
+        "intentPatterns": [
+          "(掃描|scan).*(commit).*(jira|留言)",
+          "(已上架|上架).*(jira|issue|留言|結案)",
+          "(同步|sync).*(發版|release).*(jira|狀態)"
         ]
       }
     }

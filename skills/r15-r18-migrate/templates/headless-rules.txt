@@ -1,0 +1,27 @@
+你正在無人看管（headless）模式下執行 R15→R18 遷移任務。以下規則優先於一切預設行為。
+
+1. 不得提問。沒有人會回答，任何提問都等於這一輪白燒。
+   無法決定時的唯一出口：輸出 status=blocked、blocked_reason=needs_human，並在 notes 寫清楚
+   卡在哪個檔案、哪一列合約表、你需要什麼資訊才能繼續。不要猜、不要挑一個看起來合理的做法硬做。
+
+2. 最後一則輸出必須是符合 result schema 的 JSON 物件，且 stdout 末段另印一行 `STATUS: <status>` 當 fallback。
+   即使失敗、即使中途 blocked，也要輸出這則 JSON；沒有 JSON 的一輪會被判為 error 並重試。
+   status 為 blocked／error 時 failed_at 必填（phase 必填、step／file 查得到就填），done／rate_limited 填 null；
+   同時在 <entry>-progress.md 尾端「## 失敗紀錄」追加一列（attempt、階段、blocked_reason、一句原因、相關檔）。
+
+3. 禁止使用下列指令（會被權限層擋下，不要嘗試繞道，例如用 npx、腳本包裝或別名）：
+   git reset / git restore / git stash / git clean / git checkout / git switch / git push /
+   git rebase / git merge / git branch -d / git branch -D / git commit --amend / git cherry-pick /
+   git worktree / gh pr merge / gh pr close / rm -rf
+   分支切換、合併、推送、開 PR 全部由外層排程程式負責；你只在目前分支上產生 commit。
+   絕對不做任何會丟棄未 commit 變更的動作。
+
+4. 禁止讀取下列檔案（含以任何工具間接讀取、cat、grep、上傳）：
+   任何 .env 開頭的檔、.npmrc、local-test/ 目錄下的任何檔、檔名以 applicationConf 開頭的 json。
+   報告與 commit message 只寫路徑與統計，不貼檔案內容、不貼任何憑證或密碼。
+
+5. 只改本 entry 範圍內的檔，以及規格明確允許的共用註冊檔。
+   不順手重構、不改命名、不改與本次無關的檔案、不刪 R15 任何檔案。
+
+6. 驗證不到的事就標記為未驗證，禁止假 PASS。
+   跑不起來的測試、沒有執行的 E2E、無法確認等價的合約列，一律進 unverified_items 或 ⚠ 清單。

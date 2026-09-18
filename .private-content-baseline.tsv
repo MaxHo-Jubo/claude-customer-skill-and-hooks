@@ -1,7 +1,11 @@
 # 私有內容掃描基線——記錄「已知且暫時接受」的命中，只有新增命中會被擋下。
 # 重建：python3 ~/.claude/scripts/check-private-content.py --write-baseline
 # 格式：相對路徑 \t 命中片段 \t 原因
+CATALOG.md	DayCareStaff	private-identifier
 CATALOG.md	ERPD-11971	private-identifier
+CATALOG.md	FamilyMember	private-identifier
+CATALOG.md	LVB-8340	private-identifier
+CATALOG.md	LVB-8384	private-identifier
 CATALOG.md	luna_web	private-identifier
 CATALOG.md	~/.acme-internal-project	local-project-path
 CATALOG.md	~/.openclaw	local-project-path
@@ -9,9 +13,9 @@ CATALOG.md	~/.secret-client-work	local-project-path
 CATALOG.md	~/Desktop	local-project-path
 CATALOG.md	~/Documents	local-project-path
 CATALOG.md	~/Downloads	local-project-path
-CLAUDE.md.20260820	ERPD-11696	private-identifier
-CLAUDE.md.20260820	ERPD-7777	private-identifier
-CLAUDE.md.20260820	LVB-7866	private-identifier
+CLAUDE.md.20260918	ERPD-11696	private-identifier
+CLAUDE.md.20260918	ERPD-7777	private-identifier
+CLAUDE.md.20260918	LVB-7866	private-identifier
 CODE-REVIEW-RULE.md	ERPD-11696	private-identifier
 CODE-REVIEW-RULE.md	ERPD-12345	private-identifier
 CODE-REVIEW-RULE.md	ERPD-7777	private-identifier
@@ -21,6 +25,7 @@ README.md	ERPD-11970	private-identifier
 README.md	ERPD-11971	private-identifier
 README.md	FamilyMember	private-identifier
 README.md	LVB-7963	private-identifier
+README.md	LVB-8384	private-identifier
 README.md	erpv3_web_frontend	private-identifier
 README.md	luna_RN_HomeCareStaff	private-identifier
 README.md	luna_web	private-identifier
@@ -34,6 +39,7 @@ agents/multi-repo-commit-scanner.md	ERPD-1234	private-identifier
 agents/multi-repo-commit-scanner.md	FamilyMember	private-identifier
 agents/multi-repo-commit-scanner.md	LVB-7963	private-identifier
 agents/multi-repo-commit-scanner.md	LVB-8037	private-identifier
+agents/multi-repo-commit-scanner.md	LVB-8384	private-identifier
 agents/multi-repo-commit-scanner.md	erpv3_web_backend	private-identifier
 agents/multi-repo-commit-scanner.md	erpv3_web_frontend	private-identifier
 agents/multi-repo-commit-scanner.md	luna_RN_HomeCareStaff	private-identifier
@@ -42,6 +48,7 @@ claude-mem-customize-TC/files/worker-service.cjs	~/.claude-mem	local-project-pat
 claude-mem-customize-TC/files/worker-service.cjs	~/.gemini	local-project-path
 claude-mem-customize-TC/files/worker-service.cjs	~/g	local-project-path
 claude-mem-customize-TC/files/worker-service.cjs	~/projects	local-project-path
+claude-mem-customize-TC/translation-mapping.md	~/.claude-mem	local-project-path
 claude-mem-customize-TC/translation-mapping.md	~/Documents	local-project-path
 docs/superpowers/plans/2026-03-20-pr-reviewer-agent.md	~/Documents	local-project-path
 docs/superpowers/specs/2026-03-20-pr-reviewer-agent-design.md	luna_web	private-identifier
@@ -50,9 +57,12 @@ harness/delegation-templates.md	luna_web	private-identifier
 harness/handover-letter.md	~/.claude.json	local-project-path
 harness/harness-diagnosis.md	~/Documents	local-project-path
 harness/knowledge-protocol.md	~/.claude.json	local-project-path
+harness/model-dispatch.md	FamilyMember	private-identifier
+harness/model-dispatch.md	erpv3_web_frontend	private-identifier
 harness/model-dispatch.md	luna_web	private-identifier
 hooks/r15-syntax-guard.ts	luna_web	private-identifier
 mcp-servers.json	/Users/maxhero/Documents	local-project-path
+mcp-servers.json	luna_web	private-identifier
 multi-account-setup.md	~/.zshrc	local-project-path
 plan-and-execute-workspace/trigger-eval.json	ERPD-12345	private-identifier
 plugins/README.md	~/.claude.json	local-project-path
@@ -61,7 +71,9 @@ rules/common/coding-style.md	LVB-8213	private-identifier
 rules/common/coding-style.md	LWM-2425	private-identifier
 rules/common/hooks.md	~/.claude.json	local-project-path
 rules/common/hooks.md.20260310	~/.claude.json	local-project-path
+rules/common/security.md	~/.claude.json	local-project-path
 rules/typescript/coding-style.md	ERPD-11967	private-identifier
+rules/typescript/coding-style.md	LVB-8340	private-identifier
 scripts/add-obsidian-tags.ts	DayCareStaff	private-identifier
 scripts/add-obsidian-tags.ts	FamilyMember	private-identifier
 scripts/detect-jira-issue.sh	ERPD-5678	private-identifier
@@ -94,12 +106,31 @@ skills/cup-build-test/scripts/sync-helpers.sh	$HOME/Documents	local-project-path
 skills/cup-build-test/scripts/sync-helpers.sh	luna_web	private-identifier
 skills/cup-build-test/templates/spec-template.md	compal-health.com	private-identifier
 skills/cup-build-test/templates/test-cjs-template.cjs	compal-health.com	private-identifier
+skills/finalize-release/SKILL.md	DayCareStaff	private-identifier
+skills/finalize-release/SKILL.md	FamilyMember	private-identifier
+skills/finalize-release/SKILL.md	compal-swhq	private-identifier
+skills/finalize-release/SKILL.md	luna_RN_HomeCareStaff	private-identifier
 skills/humanizer-zh-tw/README.md	~/.codex	local-project-path
 skills/humanizer-zh-tw/README.md	~/.gemini	local-project-path
 skills/humanizer-zh-tw/README.md	~/.roocode	local-project-path
 skills/jira-acceptance/SKILL.md	ERPD-7777	private-identifier
 skills/jira-acceptance/evals/evals.json	ERPD-11696	private-identifier
 skills/jira-acceptance/evals/evals.json	LVB-7866	private-identifier
+skills/jira-release-sync/SKILL.md	DayCareStaff	private-identifier
+skills/jira-release-sync/SKILL.md	ERPD-12013	private-identifier
+skills/jira-release-sync/SKILL.md	ERPD-12090	private-identifier
+skills/jira-release-sync/SKILL.md	FamilyMember	private-identifier
+skills/jira-release-sync/SKILL.md	LVB-8213	private-identifier
+skills/jira-release-sync/SKILL.md	LVB-8296	private-identifier
+skills/jira-release-sync/SKILL.md	LVB-8340	private-identifier
+skills/jira-release-sync/SKILL.md	LVB-8369	private-identifier
+skills/jira-release-sync/SKILL.md	compal-swhq	private-identifier
+skills/jira-release-sync/SKILL.md	luna_web	private-identifier
+skills/jira-release-sync/scan_commits.py	LVB-8340	private-identifier
+skills/jira-release-sync/scan_commits_luna.py	ERPD-12051	private-identifier
+skills/jira-release-sync/scan_commits_luna.py	ERPD-12090	private-identifier
+skills/jira-release-sync/scan_commits_luna.py	compal-swhq	private-identifier
+skills/jira-release-sync/scan_commits_luna.py	luna_web	private-identifier
 skills/jira-test-report/CHANGELOG.md	ERPD-11841	private-identifier
 skills/jira-test-report/CHANGELOG.md	LVB-7963	private-identifier
 skills/jira-test-report/CHANGELOG.md	LVB-7977	private-identifier

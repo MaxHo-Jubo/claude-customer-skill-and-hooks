@@ -49,14 +49,19 @@ def load_detector(repo: Path):
 
 def scan(repo: Path):
     """
-    掃描 repo 內所有受版控檔案，回傳命中集合。
+    掃描 repo 內所有受版控＋尚未加入版控但即將被 `git add -A` 納入的檔案，回傳命中集合。
     @param repo repo 根目錄
     @return set of (相對路徑, 命中片段, 原因)
     """
     find_private_content = load_detector(repo)
-    # STEP 01: 取受版控檔案清單
+    # STEP 01: 取檔案清單——`ls-files` 預設只列「已追蹤」檔案（含已 staged 但未 commit），
+    # 不含全新、尚未 `git add` 過的檔案。sync 流程的呼叫順序是「先掃描、後 git add -A」，
+    # 若只掃已追蹤檔案，STEP 02 剛 rsync 進來的全新 skill/hook/script 會在掃描當下完全不存在
+    # 於這份清單——跟這支工具存在理由所說的「skills/ 等 6 個目錄零掃描」是同一種盲區，
+    # 只是換了個新面貌。加 --others --exclude-standard 把「未追蹤但未被 .gitignore 排除」的
+    # 檔案也納入，覆蓋範圍才對得上「即將被這次 commit 收進去的內容」。
     files = subprocess.run(
-        ['git', '-C', str(repo), 'ls-files'],
+        ['git', '-C', str(repo), 'ls-files', '--cached', '--others', '--exclude-standard'],
         capture_output=True, text=True, check=True,
     ).stdout.split('\n')
 

@@ -270,13 +270,15 @@
             "statusMessage": "Checking post-commit review..."
           }
         ]
-      },
+      }
+    ],
+    "PostToolUseFailure": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse python3 /Users/maxhero/.claude/hooks/post_tool_error.py",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUseFailure python3 /Users/maxhero/.claude/hooks/post_tool_error.py",
             "timeout": 3000
           }
         ]

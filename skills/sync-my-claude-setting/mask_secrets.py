@@ -80,6 +80,7 @@ _ALLOWED_HOME_DIRS = (
     '.nvm', '.npm', '.cache', '.config', '.local', '.ssh',    # 標準工具目錄（路徑本身不含專案資訊）
     '.maestro',                                               # Maestro 行動 App UI 測試工具（v1.8.1 補）
     'library',                                                # macOS ~/Library（系統路徑）
+    'r18-migration-state',                                    # r15-r18-migrate skill 的 runner 狀態目錄（工具狀態，不含專案資訊；2026-09-16 補）
 )
 # marker 檔名等 dash-encoded 路徑（scripts/lib/review-marker.ts 的 markerPathForRepo 產物），
 # 斜線被換成 dash 後上面的路徑 pattern 認不出來，需單獨比對
