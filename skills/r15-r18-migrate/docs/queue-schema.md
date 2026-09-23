@@ -66,8 +66,8 @@
 | 欄位 | 說明 |
 |---|---|
 | `status` | `pending` \| `running` \| `waiting_quota` \| `done` \| `failed` \| `blocked` |
-| `blocked_reason` | 卡住的具體原因。來源有兩種：skill 自己回報的八種（`inventory_incomplete` / `too_large` / `git_state` / `build_env` / `no_mapping` / `unsupported_ajax_field` / `build_failed` / `needs_human`，見下方 `result.schema.json`），以及 runner 在 L1 驗證與判讀時自己寫入的三種（`build_unverified`：runner 自跑 build 或啟動 smoke 失敗；`secret_detected`：diff 內掃到疑似憑證；`hook_denied`：CLI 輸出含 deny/permission 字樣）。人工 `unblock` 後才會回到 `pending` |
-| `attempts` | 失敗計數：只在 error／timeout 累加（達上限轉 `failed`），blocked 不累加，`unblock` 歸零。**不是** `sessions/<entry>-<n>.*` 與診斷包名稱的 `<n>`——那是呼叫序號，由 runner 取「`attempts`+1」與「`sessions/` 內最大編號+1」的較大者，單調遞增，`unblock` 後重跑不會回頭覆寫舊的 session 檔（1.1.0） |
+| `blocked_reason` | 卡住的具體原因。來源有兩種：skill 自己回報的八種（`inventory_incomplete` / `too_large` / `git_state` / `build_env` / `no_mapping` / `unsupported_ajax_field` / `build_failed` / `needs_human`，見下方 `result.schema.json`），以及 runner 在 L1 驗證與判讀時自己寫入的三種（`build_unverified`：runner 自跑 build 或啟動 smoke 失敗；`secret_detected`：diff 內掃到疑似憑證；`hook_denied`：CLI 輸出含 deny/permission 字樣）。runner 另外會在兩個時點自己寫 `git_state`（1.1.2）：重跑既有 entry 分支前把整合分支合進來時發生衝突（CLI 不會被呼叫），以及發佈段 ff-merge 失敗（entry 分支不是整合分支的後代）；兩者都只擋這一個 entry，runner 不暫停。人工 `unblock` 後才會回到 `pending` |
+| `attempts` | 失敗計數：只在 error／timeout 累加（達上限轉 `failed`），blocked 不累加，`unblock` 歸零。**不是** `sessions/<entry>-<n>.*` 與診斷包名稱的 `<n>`——那是呼叫序號，由 runner 取「`attempts`+1」與「`sessions/` 內任何呼叫檔（`.json`／`.stream.jsonl`／`.claim`／子行程 log）用過的最大編號+1」的較大者，並以 `O_EXCL` 建立 `sessions/<entry>-<n>.claim` 佔號（已存在就往下一號），單調遞增、不重用（唯一例外：`SESSIONS_RETENTION_DAYS` 過期清理把該 entry 的呼叫檔連同 `.claim` 全刪之後，號碼可能從 `attempts`+1 重新開始——舊檔已不在、不會覆寫，但舊的診斷包名稱與 `runner.log.jsonl` 的 `attempt` 會出現同號指向不同呼叫，對照時看時間戳）：`unblock` 後重跑不會回頭覆寫舊的 session 檔（1.1.0），被訊號中斷、只留 stream 或只留 `.claim` 的那一號也不會被下一次呼叫覆寫（1.1.2）。每一輪只在取件、額度檢查之後佔一次號，同一輪的前置作業子行程 log、CLI 呼叫、診斷包都用這一號。序號不存進 queue（存了會與重算分裂，而且 `import-inventory` 重匯入會丟掉）；檔名比對錨定整段檔名，`foo` 與 `foo-1` 兩個 entry 共存時各算各的 |
 | `last_session_id` | 最後一次執行用的 session 識別碼 |
 | `last_commit` | 最後一次 commit 的 hash |
 | `last_error` | 最後一次失敗訊息 |

@@ -22,6 +22,9 @@ import re
 import shutil
 import tarfile
 
+# sessions/ 呼叫檔的命名與掃描（runner.py 也直接用它；依賴方向：runner → diagnostics → session_index）
+import session_index
+
 # stream-json 解析（runner.py 也直接用它；依賴方向：runner → diagnostics → stream_events）
 from stream_events import (
     build_timeline,
@@ -38,9 +41,9 @@ from stream_events import (
 SESSIONS_DIR_NAME = "sessions"
 DIAGNOSTICS_DIR_NAME = "diagnostics"
 CRASHES_DIR_NAME = "crashes"
-# stream 落檔與 meta 檔的副檔名（與 runner.save_session_output 的命名一致）
-STREAM_SUFFIX = ".stream.jsonl"
-META_SUFFIX = ".json"
+# stream 落檔與 meta 檔的副檔名（定義在 session_index，與 runner.save_session_output 的命名一致）
+STREAM_SUFFIX = session_index.STREAM_SUFFIX
+META_SUFFIX = session_index.META_SUFFIX
 # 診斷包內的固定檔名
 SUMMARY_NAME = "SUMMARY.md"
 STREAM_COPY_NAME = "stream.jsonl.gz"
@@ -157,28 +160,15 @@ def sessions_dir(state_dir):
 
 
 def latest_attempt(state_dir, entry_id):
-    """掃 sessions/<entry>-<n>.json 找最大的 n；沒有任何 session 檔回 None。
+    """最新一次「真的呼叫過 CLI」的序號：有 .json 或 .stream.jsonl 的最大 n（diagnose 預設用）；都沒有回 None。
 
-    queue 的 attempts 只在 error／timeout 時累加、blocked 不累加、unblock 會歸零，所以
-    「最新一次呼叫」的編號不能從 queue 推，只能看檔案；runner 的 next_call_number 用本函式
-    保證序號單調遞增，最大編號就是最新一次。
+    queue 的 attempts 只在 error／timeout 時累加、blocked 不累加、unblock 會歸零，所以最新一次只能看檔案。
+    被訊號中斷的呼叫只有 stream、沒有 json，它才是最新的一次；只有 .claim 的號碼沒呼叫過 CLI、不算。
     """
-    # STEP 01: 沒有 sessions/ 就沒有任何呼叫紀錄
-    prefix = "%s-" % entry_id
-    best = None
-    directory = sessions_dir(state_dir)
-    if not os.path.isdir(directory):
-        return None
-    # STEP 02: 掃 <entry>-<n>.json 取最大的 n
-    for name in os.listdir(directory):
-        if not name.startswith(prefix) or not name.endswith(META_SUFFIX):
-            continue
-        middle = name[len(prefix) : -len(META_SUFFIX)]
-        if middle.isdigit():
-            number = int(middle)
-            if best is None or number > best:
-                best = number
-    return best
+    # STEP 01: 只看 json 與 stream（檔名比對規則見 session_index）
+    files = session_index.attempt_files(sessions_dir(state_dir), entry_id)
+    numbers = [number for number, suffix, _name in files if suffix in (META_SUFFIX, STREAM_SUFFIX)]
+    return max(numbers) if numbers else None
 
 
 def session_files(state_dir, entry_id, attempt):
@@ -188,12 +178,12 @@ def session_files(state_dir, entry_id, attempt):
     base = "%s-%s" % (entry_id, attempt)
     meta = os.path.join(directory, base + META_SUFFIX)
     stream = os.path.join(directory, base + STREAM_SUFFIX)
-    # STEP 02: 子行程 log 依前綴掃出來
-    logs = []
-    if os.path.isdir(directory):
-        for name in sorted(os.listdir(directory)):
-            if name.startswith(base + "-") and name.endswith(".log"):
-                logs.append(os.path.join(directory, name))
+    # STEP 02: 子行程 log 用 session_index 的錨定比對找（前綴比對會混進 `<id>-<n>-…` 形狀的別的 entry 的 log）
+    logs = [
+        os.path.join(directory, name)
+        for number, suffix, name in session_index.attempt_files(directory, entry_id)
+        if number == int(attempt) and suffix.startswith("-")
+    ]
     return {
         "meta": meta if os.path.exists(meta) else None,
         "stream": stream if os.path.exists(stream) else None,

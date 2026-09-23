@@ -1,7 +1,7 @@
 ---
 name: r15-r18-migrate
 description: 把一個 React 15 頁面 entry 以最小改動遷移到 React 18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），一次處理一個 entry 並產出 commit 與結構化結果；觸發語 `/r15-r18-migrate <entry-id> [--resume]`。
-version: 1.1.1
+version: 1.1.2
 ---
 
 # R15 → R18 最小改動遷移（單 entry）
@@ -253,7 +253,7 @@ tab-reuse entry 只回填表五（shared_deps 對照）——沒有其他合約�
 
 ## 6. Phase 4：收尾
 
-1. **逐行讀 `git diff`**，逐項確認：
+1. **逐行讀 `git diff <integration_branch>...HEAD`**（三個點：只看本分支相對分歧點的變更；分支若落後於整合分支，兩點 diff 會把別的 entry 已合併的變更反向算成本分支的刪除），逐項確認：
 
    - [ ] 沒有測試殘留（差異測試檔應在狀態目錄，不在 repo）
    - [ ] 沒有除錯用的 `console.log`、沒有被註解掉的舊程式碼

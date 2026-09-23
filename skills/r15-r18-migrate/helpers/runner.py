@@ -37,9 +37,10 @@ import sys
 import time
 import traceback
 
-# 同目錄的診斷模組（證據凍結、SUMMARY）與 stream-json 解析模組；runner.py 以腳本執行時 sys.path[0] 就是 helpers/
-# 依賴方向：runner → diagnostics → stream_events
+# 同目錄的診斷模組（證據凍結、SUMMARY）、stream-json 解析模組、sessions/ 呼叫檔命名與掃描模組；
+# runner.py 以腳本執行時 sys.path[0] 就是 helpers/。依賴方向：runner → diagnostics → stream_events／session_index
 import diagnostics
+import session_index
 import stream_events
 
 # ================================================================ 常數
@@ -158,6 +159,17 @@ HOLD_MERGE_RESULTS = ("integration_mismatch", "integration_unrecovered")
 # 整合分支推送失敗的暫停簽名：enter_paused 對同簽名連續第二次就鎖定——推送失敗退回本機之後是可重試的，
 # 但「持續推不上去」（分支保護、憑證過期、遠端 hook）沒有這個簽名就會每輪重跑完整模組而且不再通知
 PUSH_FAILED_SIGNATURE = "integration_push_failed"
+# merge_to_integration 的 ff-merge 失敗結果：entry 分支不是整合分支的後代。發佈段據此把 entry 標 blocked、主迴圈繼續，
+# 不走一般暫停（一般暫停會讓 launchd 重啟後同一個舊分支再跑一次完整 CLI，1.1.2 D1）
+ENTRY_NOT_FF_RESULT = "entry_not_ff"
+# runner 自己偵測到 entry 分支的 git 狀態無法自動處理時寫進 blocked_reason 的值（與 skill 回報的 git_state 同義）
+GIT_STATE_REASON = "git_state"
+# prepare_branch 的三種結果：可以呼叫 CLI／這個 entry 已標 blocked、換下一個／runner 級暫停（CLI 之前，不燒預算）
+PREPARE_READY = "ready"
+PREPARE_ENTRY_BLOCKED = "entry_blocked"
+PREPARE_PAUSE = "pause"
+# 呼叫序號佔號檔（sessions/<entry>-<n>.claim）的權限：檔案是空的、只當「這一號已被用過」的紀錄，擁有者讀寫即可
+CLAIM_FILE_MODE = 0o600
 # 工作樹髒污／未追蹤檔清單放進 detail 時最多列幾行，其餘只給總數（通知會截尾，前幾行比尾端有用）
 DIRTY_LIST_PREVIEW_LINES = 5
 
@@ -1942,7 +1954,7 @@ def merge_to_integration(config, entry, expected_tip):
     @param config runner 設定
     @param entry queue 裡的 entry（用到 branch）
     @param expected_tip 事先取得的 entry 分支 commit（完整 sha）；推送成功後它就是整合分支的新 tip
-    @return (result, detail)，result 是 done / integration_diverged（切換、讀取或 ff-merge 失敗，可重試）/ integration_push_failed（推送失敗且本機已退回，可重試；呼叫端連續第二次就鎖定）/ integration_mismatch（HEAD 不符、本機已退回）/ integration_unrecovered（HEAD 不符或推送失敗，而且本機整合分支停在非預期 commit 上，必須人工處理）
+    @return (result, detail)，result 是 done / integration_diverged（切換整合分支或讀取 HEAD 失敗，可重試）/ entry_not_ff（ff-merge 失敗：entry 分支不是整合分支的後代，呼叫端把 entry 標 blocked、不暫停）/ integration_push_failed（推送失敗且本機已退回，可重試；呼叫端連續第二次就鎖定）/ integration_mismatch（HEAD 不符、本機已退回）/ integration_unrecovered（HEAD 不符或推送失敗，而且本機整合分支停在非預期 commit 上，必須人工處理）
     """
     integration = config["integration_branch"]
     # STEP 01: 切回整合分支，記下合併前的 HEAD（mismatch 時退回用；讀不到就不合併）
@@ -1953,11 +1965,12 @@ def merge_to_integration(config, entry, expected_tip):
     if code != 0:
         return "integration_diverged", "讀取合併前的整合分支 HEAD 失敗: %s" % err.strip()[-200:]
     head_before_merge = out.strip()
-    # STEP 02: fast-forward 合併
+    # STEP 02: fast-forward 合併。失敗代表 entry 分支不是整合分支的後代（prepare_branch 已先把整合分支合進 entry 分支，
+    # 走到這裡是之後整合分支又被動過）；--ff-only 失敗不改任何東西，本機整合分支仍在合併前
     log_path = session_log_path(config, "git-merge-ff")
     code, _out, err = git(config, "merge", "--ff-only", entry["branch"], log_path=log_path)
     if code != 0:
-        return "integration_diverged", "ff-merge 失敗: %s%s" % (err.strip()[-200:], log_ref(config, log_path))
+        return ENTRY_NOT_FF_RESULT, "ff-merge 失敗: %s%s" % (err.strip()[-200:], log_ref(config, log_path))
     # STEP 03: 推送之前確認 HEAD 就是預期的 commit（讀不到也算不一致，一樣不推）；不一致就退回合併前
     code, out, err = git(config, "rev-parse", "HEAD")
     head_after_merge = out.strip() if code == 0 else ""
@@ -2588,7 +2601,8 @@ def module_preflight(config, queue):
     # 所以 entry 沒走到 push（失敗／blocked／額度／斷點）、或前置作業本身在合併之後才失敗（斷點回流衝突、
     # 停止訊號）時，本機本來就會領先。判定用結構、不用記錄（記錄式有「HEAD 動了但還沒記」的窗）：領先的
     # commit 裡只數「不是 merge commit、而且不可從 origin/<base> 或任何斷點分支到達」的——runner 自己做的
-    # 只有 merge commit 與 base／斷點分支上的 commit，entry 分支不可能有 merge commit（CLI 被禁用 git merge）。
+    # 只有 merge commit 與 base／斷點分支上的 commit。entry 分支上的 merge commit 只有一種：prepare_branch 把整合
+    # 分支合進既有 entry 分支（1.1.2；CLI 被禁用 git merge），它本身被 --no-merges 排除，另一個 parent 本來就在整合分支上。
     # 數到的只會來自沒走完的發佈段（ff-merge 之後被中斷、退不回去、或人只跑了 unblock --runner 沒把本機對齊）：
     # 下一步的 --ff-only 對它是 no-op、看不出來，之後 prepare_branch 會從這個 commit 切下一個 entry 的分支、
     # 最後把它推上去。專屬原因，呼叫端據此鎖定；本機分支不動（那是證據）。git 指令失敗不能當成 0 個放行
@@ -2731,25 +2745,80 @@ def install_deps_if_lockfile_changed(config, previous_hash):
 
 
 def prepare_branch(config, entry):
-    """切到（必要時建立）entry 的頁面分支。
+    """切到（必要時建立）entry 的頁面分支；既有分支先把整合分支合進來，CLI 才是在最新的基礎上重跑。
 
-    回傳 (ok, detail)。
+    既有分支是上一輪留下的（逾時重試、blocked 後 unblock），期間別的 entry 可能已經合併、整合分支前進。1.1.1 以前
+    只 checkout：CLI 在舊基礎上重跑、發佈段 ff-merge 必敗、一般暫停、launchd 重啟再燒一次，無限迴圈（1.1.2 D1）。
+    合併用 --ff（entry 分支沒有自己的 commit 時直接快轉，不產生 merge commit）。失敗的分類見 _abort_branch_catch_up。
+
+    @param config runner 設定
+    @param entry queue 裡的 entry（用到 id、branch）
+    @return (status, detail)：status 是 PREPARE_READY（可以呼叫 CLI）／PREPARE_ENTRY_BLOCKED（合併衝突，entry 已標
+        blocked 並通知，主迴圈換下一個）／PREPARE_PAUSE（其餘失敗，呼叫端 runner 級暫停）
     """
-    # STEP 01: 分支已存在就直接切過去（resume 情境）
+    # STEP 01: 分支不存在就從整合分支 HEAD 建立
     branch = entry.get("branch")
     if not branch:
-        return False, "entry 缺少 branch 欄位"
+        return PREPARE_PAUSE, "entry 缺少 branch 欄位"
+    integration = config["integration_branch"]
     exists = git_out(config, "rev-parse", "--verify", "--quiet", "refs/heads/%s" % branch)
-    if exists:
-        code, _out, err = git(config, "checkout", branch)
+    if not exists:
+        code, _out, err = git(config, "checkout", "-b", branch, integration)
         if code != 0:
-            return False, "切換既有分支失敗: %s" % err.strip()[-200:]
-        return True, "checkout 既有分支"
-    # STEP 02: 不存在就從整合分支 HEAD 建立
-    code, _out, err = git(config, "checkout", "-b", branch, config["integration_branch"])
+            return PREPARE_PAUSE, "建立分支失敗: %s" % err.strip()[-200:]
+        return PREPARE_READY, "建立新分支"
+    # STEP 02: 既有分支：切過去、把整合分支合進來（全文落檔）
+    code, _out, err = git(config, "checkout", branch)
     if code != 0:
-        return False, "建立分支失敗: %s" % err.strip()[-200:]
-    return True, "建立新分支"
+        return PREPARE_PAUSE, "切換既有分支失敗: %s" % err.strip()[-200:]
+    log_path = session_log_path(config, "git-merge-integration")
+    code, _out, err = git(config, "merge", "--ff", "--no-edit", integration, log_path=log_path)
+    if code != 0:
+        return _abort_branch_catch_up(config, entry, err, log_path)
+    # STEP 03: 驗證真的跟上了：整合分支必須是 entry 分支的祖先（退出碼 1 是「不是」，其餘非零是指令失敗，分開講）
+    code, _out, err = git(config, "merge-base", "--is-ancestor", integration, branch)
+    if code == 1:
+        return PREPARE_PAUSE, "合併整合分支之後，整合分支仍不是 %s 的祖先%s" % (branch, log_ref(config, log_path))
+    if code != 0:
+        return PREPARE_PAUSE, "確認 entry 分支是否已跟上整合分支失敗: %s" % err.strip()[-200:]
+    return PREPARE_READY, "既有分支已合入整合分支"
+
+
+def _abort_branch_catch_up(config, entry, merge_err, log_path):
+    """prepare_branch 的合併失敗出口：先 abort，再依有沒有衝突檔分成 entry 級 blocked 與 runner 級暫停。
+
+    * 有衝突檔（--diff-filter=U）而且 abort 成功：這個 entry 自己的分支跟別人的變更衝突，標 blocked(git_state)＋通知，
+      其他 entry 照跑；人工處理（把分支 rebase／重建）後 unblock。
+    * 其餘（hook 拒絕、未追蹤檔會被覆寫、衝突檔清單讀不到、abort 失敗）：多半是環境問題，每個 entry 都會遇到——
+      標 blocked 會把整條佇列逐一清成 blocked；回暫停，CLI 之前停下、不燒預算。abort 失敗時 repo 可能停在合併中，
+      下一個 entry 的前置作業也過不去，一樣暫停。
+
+    @param config runner 設定
+    @param entry queue 裡的 entry
+    @param merge_err 合併指令的 stderr
+    @param log_path 合併全文的落檔路徑
+    @return (status, detail)，status 是 PREPARE_ENTRY_BLOCKED 或 PREPARE_PAUSE
+    """
+    # STEP 01: abort 之前先問衝突檔（abort 後就查不到了）；清單讀不到不能當成「沒有衝突」，記成 None
+    code, out, err = git(config, "diff", "--name-only", "--diff-filter=U")
+    conflicted = out.strip() if code == 0 else None
+    list_error = "" if code == 0 else "（衝突檔清單讀取失敗: %s）" % err.strip()[-200:]
+    # STEP 02: 一律 abort；沒有進行中的合併時 abort 會失敗，這種情況不會有衝突檔，本來就走暫停
+    code, _out, err = git(config, "merge", "--abort")
+    abort_error = "" if code == 0 else "；merge --abort 也失敗（repo 可能停在合併中）: %s" % err.strip()[-200:]
+    reference = log_ref(config, log_path)
+    # STEP 03: 衝突而且已 abort 乾淨 → entry 級 blocked
+    if conflicted and not abort_error:
+        detail = "entry 分支與整合分支合併衝突: %s%s" % (conflicted.replace("\n", ", "), reference)
+        mark_entry_blocked(config, entry["id"], GIT_STATE_REASON, detail)
+        notify(config, "module_blocked", "模組 %s 的分支跟不上整合分支" % entry["id"], "原因: %s\n%s" % (GIT_STATE_REASON, detail))
+        return PREPARE_ENTRY_BLOCKED, detail
+    # STEP 04: 其餘 → runner 級暫停
+    return (
+        PREPARE_PAUSE,
+        "entry 分支 %s 合併整合分支失敗（非衝突）: %s%s%s%s"
+        % (entry["branch"], merge_err.strip()[-200:], list_error, abort_error, reference),
+    )
 
 
 # ================================================================ run 主流程
@@ -3156,6 +3225,38 @@ def add_cost(entry, outcome):
         entry["cost_usd_total"] = float(entry.get("cost_usd_total") or 0) + float(outcome["cost"])
 
 
+def mark_entry_blocked(config, entry_id, reason, detail, bundle=None, outcome=None):
+    """把 entry 標成 blocked 並落盤；不通知（各來源的通知文字不同，由呼叫端發）。
+
+    四個來源共用同一組欄位：CLI 回報 blocked／hook_denied（apply_outcome）、L1 沒過（build_unverified／
+    secret_detected）、prepare_branch 同步整合分支衝突、發佈段 ff-merge 失敗（後兩者 reason 是 git_state）。
+
+    @param config runner 設定
+    @param entry_id entry id
+    @param reason 寫進 blocked_reason
+    @param detail 寫進 last_error
+    @param bundle 診斷包相對路徑，寫進 last_diagnostics；None 表示這次沒有凍結
+    @param outcome CLI 判讀結果；給定時把這次呼叫的花費累進 cost_usd_total（add_cost），None 表示不記花費
+    @return 寫入後的 entry；entry 已不在 queue 裡回 None
+    """
+
+    def blocked_mutator(queue):
+        """標記為 blocked。"""
+        entry = find_entry(queue, entry_id)
+        if entry is not None:
+            entry["status"] = "blocked"
+            entry["blocked_reason"] = reason
+            entry["last_error"] = detail
+            entry["last_diagnostics"] = bundle
+            entry["finished_at"] = now_iso()
+            if outcome is not None:
+                add_cost(entry, outcome)
+        return entry
+
+    # STEP 01: 一次寫入
+    return mutate_queue(config, blocked_mutator)
+
+
 def apply_outcome(config, entry_id, outcome):
     """把一次呼叫的判讀結果寫回 queue。
 
@@ -3189,20 +3290,7 @@ def apply_outcome(config, entry_id, outcome):
     # STEP 04: blocked / hook_denied 直接落地，不再重試
     if kind in ("blocked", "hook_denied"):
         reason = "hook_denied" if kind == "hook_denied" else (outcome.get("detail") or "needs_human")
-
-        def blocked_mutator(queue):
-            """標記為 blocked。"""
-            entry = find_entry(queue, entry_id)
-            if entry is not None:
-                entry["status"] = "blocked"
-                entry["blocked_reason"] = reason
-                entry["last_error"] = outcome.get("detail")
-                entry["last_diagnostics"] = outcome.get("diagnostics")
-                entry["finished_at"] = now_iso()
-                add_cost(entry, outcome)
-            return entry
-
-        mutate_queue(config, blocked_mutator)
+        mark_entry_blocked(config, entry_id, reason, outcome.get("detail"), outcome.get("diagnostics"), outcome)
         notify(
             config,
             "module_blocked",
@@ -3297,6 +3385,9 @@ def finish_done_entry(config, entry, outcome, pr_error, closing):
         )
     # 通知要顯示的連結以 queue 裡的為準（可能是上一輪開的）
     pr_url = written.get("pr_url")
+    # 「同簽名連續第二次就鎖定」的連續要真的連續：有 entry 完成就重新起算。只清簽名層，startup_paused_reason 的
+    # 通知去重保留（R2）；不清的話簽名整個行程都在，中間做完幾個 entry 之後同簽名再失敗一次就被誤判成連續而鎖死
+    config["startup_crash_signature"] = None
 
     # STEP 03: 通知與進度；PR 步驟出錯時分清楚是「沒有 PR」還是「有 PR 但這一輪分支沒推上去」
     if pr_error:
@@ -3428,15 +3519,34 @@ def maybe_daily_digest(config):
 
 
 def next_call_number(config, entry):
-    """本次呼叫的序號（sessions/<entry>-<n>.* 與診斷包名稱的 n）：單調遞增，不跟 queue.attempts 綁死。
+    """佔下本次呼叫的序號（sessions/<entry>-<n>.* 與診斷包名稱的 n）並回傳：單調遞增、不重用（保留期清理刪掉舊檔後的例外見 docs/queue-schema.md 的 attempts 列）。
 
-    queue.attempts 只在 error／timeout 累加、unblock 會歸零；序號若直接用 attempts+1，
-    unblock 後重跑會回頭覆寫 sessions/<entry>-1.*，diagnose 也會把最大編號誤當最新一次
-    （fresh-context 驗收抓到）。改取「attempts+1」與「sessions/ 內最大編號+1」的較大者。
+    候選號取「queue.attempts+1」與「sessions/ 內任何呼叫檔用過的最大號+1」的較大者，以 O_CREAT|O_EXCL 建立
+    sessions/<entry>-<n>.claim 佔號，已存在就往下一號：
+    * 不跟 queue.attempts 綁死：attempts 只在 error／timeout 累加、unblock 會歸零，直接用會回頭覆寫舊檔（1.1.0）。
+    * 掃任何檔而不是只掃 .json：被訊號中斷的呼叫沒有 .json，只看 .json 會重用那一號、覆寫它的 stream 與子行程 log（1.1.2 D2）。
+    * 佔號本身留下 .claim：取了號、還沒呼叫 CLI 就停下（前置作業暫停、停止訊號），下一次也不會拿到同一號。
+    每個 entry 每輪只由 cmd_run 取一次（額度檢查之後、git 前置之前），process_one_entry 沿用 config["current_attempt"]。
+
+    @param config runner 設定（用到 state_dir）
+    @param entry queue 裡的 entry（用到 id、attempts）
+    @return 佔到的序號
+    @raises OSError 建立佔號檔失敗（「已存在」以外的原因）——不退回不佔號的算法，交給 crash 流程
     """
-    from_queue = int(entry.get("attempts", 0)) + 1
-    from_files = (diagnostics.latest_attempt(config["state_dir"], entry["id"]) or 0) + 1
-    return max(from_queue, from_files)
+    # STEP 01: 候選號（sessions/ 沒有任何檔是合法的空結果，從 attempts+1 起）
+    directory = diagnostics.sessions_dir(config["state_dir"])
+    os.makedirs(directory, exist_ok=True)
+    used = session_index.highest_used_attempt(directory, entry["id"])
+    number = max(int(entry.get("attempts", 0)) + 1, (used or 0) + 1)
+    # STEP 02: O_EXCL 佔號，撞到就往下一號
+    while True:
+        claim_path = os.path.join(directory, "%s-%s%s" % (entry["id"], number, session_index.CLAIM_SUFFIX))
+        try:
+            os.close(os.open(claim_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, CLAIM_FILE_MODE))
+        except FileExistsError:
+            number += 1
+            continue
+        return number
 
 
 def publish_verified_entry(config, entry, outcome, attempt):
@@ -3463,7 +3573,7 @@ def publish_verified_entry(config, entry, outcome, attempt):
     @param entry queue 裡的 entry
     @param outcome CLI 呼叫的判讀結果（交給 finish_done_entry 寫回）
     @param attempt 這次呼叫的序號（凍結診斷包用）
-    @return None 表示主迴圈繼續；否則為 runner 的 exit code（進入暫停）
+    @return None 表示主迴圈繼續（含 ff-merge 失敗、entry 已標 blocked）；否則為 runner 的 exit code（進入暫停）
     @raises RuntimeError entry 已不在 queue 裡（合併前發現：整合分支未動；合併後發現：見 finish_done_entry）
     """
     entry_id = entry["id"]
@@ -3507,7 +3617,20 @@ def publish_verified_entry(config, entry, outcome, attempt):
         merge_detail = "%s（PR: %s）" % (merge_detail, pr_url)
     if bundle:
         merge_detail = "%s（entry 診斷: %s）" % (merge_detail, bundle)
-    # STEP 06: ff-merge 後 HEAD 不符（本機整合分支曾停在非預期 commit 上）→ 鎖定，不能只是一般暫停，
+    # STEP 06: ff-merge 失敗（entry 分支不是整合分支的後代）→ entry 級 blocked、主迴圈繼續。一般暫停的話 launchd 重啟、
+    # 前置作業放行、同一個 entry 放回 pending 再跑一次完整 CLI、再 ff 失敗，而且同原因重複暫停不通知（1.1.2 D1）。
+    # 本機整合分支沒動（--ff-only 失敗不改東西）；花費記進 entry（這一輪 CLI 確實跑完了）
+    if merge_result == ENTRY_NOT_FF_RESULT:
+        mark_entry_blocked(config, entry_id, GIT_STATE_REASON, merge_detail, bundle, outcome)
+        refresh_bundle_snapshot(config, entry_id, bundle)
+        notify(
+            config,
+            "module_blocked",
+            "模組 %s 無法 ff 合併進整合分支" % entry_id,
+            with_diagnostics_line("原因: %s\n%s" % (GIT_STATE_REASON, merge_detail), bundle),
+        )
+        return None
+    # STEP 07: ff-merge 後 HEAD 不符（本機整合分支曾停在非預期 commit 上）→ 鎖定，不能只是一般暫停，
     # 退回成功與否都一樣：不符的前提就是有別的東西在改 repo，一般暫停 launchd 幾分鐘後就重啟、
     # 把同一個 entry 放回 pending 重試，多半再次不符、同原因重複暫停不再通知，無上限地燒額度；
     # 退不回去的還多一層——下一個 entry 會從那個 commit 切分支、最後把它推上去（module_preflight
@@ -3516,7 +3639,7 @@ def publish_verified_entry(config, entry, outcome, attempt):
     locked = merge_result in HOLD_MERGE_RESULTS
     if merge_result == "integration_unrecovered":
         merge_detail = "先照下面說明對齊本機、處理寫入者，再 unblock --integration-tip 與 --runner。%s" % merge_detail
-    # STEP 07: 推送失敗本機已退回、可重試——但「持續推不上去」（分支保護、憑證過期、遠端 hook）沒有煞車：
+    # STEP 08: 推送失敗本機已退回、可重試——但「持續推不上去」（分支保護、憑證過期、遠端 hook）沒有煞車：
     # 重啟後前置作業放行、entry 放回 pending、重跑一次完整 CLI 呼叫、再推再失敗，而且同原因重複暫停不通知。
     # 帶簽名讓 enter_paused 在連續第二次就鎖定（既有機制，unblock --runner 解除）
     signature = PUSH_FAILED_SIGNATURE if merge_result == "integration_push_failed" else None
@@ -3529,10 +3652,12 @@ def process_one_entry(config, entry):
     回傳 (exit_code_or_None)：非 None 代表 runner 應該退出。
     """
     entry_id = entry["id"]
-    attempt = next_call_number(config, entry)
-    # 子行程 log 與診斷包命名用的模組脈絡
-    config["current_entry"] = entry_id
-    config["current_attempt"] = attempt
+    # 序號由 cmd_run 取件時佔好（next_call_number），前置作業的子行程 log 已經用了這一號；這裡重算會分裂成兩個號
+    if config.get("current_entry") != entry_id or config.get("current_attempt") is None:
+        raise RuntimeError(
+            "處理 entry %s 之前沒有佔呼叫序號（current_entry=%s）" % (entry_id, config.get("current_entry"))
+        )
+    attempt = config["current_attempt"]
 
     # STEP 01: 標記 running
     def start_mutator(queue):
@@ -3619,19 +3744,8 @@ def process_one_entry(config, entry):
     # STEP 06: L1 檢查沒過一律先凍結——skill 回報 done 但 runner 自驗失敗，stream 是找原因的依據
     bundle = freeze_entry_bundle(config, entry_id, attempt, "l1_%s" % result, detail)
     if result in ("build_unverified", "secret_detected"):
-
-        def blocked_mutator(queue):
-            """L1 失敗 → blocked。"""
-            target = find_entry(queue, entry_id)
-            if target is not None:
-                target["status"] = "blocked"
-                target["blocked_reason"] = result
-                target["last_error"] = detail
-                target["last_diagnostics"] = bundle
-                target["finished_at"] = now_iso()
-            return target
-
-        mutate_queue(config, blocked_mutator)
+        # 不記花費：沿用 1.1.1 的行為（這條路徑的花費一直沒進 cost_usd_total，見 CHANGELOG 1.1.2「不在這批」）
+        mark_entry_blocked(config, entry_id, result, detail, bundle)
         refresh_bundle_snapshot(config, entry_id, bundle)
         notify(
             config,
@@ -3779,9 +3893,6 @@ def cmd_run(config, args):
                 continue
 
             entry = ready[0]
-            # 從這裡起的 git 前置／依賴安裝子行程 log 都掛在這個 entry 名下（序號與 process_one_entry 同一算法）
-            config["current_entry"] = entry["id"]
-            config["current_attempt"] = next_call_number(config, entry)
 
             # STEP 03.04: 額度 pre-flight
             snapshot = quota_snapshot(config)
@@ -3792,13 +3903,18 @@ def cmd_run(config, args):
                     return EXIT_PAUSED
                 continue
 
-            # STEP 03.05: git 前置。本機整合分支領先遠端的那一種要鎖定：一般暫停 launchd 幾分鐘後重啟、
+            # STEP 03.05: 佔呼叫序號——額度檢查之後（等完額度 continue 回來不會多佔一號）、git 前置之前（從這裡起的
+            # 前置作業／依賴安裝／準備分支子行程 log 都掛在這個 entry 的這一號名下，process_one_entry 沿用同一號）
+            config["current_entry"] = entry["id"]
+            config["current_attempt"] = next_call_number(config, entry)
+
+            # STEP 03.06: git 前置。本機整合分支領先遠端的那一種要鎖定：一般暫停 launchd 幾分鐘後重啟、
             # 同原因重複暫停不再通知，而本機領先不會自己消失
             ok, pause_reason, detail = module_preflight(config, queue)
             if not ok:
                 return enter_paused(config, pause_reason, detail, force_hold=pause_reason == LOCAL_AHEAD_REASON)
 
-            # STEP 03.06: 依賴安裝
+            # STEP 03.07: 依賴安裝
             # （原本這裡會在 git 前置一過就先發「已續跑」通知，但那時模組還沒真的跑，
             #   像 auth_expired 這類原因要等模組真的呼叫過 CLI 才知道是否還在發生；
             #   改成只在第一個模組真的 done 之後才發，見 finish_done_entry。R2）
@@ -3806,9 +3922,12 @@ def cmd_run(config, args):
             if not ok:
                 return enter_paused(config, "deps_install_failed", detail)
 
-            # STEP 03.07: 切分支後才呼叫 skill
-            ok, detail = prepare_branch(config, entry)
-            if not ok:
+            # STEP 03.08: 切分支（既有分支先合入整合分支）後才呼叫 skill。合併衝突是這個 entry 自己的問題——
+            # prepare_branch 已把它標 blocked 並通知，換下一個 entry；其餘失敗在 CLI 之前暫停
+            status, detail = prepare_branch(config, entry)
+            if status == PREPARE_ENTRY_BLOCKED:
+                continue
+            if status != PREPARE_READY:
                 return enter_paused(config, "integration_dirty", detail)
 
             exit_code = process_one_entry(config, entry)
@@ -3816,7 +3935,7 @@ def cmd_run(config, args):
             if exit_code is not None:
                 return exit_code
 
-            # STEP 03.08: 斷點檢查
+            # STEP 03.09: 斷點檢查
             should_pause, checkpoint_id = handle_checkpoints(config)
             if should_pause:
                 if not wait_for_release(config, checkpoint_id):

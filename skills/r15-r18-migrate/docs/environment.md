@@ -41,6 +41,10 @@ runner 在 L1 驗證時對 `backend/public/build/react18/` 跑 `node helpers/boo
 
 **smoke 必須對 production build 跑**（runner 的 `npm run build` 在 `frontend/react_18` 執行 `vite build`，預設就是 production 模式）。開發版產物（`npm run devReact18` 的 watch 輸出）會保留 prop-types 執行期檢查，2026-09-16 實測本機開發版產物在合成 shell 下有 7 筆既有的 `PropTypes.oneOf`／`oneOfType` 用法錯誤警告（`react_18/src/containers/Form/DaycaseRecordForm*.jsx` 等），production build 下為零；這些是 repo 既有問題，不屬於遷移範圍，也不該為了讓 smoke 過而加進忽略清單。Playwright 若不在 `frontend/react_18` 的依賴內，用 `NODE_PATH` 指向任一已安裝 `playwright` 與 chromium 的 `node_modules`（例如本機另一個 skill 的 helper 目錄）；找不到時腳本回退出碼 2，runner 不會把它當通過。
 
+### stub／測試環境要擋額度查詢連網
+
+用假 CLI、`RUNNER_SKIP_BUILD=1`／`RUNNER_SKIP_SMOKE=1` 跑 runner 做驗收時，主迴圈每次取件前仍會執行 `helpers/quota-usage.py`，它會拿本機的 token（或 Keychain）去連真正的用量查詢 API。stub 環境要在 skill 的**複本**裡把這支腳本換成只印 `{}` 的假腳本（runner 視為「額度查不到」、不擋取件，事件記一筆 `quota_unavailable`），不要改正式的 skill 目錄，也不要讓測試帶著真實憑證連網。
+
 ## `CLAUDE_CONFIG_DIR` 隔離
 
 無人看管批次跑 headless session 時，**不能沿用日常互動用的設定目錄**。原因：日常設定目錄通常掛了多個 hook（例如 commit 前檢查、程式碼風格檢查）與 plugin，這些是為互動式工作流設計的，headless 執行時同樣會被觸發、介入 skill 的判斷與輸出，讓 headless 流程變得不可預期。
@@ -134,7 +138,8 @@ runner 在 L1 驗證時對 `backend/public/build/react18/` 跑 `node helpers/boo
 | `diff-tests/<module>/*.test.js` | 差異測試產出，不進 repo |
 | `sessions/<module>-<n>.stream.jsonl` | 每次 CLI 呼叫的 stream-json 逐事件落檔（system／assistant／user／result，含每個工具呼叫與結果）。CLI 直接寫這個檔、不經 runner 記憶體，逾時被殺時仍保留到那一刻為止的事件；依 `SESSIONS_RETENTION_DAYS` 保留 |
 | `sessions/<module>-<n>.json` | 該次呼叫的 meta：returncode、逾時、耗時、stderr 尾端、stream 路徑與事件統計、`result` 事件全文（`structured_output`、成本、`permission_denials`、`terminal_reason`）；依 `SESSIONS_RETENTION_DAYS` 保留 |
-| `sessions/<module>-<n>-<name>.log` | 子行程完整 stdout＋stderr（`build`、`smoke`、`npm-ci`、`git-merge-base`、`git-merge-cp-<斷點>`、`git-merge-ff`、`git-push-integration`、`git-push-branch`、`gh-pr-create`）；queue／通知裡的 detail 只截尾段並以 `（全文: sessions/…）` 指到這裡；依 `SESSIONS_RETENTION_DAYS` 保留 |
+| `sessions/<module>-<n>.claim` | 呼叫序號的佔號檔（1.1.2，空檔）：每一輪取件、額度檢查之後以 `O_EXCL` 建立，已存在就往下一號；取了號還沒呼叫 CLI 就停下（前置作業暫停、停止訊號）時只會留下它，下一次不會重用這一號。依 `SESSIONS_RETENTION_DAYS` 保留 |
+| `sessions/<module>-<n>-<name>.log` | 子行程完整 stdout＋stderr（`build`、`smoke`、`npm-ci`、`git-merge-base`、`git-merge-cp-<斷點>`、`git-merge-integration`（1.1.2：重跑既有 entry 分支前把整合分支合進來）、`git-merge-ff`、`git-push-integration`、`git-push-branch`、`gh-pr-create`）；queue／通知裡的 detail 只截尾段並以 `（全文: sessions/…）` 指到這裡；依 `SESSIONS_RETENTION_DAYS` 保留 |
 | `diagnostics/<module>-<n>-<時間>/` | 失敗當下自動凍結的診斷包（判讀為 timeout／error／blocked／hook_denied／auth_expired、或 L1 沒過）：`SUMMARY.md`（給人與 Claude 讀）、`stream.jsonl.gz`、`meta.json`、子行程 log、progress／contract／report 快照、`queue-entry.json`、`runner-events.jsonl`。**不受保留期清理**，目錄權限 700。`runner.py diagnose` 也產在這裡 |
 | `diagnostics/runner-<時間>-<原因>/` | 每次 runner 級暫停（含 crash）自動凍結的診斷包：`runner_state`、traceback、最近 200 筆事件、`queue.json` 原檔複本（即使損毀）、deadletter |
 | `crashes/<時間>-<簽名>.txt` | runner 未預期例外的 traceback 全文（簽名 = `<例外類別>@<檔>:<行>`）；不受保留期清理 |
@@ -156,8 +161,12 @@ runner 把「失敗當下的全部證據」凍結成一個目錄，人只要把�
    印出來的 `.tar.gz` 就是要帶走的東西。`diagnose` 只讀 `queue.json` 不寫，重跑幾次都安全；自動凍結的那份不會被覆蓋（同名加序號）。
 3. **帶回開發機**：`scp <執行機器>:<狀態目錄>/diagnostics/<名稱>.tar.gz .`，解開後先讀 `SUMMARY.md`——它的結構固定：呼叫概況與環境指紋（哪版 skill／runner／CLI／模型／repo HEAD）→ 結構化結果（含 `failed_at`）→ 工具呼叫時間軸（subagent 縮排、每筆耗時、錯誤標記）→ 全部 `is_error` 的工具結果、`permission_denials`、最後 10 個事件（逾時就看這裡）、stderr 尾端 → skill 側 progress 勾選與失敗紀錄 → build／smoke 全文尾端（smoke 另抽 `[ignored:*]`／FAIL 行）→ runner 事件 → 診斷包內檔案清單。要更深就解 `stream.jsonl.gz`。
 4. **憑證**：`SUMMARY.md` 內命中憑證樣式（GitHub token、AWS key、私鑰、`password:`／`_token:` 字面）的行整行換成 `[REDACTED:<類別>]`；`stream.jsonl.gz` 與各 log **不遮罩**（遮罩會破壞證據），交出去之前自己看一眼，或只交 `SUMMARY.md`。
-5. **解除**：entry 級失敗修好後 `runner.py unblock <entry-id>`；runner 級 crash 同簽名兩次後會鎖定（`runner_state.hold`；第 6 點那一類例外第一次就鎖定），修好後 `runner.py unblock --runner`（見下一節）。
+5. **解除**：entry 級失敗修好後 `runner.py unblock <entry-id>`；runner 級 crash 同簽名連續兩次後會鎖定（`runner_state.hold`；中間有 entry 完成就重新起算（1.1.2）；第 6 點那一類例外第一次就鎖定），修好後 `runner.py unblock --runner`（見下一節）。
 6. **crash 的例外是 `LeftoverProcessError` 或 `UnsignalableGroupError`**（1.1.1）：這不是程式錯誤，是 runner 在回報「CLI 衍生的行程沒有收乾淨」——前者是有行程自行脫離了 process group（訊號送不到）還握著 CLI 的輸出 pipe、或 SIGKILL 之後 group 仍有成員，後者是 group 裡有送不了訊號的行程。它可能還在改 repo，所以 runner 不把這一輪當成一般逾時，而且**第一次出現就鎖定**（`runner_state.hold`）：一般的暫停只是結束行程，`launchd` 幾分鐘後就會把 runner 重新拉起來照常往下跑，只有鎖定擋得住。先在執行機器上找出並處理殘留行程（`ps -ax -o pid,ppid,sess,user,command`，或 `lsof +D <repo 目錄>` 看誰還開著 repo 裡的檔案），確認乾淨之後執行 `runner.py unblock --runner`。runner 偵測不到的一種：自行脫離 group **而且**關掉了 stdio 的行程（標準的 daemon 化）——它不在 group 裡、也不握 pipe；逾時之後若懷疑有這種行程，同樣用上面兩個指令查。
+7. **`blocked_reason` 是 `git_state`、但 skill 沒有回報過**（1.1.2）：是 runner 自己擋下的，兩種來源——
+   - **重跑既有 entry 分支前合併整合分支時衝突**：`last_error` 列出衝突檔與 `sessions/<entry>-<n>-git-merge-integration.log`。CLI 沒有被呼叫、沒花錢；合併已 abort，repo 是乾淨的。處理：在 entry 分支上手動把整合分支合進來解衝突並 commit（或刪掉這條本機分支讓它從整合分支重建——上一輪的遷移 commit 會一起丟掉），再 `unblock <entry-id>`。其他 entry 不受影響、runner 照跑。
+   - **發佈段 ff-merge 失敗**：entry 分支不是整合分支的後代（前置作業之後整合分支又被動過）。L1 已經通過、PR 可能已開，這一輪的花費記在 entry 上；本機整合分支沒動。`unblock` 後重跑時 runner 會先把整合分支合進 entry 分支再呼叫 CLI。
+   合併失敗但**沒有衝突檔**（hook 拒絕、未追蹤檔會被覆寫、abort 失敗）不標 blocked，而是 runner 級 `paused(integration_dirty)`、在 CLI 之前停下：這類多半是環境問題，每個 entry 都會遇到，逐一標 blocked 會把整條佇列清空。
 
 ## launchd 常駐與重啟行為
 
