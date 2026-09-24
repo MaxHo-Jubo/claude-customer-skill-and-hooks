@@ -78,6 +78,8 @@ version: 1.1.2
 **(4) 驗 git 狀態**：
 - `git branch --show-current` 必須等於 `entry.branch`，不等 → `blocked(git_state)`（分支是 runner 準備的，skill 不切換）。
 - `git status --porcelain` 為空，或所有髒檔都落在本 entry 的路徑範圍內（`r18_dir` 底下、或 §0 允許的共用註冊檔）。有範圍外的髒檔 → `blocked(git_state)`，`notes` 列出檔名。
+  - **runner 下**：呼叫 CLI 之前，runner 的前置作業已在整合分支上確認 `git status --porcelain` 為空（含未追蹤檔；不為空就 runner 級暫停 `integration_dirty`，不會呼叫 CLI），之後只做依賴安裝與 `checkout`／`merge`（失敗就不呼叫 CLI），所以這裡看到的應該是空的——「髒檔在範圍內」那半句在 runner 下碰不到。真的看到髒檔代表 runner 之外還有寫入者，照上面的規則判斷。
+  - **手動執行時**（例如人工中斷後直接 `/r15-r18-migrate <entry-id> --resume`）：上一輪留下的未 commit 變更可能還在工作樹上，範圍內的髒檔照上面的規則放行。
 
 **(5) `--resume` 判定**（帶此旗標時才做，順序不可調換）：
 1. 先跑 `git log <integration_branch>..HEAD --oneline`。**只要本分支已經有本 entry 的 commit**，就直接跳到 Phase 3，不重做 Phase 1–2。（重做會讓共用註冊檔出現重複行，這是最貴的失敗模式。）

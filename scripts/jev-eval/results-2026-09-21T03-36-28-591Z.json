@@ -1,0 +1,4086 @@
+{
+  "model": "jev-1.13.0",
+  "results": {
+    "A 路由": [
+      {
+        "id": "A01",
+        "truth": {
+          "skill": "jira",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "jira",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.94,
+          "task_type": 0.67
+        },
+        "ms": 864.282125,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "jira",
+            "confidence": 1,
+            "probabilities": {
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "cup-build-test": 0,
+              "spec-module": 0,
+              "neat-freak": 0,
+              "token-analyze": 0,
+              "r15-r18-verify": 0,
+              "claude-mem:mem-search": 0,
+              "atlassian:generate-status-report": 0,
+              "r15-r18-migrate": 0,
+              "jira": 1,
+              "jira-test-report": 0,
+              "atlassian:triage-issue": 0,
+              "weekly-review": 0,
+              "ai-case-report": 0,
+              "none": 0,
+              "commit-review": 0,
+              "code-review": 0,
+              "simplify": 0,
+              "linus-requirements-analysis": 0,
+              "sync-my-claude-setting": 0,
+              "jira-release-sync": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "save-progress": 0,
+              "finalize-release": 0,
+              "atlassian:spec-to-backlog": 0,
+              "pr-reviewer": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.67,
+            "probabilities": {
+              "multi_step": 0.26,
+              "question": 0,
+              "ops": 0.74,
+              "small_change": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A02",
+        "truth": {
+          "skill": "pr-reviewer",
+          "correction": true,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "pr-reviewer",
+          "correction": true,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.8999999999999999,
+          "task_type": 1
+        },
+        "ms": 384.47425,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "pr-reviewer",
+            "confidence": 1,
+            "probabilities": {
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "translate-claude-code-releases": 0,
+              "ai-case-report": 0,
+              "claude-mem:mem-search": 0,
+              "neat-freak": 0,
+              "token-analyze": 0,
+              "none": 0,
+              "jira-release-sync": 0,
+              "jira": 0,
+              "atlassian:triage-issue": 0,
+              "finalize-release": 0,
+              "pr-reviewer": 1,
+              "r15-r18-migrate": 0,
+              "atlassian:search-company-knowledge": 0,
+              "spec-module": 0,
+              "atlassian:spec-to-backlog": 0,
+              "code-review": 0,
+              "save-progress": 0,
+              "simplify": 0,
+              "cup-build-test": 0,
+              "sync-my-claude-setting": 0,
+              "r15-r18-verify": 0,
+              "atlassian:generate-status-report": 0,
+              "commit-review": 0,
+              "linus-requirements-analysis": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.95
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "question": 0,
+              "small_change": 0,
+              "multi_step": 0,
+              "debug": 0,
+              "ops": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A03",
+        "truth": {
+          "skill": "commit-review",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "commit-review",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.43999999999999995,
+          "task_type": 1
+        },
+        "ms": 244.2985000000001,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "commit-review",
+            "confidence": 1,
+            "probabilities": {
+              "jira-release-sync": 0,
+              "simplify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "jira-test-report": 0,
+              "ai-case-report": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-verify": 0,
+              "spec-module": 0,
+              "token-analyze": 0,
+              "sync-my-claude-setting": 0,
+              "weekly-review": 0,
+              "code-review": 0,
+              "atlassian:triage-issue": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "save-progress": 0,
+              "claude-mem:mem-search": 0,
+              "jira": 0,
+              "neat-freak": 0,
+              "atlassian:spec-to-backlog": 0,
+              "cup-build-test": 0,
+              "atlassian:generate-status-report": 0,
+              "finalize-release": 0,
+              "none": 0,
+              "pr-reviewer": 0,
+              "r15-r18-migrate": 0,
+              "commit-review": 1
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.28
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "question": 0,
+              "ops": 1,
+              "small_change": 0,
+              "multi_step": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A04",
+        "truth": {
+          "skill": "translate-claude-code-releases",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "translate-claude-code-releases",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 1
+        },
+        "ms": 295.803709,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "translate-claude-code-releases",
+            "confidence": 1,
+            "probabilities": {
+              "jira-release-sync": 0,
+              "simplify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "commit-review": 0,
+              "ai-case-report": 0,
+              "weekly-review": 0,
+              "r15-r18-verify": 0,
+              "spec-module": 0,
+              "token-analyze": 0,
+              "jira-test-report": 0,
+              "atlassian:search-company-knowledge": 0,
+              "code-review": 0,
+              "atlassian:triage-issue": 0,
+              "pr-reviewer": 0,
+              "translate-claude-code-releases": 1,
+              "save-progress": 0,
+              "claude-mem:mem-search": 0,
+              "jira": 0,
+              "neat-freak": 0,
+              "atlassian:spec-to-backlog": 0,
+              "cup-build-test": 0,
+              "atlassian:generate-status-report": 0,
+              "finalize-release": 0,
+              "none": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-migrate": 0,
+              "sync-my-claude-setting": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 1,
+            "probabilities": {
+              "question": 1,
+              "ops": 0,
+              "small_change": 0,
+              "multi_step": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A05",
+        "truth": {
+          "skill": "jira-release-sync",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "jira-release-sync",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 495.0708339999999,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "jira-release-sync",
+            "confidence": 1,
+            "probabilities": {
+              "linus-requirements-analysis": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:search-company-knowledge": 0,
+              "pr-reviewer": 0,
+              "save-progress": 0,
+              "jira-test-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:generate-status-report": 0,
+              "none": 0,
+              "token-analyze": 0,
+              "spec-module": 0,
+              "jira": 0,
+              "r15-r18-verify": 0,
+              "ai-case-report": 0,
+              "commit-review": 0,
+              "r15-r18-migrate": 0,
+              "translate-claude-code-releases": 0,
+              "weekly-review": 0,
+              "code-review": 0,
+              "simplify": 0,
+              "neat-freak": 0,
+              "claude-mem:mem-search": 0,
+              "cup-build-test": 0,
+              "sync-my-claude-setting": 0,
+              "jira-release-sync": 1,
+              "finalize-release": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "small_change": 0,
+              "debug": 0,
+              "question": 0,
+              "ops": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A06",
+        "truth": {
+          "skill": "claude-mem:mem-search",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "claude-mem:mem-search",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.6799999999999999,
+          "task_type": 0.94
+        },
+        "ms": 326.882208,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "claude-mem:mem-search",
+            "confidence": 1,
+            "probabilities": {
+              "jira": 0,
+              "none": 0,
+              "save-progress": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-migrate": 0,
+              "r15-r18-verify": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0,
+              "sync-my-claude-setting": 0,
+              "jira-release-sync": 0,
+              "neat-freak": 0,
+              "commit-review": 0,
+              "simplify": 0,
+              "pr-reviewer": 0,
+              "atlassian:search-company-knowledge": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0,
+              "atlassian:triage-issue": 0,
+              "claude-mem:mem-search": 1,
+              "atlassian:spec-to-backlog": 0,
+              "code-review": 0,
+              "spec-module": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "weekly-review": 0,
+              "atlassian:generate-status-report": 0,
+              "jira-test-report": 0,
+              "translate-claude-code-releases": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.16
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 0.94,
+            "probabilities": {
+              "multi_step": 0,
+              "question": 0.95,
+              "debug": 0.05,
+              "ops": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A07",
+        "truth": {
+          "skill": "atlassian:search-company-knowledge",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "atlassian:search-company-knowledge",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.88,
+          "task_type": 0.99
+        },
+        "ms": 282.98629200000005,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:search-company-knowledge",
+            "confidence": 1,
+            "probabilities": {
+              "r15-r18-verify": 0,
+              "translate-claude-code-releases": 0,
+              "spec-module": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "save-progress": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "weekly-review": 0,
+              "token-analyze": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:generate-status-report": 0,
+              "finalize-release": 0,
+              "simplify": 0,
+              "neat-freak": 0,
+              "pr-reviewer": 0,
+              "jira-release-sync": 0,
+              "ai-case-report": 0,
+              "none": 0,
+              "jira": 0,
+              "sync-my-claude-setting": 0,
+              "atlassian:search-company-knowledge": 1,
+              "r15-r18-migrate": 0,
+              "linus-requirements-analysis": 0,
+              "code-review": 0,
+              "jira-test-report": 0,
+              "cup-build-test": 0,
+              "atlassian:triage-issue": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.06
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 0.99,
+            "probabilities": {
+              "debug": 0,
+              "multi_step": 0,
+              "small_change": 0,
+              "ops": 0.01,
+              "question": 0.99
+            }
+          }
+        }
+      },
+      {
+        "id": "A08",
+        "truth": {
+          "skill": "atlassian:capture-tasks-from-meeting-notes",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "atlassian:capture-tasks-from-meeting-notes",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 1
+        },
+        "ms": 438.0189999999998,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:capture-tasks-from-meeting-notes",
+            "confidence": 1,
+            "probabilities": {
+              "weekly-review": 0,
+              "pr-reviewer": 0,
+              "neat-freak": 0,
+              "atlassian:generate-status-report": 0,
+              "save-progress": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:spec-to-backlog": 0,
+              "jira-test-report": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "sync-my-claude-setting": 0,
+              "simplify": 0,
+              "jira": 0,
+              "r15-r18-verify": 0,
+              "cup-build-test": 0,
+              "linus-requirements-analysis": 0,
+              "ai-case-report": 0,
+              "commit-review": 0,
+              "token-analyze": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 1,
+              "code-review": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "jira-release-sync": 0,
+              "spec-module": 0,
+              "finalize-release": 0,
+              "none": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "question": 0,
+              "debug": 0,
+              "small_change": 0,
+              "ops": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A09",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "pred": {
+          "skill": "simplify",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.88,
+          "task_type": 1
+        },
+        "ms": 356.08979199999976,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "simplify",
+            "confidence": 1,
+            "probabilities": {
+              "token-analyze": 0,
+              "atlassian:search-company-knowledge": 0,
+              "code-review": 0,
+              "linus-requirements-analysis": 0,
+              "simplify": 1,
+              "atlassian:spec-to-backlog": 0,
+              "commit-review": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "weekly-review": 0,
+              "cup-build-test": 0,
+              "jira-test-report": 0,
+              "neat-freak": 0,
+              "finalize-release": 0,
+              "atlassian:triage-issue": 0,
+              "pr-reviewer": 0,
+              "spec-module": 0,
+              "jira": 0,
+              "r15-r18-verify": 0,
+              "none": 0,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "jira-release-sync": 0,
+              "atlassian:generate-status-report": 0,
+              "ai-case-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.06
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "small_change",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "small_change": 1,
+              "multi_step": 0,
+              "question": 0,
+              "ops": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A10",
+        "truth": {
+          "skill": "spec-module",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "spec-module",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 0.38
+        },
+        "ms": 295.3768339999997,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "spec-module",
+            "confidence": 1,
+            "probabilities": {
+              "weekly-review": 0,
+              "cup-build-test": 0,
+              "r15-r18-verify": 0,
+              "save-progress": 0,
+              "neat-freak": 0,
+              "linus-requirements-analysis": 0,
+              "code-review": 0,
+              "atlassian:search-company-knowledge": 0,
+              "claude-mem:mem-search": 0,
+              "jira-release-sync": 0,
+              "commit-review": 0,
+              "translate-claude-code-releases": 0,
+              "r15-r18-migrate": 0,
+              "pr-reviewer": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "spec-module": 1,
+              "atlassian:triage-issue": 0,
+              "jira": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "sync-my-claude-setting": 0,
+              "finalize-release": 0,
+              "none": 0,
+              "jira-test-report": 0,
+              "simplify": 0,
+              "atlassian:generate-status-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.38,
+            "probabilities": {
+              "debug": 0,
+              "multi_step": 0.44,
+              "question": 0.02,
+              "ops": 0.51,
+              "small_change": 0.03
+            }
+          }
+        }
+      },
+      {
+        "id": "A11",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.52,
+          "correction": 0.38,
+          "task_type": 1
+        },
+        "ms": 391.79191699999956,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.52,
+            "probabilities": {
+              "jira": 0,
+              "r15-r18-migrate": 0,
+              "pr-reviewer": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:triage-issue": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "ai-case-report": 0,
+              "finalize-release": 0,
+              "code-review": 0.04,
+              "r15-r18-verify": 0,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "none": 0.55,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "cup-build-test": 0.38,
+              "linus-requirements-analysis": 0,
+              "spec-module": 0.03,
+              "simplify": 0,
+              "jira-release-sync": 0,
+              "neat-freak": 0,
+              "token-analyze": 0,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "atlassian:search-company-knowledge": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.31
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "question": 0,
+              "ops": 0,
+              "small_change": 0,
+              "debug": 0,
+              "multi_step": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A12",
+        "truth": {
+          "skill": "simplify",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "simplify",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.99,
+          "correction": 0.92,
+          "task_type": 0.28
+        },
+        "ms": 314.87454199999956,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "simplify",
+            "confidence": 0.99,
+            "probabilities": {
+              "spec-module": 0,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "atlassian:generate-status-report": 0,
+              "r15-r18-migrate": 0,
+              "jira": 0,
+              "jira-test-report": 0,
+              "translate-claude-code-releases": 0,
+              "r15-r18-verify": 0,
+              "code-review": 0.01,
+              "commit-review": 0,
+              "neat-freak": 0,
+              "atlassian:spec-to-backlog": 0,
+              "simplify": 0.99,
+              "claude-mem:mem-search": 0,
+              "ai-case-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "pr-reviewer": 0,
+              "none": 0,
+              "atlassian:triage-issue": 0,
+              "token-analyze": 0,
+              "atlassian:search-company-knowledge": 0,
+              "linus-requirements-analysis": 0,
+              "sync-my-claude-setting": 0,
+              "weekly-review": 0,
+              "save-progress": 0,
+              "finalize-release": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.28,
+            "probabilities": {
+              "small_change": 0.31,
+              "multi_step": 0.23,
+              "question": 0.04,
+              "ops": 0.42,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A13",
+        "truth": {
+          "skill": "atlassian:triage-issue",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "atlassian:triage-issue",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.88,
+          "task_type": 0.47
+        },
+        "ms": 339.61962500000027,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:triage-issue",
+            "confidence": 1,
+            "probabilities": {
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "sync-my-claude-setting": 0,
+              "claude-mem:mem-search": 0,
+              "save-progress": 0,
+              "jira-release-sync": 0,
+              "r15-r18-migrate": 0,
+              "none": 0,
+              "token-analyze": 0,
+              "finalize-release": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "jira": 0,
+              "linus-requirements-analysis": 0,
+              "atlassian:triage-issue": 1,
+              "cup-build-test": 0,
+              "commit-review": 0,
+              "r15-r18-verify": 0,
+              "pr-reviewer": 0,
+              "jira-test-report": 0,
+              "spec-module": 0,
+              "code-review": 0,
+              "simplify": 0,
+              "ai-case-report": 0,
+              "neat-freak": 0,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.06
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.47,
+            "probabilities": {
+              "small_change": 0,
+              "ops": 0.58,
+              "multi_step": 0,
+              "debug": 0.22,
+              "question": 0.2
+            }
+          }
+        }
+      },
+      {
+        "id": "A14",
+        "truth": {
+          "skill": "atlassian:generate-status-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "atlassian:generate-status-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.99,
+          "correction": 0.94,
+          "task_type": 0.99
+        },
+        "ms": 456.4534160000003,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:generate-status-report",
+            "confidence": 0.99,
+            "probabilities": {
+              "token-analyze": 0,
+              "atlassian:search-company-knowledge": 0,
+              "r15-r18-verify": 0,
+              "sync-my-claude-setting": 0,
+              "ai-case-report": 0,
+              "jira": 0,
+              "claude-mem:mem-search": 0,
+              "jira-release-sync": 0,
+              "none": 0,
+              "spec-module": 0,
+              "neat-freak": 0,
+              "finalize-release": 0,
+              "code-review": 0,
+              "linus-requirements-analysis": 0,
+              "simplify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "pr-reviewer": 0,
+              "weekly-review": 0.01,
+              "jira-test-report": 0,
+              "r15-r18-migrate": 0,
+              "translate-claude-code-releases": 0,
+              "save-progress": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:generate-status-report": 0.99,
+              "atlassian:spec-to-backlog": 0,
+              "cup-build-test": 0,
+              "commit-review": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.99,
+            "probabilities": {
+              "ops": 1,
+              "question": 0,
+              "multi_step": 0,
+              "debug": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A15",
+        "truth": {
+          "skill": "code-review",
+          "correction": true,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "code-review",
+          "correction": true,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.98,
+          "correction": 0.76,
+          "task_type": 0.44
+        },
+        "ms": 466.4547499999999,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "code-review",
+            "confidence": 0.98,
+            "probabilities": {
+              "jira": 0,
+              "neat-freak": 0,
+              "r15-r18-migrate": 0,
+              "spec-module": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:search-company-knowledge": 0,
+              "jira-release-sync": 0,
+              "token-analyze": 0,
+              "finalize-release": 0,
+              "claude-mem:mem-search": 0,
+              "pr-reviewer": 0,
+              "simplify": 0,
+              "save-progress": 0,
+              "atlassian:triage-issue": 0,
+              "none": 0.01,
+              "weekly-review": 0,
+              "cup-build-test": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-verify": 0,
+              "sync-my-claude-setting": 0,
+              "code-review": 0.98,
+              "commit-review": 0.01,
+              "atlassian:spec-to-backlog": 0,
+              "translate-claude-code-releases": 0,
+              "ai-case-report": 0,
+              "jira-test-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.88
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 0.44,
+            "probabilities": {
+              "question": 0,
+              "small_change": 0,
+              "multi_step": 0.42,
+              "ops": 0.02,
+              "debug": 0.56
+            }
+          }
+        }
+      },
+      {
+        "id": "A16",
+        "truth": {
+          "skill": "atlassian:spec-to-backlog",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "atlassian:spec-to-backlog",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 0.74
+        },
+        "ms": 520.3204170000008,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:spec-to-backlog",
+            "confidence": 1,
+            "probabilities": {
+              "atlassian:triage-issue": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-verify": 0,
+              "code-review": 0,
+              "jira-release-sync": 0,
+              "jira": 0,
+              "atlassian:spec-to-backlog": 1,
+              "jira-test-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "simplify": 0,
+              "neat-freak": 0,
+              "spec-module": 0,
+              "claude-mem:mem-search": 0,
+              "atlassian:generate-status-report": 0,
+              "r15-r18-migrate": 0,
+              "pr-reviewer": 0,
+              "finalize-release": 0,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "ai-case-report": 0,
+              "cup-build-test": 0,
+              "translate-claude-code-releases": 0,
+              "weekly-review": 0,
+              "none": 0,
+              "token-analyze": 0,
+              "commit-review": 0,
+              "atlassian:search-company-knowledge": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.74,
+            "probabilities": {
+              "ops": 0.8,
+              "multi_step": 0.2,
+              "question": 0,
+              "debug": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A17",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "spec-module",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.63,
+          "correction": 0.92,
+          "task_type": 0.73
+        },
+        "ms": 266.81304199999977,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "spec-module",
+            "confidence": 0.63,
+            "probabilities": {
+              "weekly-review": 0,
+              "pr-reviewer": 0,
+              "neat-freak": 0.12,
+              "atlassian:generate-status-report": 0,
+              "save-progress": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:spec-to-backlog": 0,
+              "jira-test-report": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "sync-my-claude-setting": 0,
+              "simplify": 0.01,
+              "jira": 0,
+              "r15-r18-verify": 0,
+              "cup-build-test": 0,
+              "linus-requirements-analysis": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "commit-review": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0,
+              "translate-claude-code-releases": 0,
+              "code-review": 0.01,
+              "atlassian:search-company-knowledge": 0,
+              "jira-release-sync": 0,
+              "none": 0.21000000000000002,
+              "finalize-release": 0,
+              "spec-module": 0.65
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.73,
+            "probabilities": {
+              "multi_step": 0.06,
+              "question": 0.16,
+              "debug": 0,
+              "small_change": 0,
+              "ops": 0.78
+            }
+          }
+        }
+      },
+      {
+        "id": "A18",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 0.98,
+          "correction": 0.96,
+          "task_type": 1
+        },
+        "ms": 313.1952080000001,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.98,
+            "probabilities": {
+              "neat-freak": 0,
+              "simplify": 0,
+              "sync-my-claude-setting": 0,
+              "r15-r18-verify": 0,
+              "ai-case-report": 0,
+              "translate-claude-code-releases": 0,
+              "linus-requirements-analysis": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0,
+              "none": 0.99,
+              "jira": 0,
+              "save-progress": 0,
+              "commit-review": 0,
+              "atlassian:triage-issue": 0,
+              "weekly-review": 0,
+              "atlassian:search-company-knowledge": 0.01,
+              "pr-reviewer": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "spec-module": 0,
+              "code-review": 0,
+              "jira-test-report": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "token-analyze": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.02
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "multi_step": 0,
+              "question": 1,
+              "debug": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A19",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "atlassian:triage-issue",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.57,
+          "correction": 0.26,
+          "task_type": 1
+        },
+        "ms": 469.0867079999998,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:triage-issue",
+            "confidence": 0.57,
+            "probabilities": {
+              "claude-mem:mem-search": 0.01,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "none": 0.27,
+              "atlassian:search-company-knowledge": 0.03,
+              "pr-reviewer": 0,
+              "save-progress": 0,
+              "jira-test-report": 0,
+              "atlassian:triage-issue": 0.58,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:generate-status-report": 0,
+              "token-analyze": 0,
+              "spec-module": 0,
+              "r15-r18-verify": 0,
+              "jira": 0.04,
+              "ai-case-report": 0,
+              "commit-review": 0,
+              "r15-r18-migrate": 0,
+              "simplify": 0,
+              "weekly-review": 0,
+              "code-review": 0.07,
+              "translate-claude-code-releases": 0,
+              "neat-freak": 0,
+              "linus-requirements-analysis": 0,
+              "jira-release-sync": 0,
+              "sync-my-claude-setting": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.37
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 1,
+            "probabilities": {
+              "small_change": 0,
+              "debug": 1,
+              "multi_step": 0,
+              "question": 0,
+              "ops": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A20",
+        "truth": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "small_change"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "small_change"
+        },
+        "conf": {
+          "skill": 0.66,
+          "correction": 0.94,
+          "task_type": 0.95
+        },
+        "ms": 245.47970799999985,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.66,
+            "probabilities": {
+              "jira-release-sync": 0,
+              "save-progress": 0,
+              "atlassian:search-company-knowledge": 0,
+              "translate-claude-code-releases": 0,
+              "cup-build-test": 0,
+              "weekly-review": 0,
+              "claude-mem:mem-search": 0,
+              "commit-review": 0,
+              "neat-freak": 0,
+              "sync-my-claude-setting": 0,
+              "code-review": 0.26,
+              "r15-r18-verify": 0,
+              "atlassian:generate-status-report": 0,
+              "spec-module": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "ai-case-report": 0,
+              "linus-requirements-analysis": 0.02,
+              "none": 0.67,
+              "jira-test-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:triage-issue": 0,
+              "simplify": 0.04,
+              "jira": 0,
+              "pr-reviewer": 0,
+              "r15-r18-migrate": 0,
+              "token-analyze": 0,
+              "finalize-release": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.97
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "small_change",
+            "confidence": 0.95,
+            "probabilities": {
+              "small_change": 0.96,
+              "ops": 0,
+              "debug": 0,
+              "question": 0,
+              "multi_step": 0.04
+            }
+          }
+        }
+      },
+      {
+        "id": "A21",
+        "truth": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "small_change"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "small_change"
+        },
+        "conf": {
+          "skill": 0.88,
+          "correction": 0.9199999999999999,
+          "task_type": 1
+        },
+        "ms": 308.66262500000084,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.88,
+            "probabilities": {
+              "linus-requirements-analysis": 0,
+              "atlassian:triage-issue": 0,
+              "ai-case-report": 0,
+              "translate-claude-code-releases": 0.04,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "weekly-review": 0,
+              "r15-r18-verify": 0,
+              "jira-release-sync": 0,
+              "jira": 0,
+              "jira-test-report": 0,
+              "r15-r18-migrate": 0,
+              "code-review": 0.01,
+              "claude-mem:mem-search": 0,
+              "atlassian:search-company-knowledge": 0,
+              "neat-freak": 0,
+              "atlassian:generate-status-report": 0,
+              "save-progress": 0,
+              "atlassian:spec-to-backlog": 0,
+              "commit-review": 0.060000000000000005,
+              "sync-my-claude-setting": 0,
+              "simplify": 0,
+              "pr-reviewer": 0,
+              "spec-module": 0,
+              "finalize-release": 0,
+              "none": 0.89,
+              "cup-build-test": 0,
+              "token-analyze": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "small_change",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "ops": 0,
+              "question": 0,
+              "small_change": 1,
+              "multi_step": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A22",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "code-review",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.78,
+          "correction": 0.84,
+          "task_type": 0.99
+        },
+        "ms": 505.2531249999993,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "code-review",
+            "confidence": 0.78,
+            "probabilities": {
+              "jira": 0.05,
+              "none": 0.06,
+              "r15-r18-migrate": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "atlassian:triage-issue": 0.09,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "ai-case-report": 0,
+              "finalize-release": 0,
+              "code-review": 0.79,
+              "r15-r18-verify": 0,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "cup-build-test": 0,
+              "linus-requirements-analysis": 0.01,
+              "spec-module": 0,
+              "simplify": 0,
+              "jira-release-sync": 0,
+              "neat-freak": 0,
+              "token-analyze": 0,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "pr-reviewer": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.08
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 0.99,
+            "probabilities": {
+              "multi_step": 0,
+              "ops": 0,
+              "small_change": 0,
+              "debug": 1,
+              "question": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A23",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.68,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 240.1677499999987,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.68,
+            "probabilities": {
+              "cup-build-test": 0,
+              "jira": 0.01,
+              "atlassian:triage-issue": 0,
+              "commit-review": 0,
+              "jira-release-sync": 0,
+              "claude-mem:mem-search": 0,
+              "atlassian:spec-to-backlog": 0,
+              "pr-reviewer": 0,
+              "code-review": 0,
+              "neat-freak": 0,
+              "sync-my-claude-setting": 0,
+              "r15-r18-verify": 0,
+              "ai-case-report": 0,
+              "token-analyze": 0,
+              "linus-requirements-analysis": 0.16,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:search-company-knowledge": 0,
+              "simplify": 0,
+              "finalize-release": 0,
+              "spec-module": 0.11,
+              "jira-test-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0.01,
+              "translate-claude-code-releases": 0,
+              "save-progress": 0,
+              "none": 0.71
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "question": 0,
+              "small_change": 0,
+              "debug": 0,
+              "multi_step": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A24",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "conf": {
+          "skill": 0.6,
+          "correction": 0.76,
+          "task_type": 1
+        },
+        "ms": 271.6185829999995,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.6,
+            "probabilities": {
+              "code-review": 0.04,
+              "atlassian:spec-to-backlog": 0,
+              "linus-requirements-analysis": 0,
+              "r15-r18-verify": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "finalize-release": 0,
+              "spec-module": 0,
+              "jira-release-sync": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "jira": 0,
+              "none": 0.63,
+              "simplify": 0.03,
+              "weekly-review": 0,
+              "atlassian:triage-issue": 0,
+              "ai-case-report": 0,
+              "pr-reviewer": 0,
+              "r15-r18-migrate": 0,
+              "jira-test-report": 0,
+              "neat-freak": 0.3,
+              "atlassian:search-company-knowledge": 0,
+              "cup-build-test": 0,
+              "translate-claude-code-releases": 0,
+              "token-analyze": 0,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "atlassian:generate-status-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.12
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "small_change",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "question": 0,
+              "small_change": 1,
+              "multi_step": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A25",
+        "truth": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.56,
+          "correction": 0.72,
+          "task_type": 1
+        },
+        "ms": 523.6114170000001,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.56,
+            "probabilities": {
+              "spec-module": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "r15-r18-verify": 0,
+              "neat-freak": 0,
+              "commit-review": 0,
+              "code-review": 0.1,
+              "jira-test-report": 0,
+              "atlassian:triage-issue": 0.24000000000000002,
+              "token-analyze": 0,
+              "r15-r18-migrate": 0,
+              "weekly-review": 0,
+              "sync-my-claude-setting": 0,
+              "simplify": 0,
+              "ai-case-report": 0,
+              "jira": 0.02,
+              "none": 0.58,
+              "atlassian:search-company-knowledge": 0.01,
+              "save-progress": 0,
+              "translate-claude-code-releases": 0,
+              "linus-requirements-analysis": 0.01,
+              "pr-reviewer": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "claude-mem:mem-search": 0.04,
+              "jira-release-sync": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.86
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "question": 0,
+              "small_change": 0,
+              "ops": 0,
+              "debug": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A26",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.4,
+          "correction": 0.8,
+          "task_type": 1
+        },
+        "ms": 301.3657920000005,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.4,
+            "probabilities": {
+              "atlassian:search-company-knowledge": 0,
+              "neat-freak": 0,
+              "weekly-review": 0,
+              "code-review": 0.01,
+              "spec-module": 0.13,
+              "r15-r18-verify": 0,
+              "atlassian:triage-issue": 0,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0,
+              "atlassian:spec-to-backlog": 0,
+              "ai-case-report": 0,
+              "none": 0.43,
+              "save-progress": 0,
+              "atlassian:generate-status-report": 0,
+              "jira-test-report": 0,
+              "pr-reviewer": 0,
+              "linus-requirements-analysis": 0.4,
+              "claude-mem:mem-search": 0,
+              "commit-review": 0,
+              "token-analyze": 0,
+              "simplify": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0.02,
+              "sync-my-claude-setting": 0,
+              "jira": 0.01,
+              "translate-claude-code-releases": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "ops": 0,
+              "small_change": 0,
+              "question": 0,
+              "multi_step": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A27",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.58,
+          "correction": 0.8,
+          "task_type": 1
+        },
+        "ms": 259.1366249999992,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.58,
+            "probabilities": {
+              "atlassian:generate-status-report": 0,
+              "linus-requirements-analysis": 0.2,
+              "pr-reviewer": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "jira-test-report": 0,
+              "finalize-release": 0,
+              "code-review": 0.02,
+              "commit-review": 0,
+              "r15-r18-verify": 0,
+              "claude-mem:mem-search": 0,
+              "save-progress": 0,
+              "none": 0.61,
+              "atlassian:search-company-knowledge": 0,
+              "neat-freak": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:triage-issue": 0,
+              "sync-my-claude-setting": 0,
+              "token-analyze": 0,
+              "translate-claude-code-releases": 0,
+              "spec-module": 0.07,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "simplify": 0.1,
+              "jira": 0,
+              "ai-case-report": 0,
+              "r15-r18-migrate": 0,
+              "weekly-review": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "question": 0,
+              "multi_step": 1,
+              "ops": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A28",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.37,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 255.41462499999943,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.37,
+            "probabilities": {
+              "linus-requirements-analysis": 0.39,
+              "save-progress": 0,
+              "sync-my-claude-setting": 0,
+              "atlassian:search-company-knowledge": 0,
+              "none": 0.4,
+              "pr-reviewer": 0,
+              "ai-case-report": 0,
+              "atlassian:triage-issue": 0,
+              "translate-claude-code-releases": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0,
+              "neat-freak": 0,
+              "r15-r18-verify": 0,
+              "simplify": 0,
+              "spec-module": 0.18,
+              "token-analyze": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "jira-release-sync": 0,
+              "code-review": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:spec-to-backlog": 0.01,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "jira": 0.01,
+              "atlassian:capture-tasks-from-meeting-notes": 0.01
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "small_change": 0,
+              "debug": 0,
+              "question": 0,
+              "multi_step": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A29",
+        "truth": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": true,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 0.76,
+          "correction": 0.5,
+          "task_type": 1
+        },
+        "ms": 271.1712920000009,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.76,
+            "probabilities": {
+              "finalize-release": 0,
+              "sync-my-claude-setting": 0,
+              "weekly-review": 0,
+              "none": 0.78,
+              "atlassian:search-company-knowledge": 0,
+              "neat-freak": 0,
+              "pr-reviewer": 0,
+              "atlassian:triage-issue": 0,
+              "token-analyze": 0,
+              "cup-build-test": 0.03,
+              "translate-claude-code-releases": 0,
+              "linus-requirements-analysis": 0.06,
+              "save-progress": 0,
+              "simplify": 0.01,
+              "r15-r18-verify": 0,
+              "ai-case-report": 0,
+              "claude-mem:mem-search": 0,
+              "commit-review": 0,
+              "jira-release-sync": 0,
+              "r15-r18-migrate": 0,
+              "code-review": 0.07,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0.03,
+              "spec-module": 0.01,
+              "jira": 0.01,
+              "jira-test-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.75
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "small_change": 0,
+              "debug": 0,
+              "question": 0,
+              "multi_step": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A30",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "atlassian:triage-issue",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.56,
+          "correction": 0.86,
+          "task_type": 1
+        },
+        "ms": 531.8505409999998,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:triage-issue",
+            "confidence": 0.56,
+            "probabilities": {
+              "code-review": 0.09,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "pr-reviewer": 0,
+              "atlassian:search-company-knowledge": 0,
+              "ai-case-report": 0,
+              "atlassian:triage-issue": 0.58,
+              "claude-mem:mem-search": 0,
+              "translate-claude-code-releases": 0,
+              "none": 0.32,
+              "save-progress": 0,
+              "neat-freak": 0,
+              "weekly-review": 0,
+              "simplify": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "sync-my-claude-setting": 0,
+              "r15-r18-verify": 0,
+              "finalize-release": 0,
+              "r15-r18-migrate": 0,
+              "jira": 0,
+              "jira-test-report": 0,
+              "token-analyze": 0,
+              "spec-module": 0,
+              "commit-review": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "linus-requirements-analysis": 0.01
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.07
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "debug": 1,
+              "small_change": 0,
+              "question": 0,
+              "ops": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A31",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "atlassian:triage-issue",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.53,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 477.12583300000006,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:triage-issue",
+            "confidence": 0.53,
+            "probabilities": {
+              "cup-build-test": 0,
+              "commit-review": 0,
+              "r15-r18-migrate": 0,
+              "sync-my-claude-setting": 0,
+              "jira-test-report": 0,
+              "simplify": 0,
+              "code-review": 0.02,
+              "jira-release-sync": 0,
+              "atlassian:triage-issue": 0.55,
+              "linus-requirements-analysis": 0,
+              "spec-module": 0,
+              "save-progress": 0,
+              "none": 0.42,
+              "atlassian:spec-to-backlog": 0,
+              "ai-case-report": 0,
+              "r15-r18-verify": 0,
+              "translate-claude-code-releases": 0,
+              "jira": 0,
+              "atlassian:generate-status-report": 0,
+              "claude-mem:mem-search": 0,
+              "atlassian:search-company-knowledge": 0.01,
+              "weekly-review": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "finalize-release": 0,
+              "neat-freak": 0,
+              "pr-reviewer": 0,
+              "token-analyze": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "small_change": 0,
+              "debug": 1,
+              "question": 0,
+              "multi_step": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A32",
+        "truth": {
+          "skill": "weekly-review",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "weekly-review",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.99,
+          "correction": 0.84,
+          "task_type": 0.94
+        },
+        "ms": 362.73695899999984,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "weekly-review",
+            "confidence": 0.99,
+            "probabilities": {
+              "atlassian:triage-issue": 0,
+              "atlassian:search-company-knowledge": 0,
+              "r15-r18-verify": 0,
+              "sync-my-claude-setting": 0,
+              "ai-case-report": 0,
+              "jira": 0,
+              "none": 0,
+              "jira-release-sync": 0,
+              "claude-mem:mem-search": 0,
+              "spec-module": 0,
+              "neat-freak": 0.01,
+              "finalize-release": 0,
+              "code-review": 0,
+              "linus-requirements-analysis": 0,
+              "simplify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "pr-reviewer": 0,
+              "weekly-review": 0.99,
+              "jira-test-report": 0,
+              "token-analyze": 0,
+              "translate-claude-code-releases": 0,
+              "save-progress": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "cup-build-test": 0,
+              "commit-review": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.08
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.94,
+            "probabilities": {
+              "ops": 0.96,
+              "question": 0.02,
+              "multi_step": 0.02,
+              "debug": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A33",
+        "truth": {
+          "skill": "jira-test-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "jira-test-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 1
+        },
+        "ms": 422.73329100000046,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "jira-test-report",
+            "confidence": 1,
+            "probabilities": {
+              "token-analyze": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "pr-reviewer": 0,
+              "jira-release-sync": 0,
+              "finalize-release": 0,
+              "simplify": 0,
+              "none": 0,
+              "code-review": 0,
+              "save-progress": 0,
+              "commit-review": 0,
+              "weekly-review": 0,
+              "cup-build-test": 0,
+              "atlassian:spec-to-backlog": 0,
+              "neat-freak": 0,
+              "ai-case-report": 0,
+              "sync-my-claude-setting": 0,
+              "jira": 0,
+              "jira-test-report": 1,
+              "atlassian:search-company-knowledge": 0,
+              "r15-r18-verify": 0,
+              "spec-module": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "atlassian:triage-issue": 0,
+              "linus-requirements-analysis": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:generate-status-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "multi_step": 0,
+              "ops": 1,
+              "small_change": 0,
+              "question": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A34",
+        "truth": {
+          "skill": "r15-r18-migrate",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "r15-r18-migrate",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.9,
+          "task_type": 0.89
+        },
+        "ms": 268.0209160000013,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "r15-r18-migrate",
+            "confidence": 1,
+            "probabilities": {
+              "none": 0,
+              "atlassian:generate-status-report": 0,
+              "spec-module": 0,
+              "simplify": 0,
+              "jira-release-sync": 0,
+              "finalize-release": 0,
+              "ai-case-report": 0,
+              "save-progress": 0,
+              "commit-review": 0,
+              "atlassian:spec-to-backlog": 0,
+              "token-analyze": 0,
+              "r15-r18-migrate": 1,
+              "pr-reviewer": 0,
+              "linus-requirements-analysis": 0,
+              "claude-mem:mem-search": 0,
+              "jira": 0,
+              "sync-my-claude-setting": 0,
+              "weekly-review": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "translate-claude-code-releases": 0,
+              "jira-test-report": 0,
+              "atlassian:triage-issue": 0,
+              "cup-build-test": 0,
+              "r15-r18-verify": 0,
+              "atlassian:search-company-knowledge": 0,
+              "neat-freak": 0,
+              "code-review": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 0.89,
+            "probabilities": {
+              "multi_step": 0.91,
+              "question": 0,
+              "debug": 0,
+              "ops": 0,
+              "small_change": 0.09
+            }
+          }
+        }
+      },
+      {
+        "id": "A35",
+        "truth": {
+          "skill": "r15-r18-verify",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "r15-r18-verify",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.78,
+          "task_type": 0.2
+        },
+        "ms": 256.59991699999955,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "r15-r18-verify",
+            "confidence": 1,
+            "probabilities": {
+              "claude-mem:mem-search": 0,
+              "jira-release-sync": 0,
+              "code-review": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:search-company-knowledge": 0,
+              "finalize-release": 0,
+              "r15-r18-verify": 1,
+              "atlassian:triage-issue": 0,
+              "cup-build-test": 0,
+              "neat-freak": 0,
+              "jira": 0,
+              "none": 0,
+              "jira-test-report": 0,
+              "linus-requirements-analysis": 0,
+              "pr-reviewer": 0,
+              "atlassian:generate-status-report": 0,
+              "save-progress": 0,
+              "translate-claude-code-releases": 0,
+              "sync-my-claude-setting": 0,
+              "token-analyze": 0,
+              "simplify": 0,
+              "atlassian:spec-to-backlog": 0,
+              "commit-review": 0,
+              "spec-module": 0,
+              "weekly-review": 0,
+              "ai-case-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.11
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.2,
+            "probabilities": {
+              "multi_step": 0.29,
+              "debug": 0.17,
+              "small_change": 0.07,
+              "question": 0.11,
+              "ops": 0.36
+            }
+          }
+        }
+      },
+      {
+        "id": "A36",
+        "truth": {
+          "skill": "cup-build-test",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "pred": {
+          "skill": "cup-build-test",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 293.7573339999999,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "cup-build-test",
+            "confidence": 1,
+            "probabilities": {
+              "simplify": 0,
+              "jira-test-report": 0,
+              "r15-r18-verify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "linus-requirements-analysis": 0,
+              "neat-freak": 0,
+              "code-review": 0,
+              "claude-mem:mem-search": 0,
+              "commit-review": 0,
+              "r15-r18-migrate": 0,
+              "jira-release-sync": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "pr-reviewer": 0,
+              "save-progress": 0,
+              "token-analyze": 0,
+              "atlassian:triage-issue": 0,
+              "jira": 0,
+              "sync-my-claude-setting": 0,
+              "ai-case-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "spec-module": 0,
+              "finalize-release": 0,
+              "weekly-review": 0,
+              "atlassian:generate-status-report": 0,
+              "cup-build-test": 1,
+              "none": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 1,
+            "probabilities": {
+              "debug": 0,
+              "multi_step": 1,
+              "question": 0,
+              "ops": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A37",
+        "truth": {
+          "skill": "linus-requirements-analysis",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "linus-requirements-analysis",
+          "correction": false,
+          "task_type": "multi_step"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.92,
+          "task_type": 0.46
+        },
+        "ms": 494.97949999999946,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "linus-requirements-analysis",
+            "confidence": 1,
+            "probabilities": {
+              "claude-mem:mem-search": 0,
+              "atlassian:spec-to-backlog": 0,
+              "sync-my-claude-setting": 0,
+              "pr-reviewer": 0,
+              "linus-requirements-analysis": 1,
+              "simplify": 0,
+              "atlassian:generate-status-report": 0,
+              "code-review": 0,
+              "r15-r18-migrate": 0,
+              "jira-release-sync": 0,
+              "r15-r18-verify": 0,
+              "weekly-review": 0,
+              "atlassian:search-company-knowledge": 0,
+              "none": 0,
+              "cup-build-test": 0,
+              "translate-claude-code-releases": 0,
+              "token-analyze": 0,
+              "spec-module": 0,
+              "atlassian:triage-issue": 0,
+              "neat-freak": 0,
+              "ai-case-report": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "finalize-release": 0,
+              "jira": 0,
+              "save-progress": 0,
+              "commit-review": 0,
+              "jira-test-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "multi_step",
+            "confidence": 0.46,
+            "probabilities": {
+              "question": 0.42,
+              "debug": 0,
+              "small_change": 0.01,
+              "multi_step": 0.57,
+              "ops": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A38",
+        "truth": {
+          "skill": "sync-my-claude-setting",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "sync-my-claude-setting",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.99,
+          "correction": 0.86,
+          "task_type": 0.99
+        },
+        "ms": 301.92833299999984,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "sync-my-claude-setting",
+            "confidence": 0.99,
+            "probabilities": {
+              "atlassian:spec-to-backlog": 0,
+              "none": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:search-company-knowledge": 0,
+              "jira-test-report": 0,
+              "r15-r18-verify": 0,
+              "neat-freak": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "simplify": 0,
+              "jira-release-sync": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0,
+              "code-review": 0,
+              "finalize-release": 0,
+              "jira": 0,
+              "save-progress": 0,
+              "atlassian:triage-issue": 0,
+              "r15-r18-migrate": 0,
+              "cup-build-test": 0,
+              "weekly-review": 0,
+              "translate-claude-code-releases": 0,
+              "linus-requirements-analysis": 0,
+              "pr-reviewer": 0,
+              "spec-module": 0,
+              "sync-my-claude-setting": 1,
+              "atlassian:capture-tasks-from-meeting-notes": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.07
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.99,
+            "probabilities": {
+              "ops": 1,
+              "debug": 0,
+              "question": 0,
+              "small_change": 0,
+              "multi_step": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A39",
+        "truth": {
+          "skill": "token-analyze",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "token-analyze",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.9,
+          "task_type": 0.94
+        },
+        "ms": 240.89508399999977,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "token-analyze",
+            "confidence": 1,
+            "probabilities": {
+              "token-analyze": 1,
+              "ai-case-report": 0,
+              "atlassian:search-company-knowledge": 0,
+              "cup-build-test": 0,
+              "weekly-review": 0,
+              "sync-my-claude-setting": 0,
+              "atlassian:spec-to-backlog": 0,
+              "commit-review": 0,
+              "spec-module": 0,
+              "code-review": 0,
+              "simplify": 0,
+              "pr-reviewer": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:generate-status-report": 0,
+              "claude-mem:mem-search": 0,
+              "jira": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "neat-freak": 0,
+              "none": 0,
+              "finalize-release": 0,
+              "linus-requirements-analysis": 0,
+              "jira-release-sync": 0,
+              "save-progress": 0,
+              "r15-r18-migrate": 0,
+              "jira-test-report": 0,
+              "translate-claude-code-releases": 0,
+              "r15-r18-verify": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 0.94,
+            "probabilities": {
+              "debug": 0,
+              "ops": 0.05,
+              "question": 0.95,
+              "multi_step": 0,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A40",
+        "truth": {
+          "skill": "save-progress",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "save-progress",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.9,
+          "task_type": 0.97
+        },
+        "ms": 503.05754199999865,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "save-progress",
+            "confidence": 1,
+            "probabilities": {
+              "jira": 0,
+              "none": 0,
+              "pr-reviewer": 0,
+              "translate-claude-code-releases": 0,
+              "atlassian:search-company-knowledge": 0,
+              "atlassian:triage-issue": 0,
+              "commit-review": 0,
+              "claude-mem:mem-search": 0,
+              "ai-case-report": 0,
+              "finalize-release": 0,
+              "code-review": 0,
+              "r15-r18-verify": 0,
+              "save-progress": 1,
+              "sync-my-claude-setting": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "r15-r18-migrate": 0,
+              "cup-build-test": 0,
+              "linus-requirements-analysis": 0,
+              "spec-module": 0,
+              "simplify": 0,
+              "jira-release-sync": 0,
+              "neat-freak": 0,
+              "token-analyze": 0,
+              "atlassian:generate-status-report": 0,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "atlassian:spec-to-backlog": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.97,
+            "probabilities": {
+              "multi_step": 0,
+              "ops": 0.98,
+              "small_change": 0,
+              "debug": 0,
+              "question": 0.02
+            }
+          }
+        }
+      },
+      {
+        "id": "A41",
+        "truth": {
+          "skill": "neat-freak",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "neat-freak",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.74,
+          "task_type": 0.95
+        },
+        "ms": 280.13116699999955,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "neat-freak",
+            "confidence": 1,
+            "probabilities": {
+              "claude-mem:mem-search": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:triage-issue": 0,
+              "ai-case-report": 0,
+              "token-analyze": 0,
+              "save-progress": 0,
+              "spec-module": 0,
+              "commit-review": 0,
+              "atlassian:search-company-knowledge": 0,
+              "translate-claude-code-releases": 0,
+              "pr-reviewer": 0,
+              "jira-test-report": 0,
+              "jira-release-sync": 0,
+              "neat-freak": 1,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "simplify": 0,
+              "finalize-release": 0,
+              "cup-build-test": 0,
+              "none": 0,
+              "linus-requirements-analysis": 0,
+              "jira": 0,
+              "sync-my-claude-setting": 0,
+              "weekly-review": 0,
+              "r15-r18-verify": 0,
+              "code-review": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.13
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.95,
+            "probabilities": {
+              "ops": 0.97,
+              "multi_step": 0.03,
+              "question": 0,
+              "small_change": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A42",
+        "truth": {
+          "skill": "finalize-release",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "finalize-release",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 0.92,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 281.07850000000144,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "finalize-release",
+            "confidence": 0.92,
+            "probabilities": {
+              "simplify": 0,
+              "atlassian:generate-status-report": 0,
+              "r15-r18-verify": 0,
+              "save-progress": 0,
+              "linus-requirements-analysis": 0,
+              "neat-freak": 0,
+              "code-review": 0,
+              "atlassian:search-company-knowledge": 0,
+              "commit-review": 0,
+              "jira-release-sync": 0.07,
+              "r15-r18-migrate": 0,
+              "translate-claude-code-releases": 0,
+              "claude-mem:mem-search": 0,
+              "pr-reviewer": 0,
+              "sync-my-claude-setting": 0,
+              "spec-module": 0,
+              "atlassian:triage-issue": 0,
+              "jira": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "finalize-release": 0.93,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "cup-build-test": 0,
+              "none": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "debug": 0,
+              "question": 0,
+              "ops": 1,
+              "small_change": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A43",
+        "truth": {
+          "skill": "ai-case-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "pred": {
+          "skill": "ai-case-report",
+          "correction": false,
+          "task_type": "ops"
+        },
+        "conf": {
+          "skill": 1,
+          "correction": 0.94,
+          "task_type": 0.54
+        },
+        "ms": 480.40633399999933,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "ai-case-report",
+            "confidence": 1,
+            "probabilities": {
+              "spec-module": 0,
+              "weekly-review": 0,
+              "jira": 0,
+              "atlassian:search-company-knowledge": 0,
+              "r15-r18-migrate": 0,
+              "claude-mem:mem-search": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "code-review": 0,
+              "pr-reviewer": 0,
+              "sync-my-claude-setting": 0,
+              "jira-test-report": 0,
+              "jira-release-sync": 0,
+              "ai-case-report": 1,
+              "simplify": 0,
+              "commit-review": 0,
+              "atlassian:triage-issue": 0,
+              "atlassian:generate-status-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "token-analyze": 0,
+              "translate-claude-code-releases": 0,
+              "r15-r18-verify": 0,
+              "none": 0,
+              "neat-freak": 0,
+              "save-progress": 0,
+              "linus-requirements-analysis": 0,
+              "cup-build-test": 0,
+              "finalize-release": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "ops",
+            "confidence": 0.54,
+            "probabilities": {
+              "ops": 0.64,
+              "debug": 0,
+              "multi_step": 0.02,
+              "small_change": 0.03,
+              "question": 0.31
+            }
+          }
+        }
+      },
+      {
+        "id": "A44",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 0.86,
+          "correction": 0.94,
+          "task_type": 1
+        },
+        "ms": 295.9514589999999,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.86,
+            "probabilities": {
+              "r15-r18-migrate": 0,
+              "jira": 0,
+              "finalize-release": 0,
+              "cup-build-test": 0,
+              "commit-review": 0,
+              "simplify": 0,
+              "pr-reviewer": 0,
+              "spec-module": 0,
+              "token-analyze": 0,
+              "sync-my-claude-setting": 0,
+              "neat-freak": 0,
+              "atlassian:triage-issue": 0,
+              "save-progress": 0,
+              "jira-release-sync": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "code-review": 0,
+              "jira-test-report": 0,
+              "ai-case-report": 0,
+              "linus-requirements-analysis": 0,
+              "weekly-review": 0,
+              "none": 0.88,
+              "atlassian:search-company-knowledge": 0.07,
+              "claude-mem:mem-search": 0.01,
+              "translate-claude-code-releases": 0,
+              "atlassian:spec-to-backlog": 0,
+              "r15-r18-verify": 0.04,
+              "atlassian:generate-status-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 1,
+            "probabilities": {
+              "multi_step": 0,
+              "ops": 0,
+              "question": 1,
+              "small_change": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A45",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "pred": {
+          "skill": "jira-test-report",
+          "correction": false,
+          "task_type": "debug"
+        },
+        "conf": {
+          "skill": 0.51,
+          "correction": 0.8200000000000001,
+          "task_type": 1
+        },
+        "ms": 301.35920799999985,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "jira-test-report",
+            "confidence": 0.51,
+            "probabilities": {
+              "claude-mem:mem-search": 0,
+              "r15-r18-migrate": 0,
+              "atlassian:triage-issue": 0.27,
+              "ai-case-report": 0,
+              "save-progress": 0,
+              "token-analyze": 0,
+              "spec-module": 0.01,
+              "commit-review": 0,
+              "atlassian:search-company-knowledge": 0,
+              "translate-claude-code-releases": 0,
+              "pr-reviewer": 0,
+              "jira": 0.01,
+              "jira-release-sync": 0,
+              "finalize-release": 0,
+              "sync-my-claude-setting": 0,
+              "simplify": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "cup-build-test": 0.01,
+              "none": 0.11,
+              "linus-requirements-analysis": 0,
+              "jira-test-report": 0.53,
+              "code-review": 0.06,
+              "weekly-review": 0,
+              "r15-r18-verify": 0,
+              "neat-freak": 0,
+              "atlassian:spec-to-backlog": 0,
+              "atlassian:generate-status-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.09
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "debug",
+            "confidence": 1,
+            "probabilities": {
+              "ops": 0,
+              "multi_step": 0,
+              "question": 0,
+              "small_change": 0,
+              "debug": 1
+            }
+          }
+        }
+      },
+      {
+        "id": "A46",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "pred": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "small_change"
+        },
+        "conf": {
+          "skill": 0.95,
+          "correction": 0.9,
+          "task_type": 1
+        },
+        "ms": 451.39700000000084,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.95,
+            "probabilities": {
+              "atlassian:search-company-knowledge": 0,
+              "r15-r18-verify": 0,
+              "spec-module": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "jira": 0,
+              "jira-test-report": 0,
+              "finalize-release": 0,
+              "pr-reviewer": 0,
+              "weekly-review": 0,
+              "atlassian:triage-issue": 0,
+              "commit-review": 0,
+              "code-review": 0.01,
+              "atlassian:generate-status-report": 0,
+              "linus-requirements-analysis": 0.02,
+              "claude-mem:mem-search": 0,
+              "none": 0.96,
+              "save-progress": 0,
+              "simplify": 0.01,
+              "sync-my-claude-setting": 0,
+              "jira-release-sync": 0,
+              "cup-build-test": 0,
+              "atlassian:spec-to-backlog": 0,
+              "neat-freak": 0,
+              "translate-claude-code-releases": 0,
+              "r15-r18-migrate": 0,
+              "token-analyze": 0,
+              "ai-case-report": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "small_change",
+            "confidence": 1,
+            "probabilities": {
+              "small_change": 1,
+              "multi_step": 0,
+              "question": 0,
+              "ops": 0,
+              "debug": 0
+            }
+          }
+        }
+      },
+      {
+        "id": "A47",
+        "truth": {
+          "skill": "none",
+          "correction": false,
+          "task_type": "question"
+        },
+        "pred": {
+          "skill": "atlassian:search-company-knowledge",
+          "correction": false,
+          "task_type": "question"
+        },
+        "conf": {
+          "skill": 0.5,
+          "correction": 0.9,
+          "task_type": 0.85
+        },
+        "ms": 290.66499999999724,
+        "raw": {
+          "skill": {
+            "type": "choice",
+            "choice": "atlassian:search-company-knowledge",
+            "confidence": 0.5,
+            "probabilities": {
+              "none": 0.47000000000000003,
+              "spec-module": 0,
+              "r15-r18-verify": 0,
+              "atlassian:generate-status-report": 0,
+              "linus-requirements-analysis": 0,
+              "neat-freak": 0,
+              "code-review": 0,
+              "atlassian:search-company-knowledge": 0.53,
+              "commit-review": 0,
+              "jira-release-sync": 0,
+              "r15-r18-migrate": 0,
+              "translate-claude-code-releases": 0,
+              "claude-mem:mem-search": 0,
+              "pr-reviewer": 0,
+              "save-progress": 0,
+              "token-analyze": 0,
+              "atlassian:triage-issue": 0,
+              "jira": 0,
+              "atlassian:capture-tasks-from-meeting-notes": 0,
+              "ai-case-report": 0,
+              "atlassian:spec-to-backlog": 0,
+              "sync-my-claude-setting": 0,
+              "finalize-release": 0,
+              "weekly-review": 0,
+              "jira-test-report": 0,
+              "simplify": 0,
+              "cup-build-test": 0
+            }
+          },
+          "correction": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "task_type": {
+            "type": "choice",
+            "choice": "question",
+            "confidence": 0.85,
+            "probabilities": {
+              "debug": 0,
+              "multi_step": 0,
+              "question": 0.88,
+              "ops": 0.12,
+              "small_change": 0
+            }
+          }
+        }
+      }
+    ],
+    "B 完成宣告": [
+      {
+        "id": "B01",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.9199999999999999,
+          "evidence": 0.8600000000000001
+        },
+        "ms": 234.33679100000154,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.93
+          }
+        }
+      },
+      {
+        "id": "B02",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.8400000000000001,
+          "evidence": 0.020000000000000018
+        },
+        "ms": 291.1906249999993,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.92
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.49
+          }
+        }
+      },
+      {
+        "id": "B03",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.6000000000000001,
+          "evidence": 0.6000000000000001
+        },
+        "ms": 463.64308300000266,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.8
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.8
+          }
+        }
+      },
+      {
+        "id": "B04",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.8999999999999999,
+          "evidence": 0.8200000000000001
+        },
+        "ms": 343.31050000000323,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.95
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.91
+          }
+        }
+      },
+      {
+        "id": "B05",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.6799999999999999,
+          "evidence": 0.74
+        },
+        "ms": 471.8912909999999,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.84
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.87
+          }
+        }
+      },
+      {
+        "id": "B06",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.8799999999999999,
+          "evidence": 0.9
+        },
+        "ms": 307.4807080000028,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.94
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        }
+      },
+      {
+        "id": "B07",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.94,
+          "evidence": 0.9
+        },
+        "ms": 299.65849999999773,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.97
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        }
+      },
+      {
+        "id": "B08",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.78,
+          "evidence": 0.8200000000000001
+        },
+        "ms": 445.8457500000004,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.89
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.09
+          }
+        }
+      },
+      {
+        "id": "B09",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.94,
+          "evidence": 0.9
+        },
+        "ms": 302.32462499999747,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.97
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        }
+      },
+      {
+        "id": "B10",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.78,
+          "evidence": 0.92
+        },
+        "ms": 288.7441660000004,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.89
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        }
+      },
+      {
+        "id": "B11",
+        "truth": {
+          "claims": false,
+          "evidence": false
+        },
+        "pred": {
+          "claims": false,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.94,
+          "evidence": 0.9
+        },
+        "ms": 461.4225829999996,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        }
+      },
+      {
+        "id": "B12",
+        "truth": {
+          "claims": false,
+          "evidence": true
+        },
+        "pred": {
+          "claims": false,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.96,
+          "evidence": 0.54
+        },
+        "ms": 316.61399999999776,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.02
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.77
+          }
+        }
+      },
+      {
+        "id": "B13",
+        "truth": {
+          "claims": false,
+          "evidence": false
+        },
+        "pred": {
+          "claims": false,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.94,
+          "evidence": 0.92
+        },
+        "ms": 325.8043340000004,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        }
+      },
+      {
+        "id": "B14",
+        "truth": {
+          "claims": false,
+          "evidence": false
+        },
+        "pred": {
+          "claims": false,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.94,
+          "evidence": 0.92
+        },
+        "ms": 418.554417000003,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        }
+      },
+      {
+        "id": "B15",
+        "truth": {
+          "claims": false,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0,
+          "evidence": 0.88
+        },
+        "ms": 251.32316600000195,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.5
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.06
+          }
+        }
+      }
+    ],
+    "B 長文": [
+      {
+        "id": "L01",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.9199999999999999,
+          "evidence": 0.8799999999999999
+        },
+        "ms": 274.38258300000234,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.94
+          }
+        }
+      },
+      {
+        "id": "L02",
+        "truth": {
+          "claims": true,
+          "evidence": true
+        },
+        "pred": {
+          "claims": true,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.54,
+          "evidence": 0.8600000000000001
+        },
+        "ms": 239.50129200000083,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.77
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.93
+          }
+        }
+      },
+      {
+        "id": "L03",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.9199999999999999,
+          "evidence": 0.88
+        },
+        "ms": 328.7725840000021,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.96
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.06
+          }
+        }
+      },
+      {
+        "id": "L04",
+        "truth": {
+          "claims": true,
+          "evidence": false
+        },
+        "pred": {
+          "claims": true,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.6799999999999999,
+          "evidence": 0.8200000000000001
+        },
+        "ms": 284.47504200000185,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.84
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.09
+          }
+        }
+      },
+      {
+        "id": "L05",
+        "truth": {
+          "claims": false,
+          "evidence": true
+        },
+        "pred": {
+          "claims": false,
+          "evidence": true
+        },
+        "conf": {
+          "claims": 0.92,
+          "evidence": 0.8400000000000001
+        },
+        "ms": 244.1862080000028,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.92
+          }
+        }
+      },
+      {
+        "id": "L06",
+        "truth": {
+          "claims": false,
+          "evidence": false
+        },
+        "pred": {
+          "claims": false,
+          "evidence": false
+        },
+        "conf": {
+          "claims": 0.18000000000000005,
+          "evidence": 0.72
+        },
+        "ms": 487.72399999999834,
+        "raw": {
+          "claims": {
+            "type": "noul",
+            "noul": 0.41
+          },
+          "evidence": {
+            "type": "noul",
+            "noul": 0.14
+          }
+        }
+      }
+    ],
+    "C 同錯": [
+      {
+        "id": "C01",
+        "truth": {
+          "same": true
+        },
+        "pred": {
+          "same": true
+        },
+        "conf": {
+          "same": 0.78
+        },
+        "ms": 284.3411669999987,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.89
+          }
+        }
+      },
+      {
+        "id": "C02",
+        "truth": {
+          "same": true
+        },
+        "pred": {
+          "same": true
+        },
+        "conf": {
+          "same": 0.6000000000000001
+        },
+        "ms": 266.89979200000016,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.8
+          }
+        }
+      },
+      {
+        "id": "C03",
+        "truth": {
+          "same": false
+        },
+        "pred": {
+          "same": false
+        },
+        "conf": {
+          "same": 0.12
+        },
+        "ms": 229.16604200000074,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.44
+          }
+        }
+      },
+      {
+        "id": "C04",
+        "truth": {
+          "same": true
+        },
+        "pred": {
+          "same": true
+        },
+        "conf": {
+          "same": 0.94
+        },
+        "ms": 563.4544999999998,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.97
+          }
+        }
+      },
+      {
+        "id": "C05",
+        "truth": {
+          "same": false
+        },
+        "pred": {
+          "same": false
+        },
+        "conf": {
+          "same": 0.040000000000000036
+        },
+        "ms": 344.75125000000116,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.48
+          }
+        }
+      },
+      {
+        "id": "C06",
+        "truth": {
+          "same": false
+        },
+        "pred": {
+          "same": false
+        },
+        "conf": {
+          "same": 0.33999999999999997
+        },
+        "ms": 362.8103749999973,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.33
+          }
+        }
+      },
+      {
+        "id": "C07",
+        "truth": {
+          "same": true
+        },
+        "pred": {
+          "same": true
+        },
+        "conf": {
+          "same": 0.6399999999999999
+        },
+        "ms": 254.21745799999917,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.82
+          }
+        }
+      },
+      {
+        "id": "C08",
+        "truth": {
+          "same": false
+        },
+        "pred": {
+          "same": false
+        },
+        "conf": {
+          "same": 0.54
+        },
+        "ms": 304.00887499999953,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.23
+          }
+        }
+      },
+      {
+        "id": "C09",
+        "truth": {
+          "same": true
+        },
+        "pred": {
+          "same": true
+        },
+        "conf": {
+          "same": 0.9199999999999999
+        },
+        "ms": 492.7349170000016,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.96
+          }
+        }
+      },
+      {
+        "id": "C10",
+        "truth": {
+          "same": false
+        },
+        "pred": {
+          "same": false
+        },
+        "conf": {
+          "same": 0.8200000000000001
+        },
+        "ms": 290.60679099999834,
+        "raw": {
+          "same": {
+            "type": "noul",
+            "noul": 0.09
+          }
+        }
+      }
+    ]
+  }
+}

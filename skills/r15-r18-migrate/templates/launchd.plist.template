@@ -19,8 +19,12 @@
                       SIGTERM 會先把 CLI 的整個 process group 收乾淨：最壞是 TERM 寬限 30 秒＋有上限
                       收屍 10 秒＋KILL 後確認 10 秒，收不乾淨時還要凍結診斷包、把鎖定（hold）寫進
                       queue.json。man launchd.plist 只說預設值 system-defined，不寫的話 runner 可能在
-                      寫入鎖定之前就被 SIGKILL——下次 KeepAlive 重啟時沒有東西擋它。90 給足餘裕；
-                      改 runner.py 的 TERM_GRACE_SECONDS／REAP_LIMIT_SECONDS 時要一起調。
+                      寫入鎖定之前就被 SIGKILL——下次 KeepAlive 重啟時沒有東西擋它。
+                      1.1.2 第五批起還要蓋住兩段停止訊號延後區間（各自獨立、不相加）：發佈區間推送 45＋
+                      ls-remote 15＋暫停通知 30＝90 秒＋本機 git；PR 區間 gh pr create 30＋再查 30＝60 秒。
+                      舊值 90 會被發佈區間吃滿，改 120（給發佈區間 30 秒本機餘裕）；改 runner.py 的
+                      TERM_GRACE_SECONDS／REAP_LIMIT_SECONDS／NOTIFY_TIMEOUT_SECONDS／PUBLISH_*_TIMEOUT_SECONDS／
+                      GH_PR_*_TIMEOUT_SECONDS 時要一起調。
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -50,7 +54,7 @@
     <integer>300</integer>
 
     <key>ExitTimeOut</key>
-    <integer>90</integer>
+    <integer>120</integer>
 
     <key>StandardOutPath</key>
     <string>__MIGRATION_STATE_DIR__/launchd-stdout.log</string>

@@ -20,26 +20,90 @@
 | `integration_branch` | 整合分支名稱；所有頁面 branch 從這個分支的 HEAD 切出，完成後 fast-forward merge 回去 |
 | `base_branch` | 最終要合併回去的正式分支（例如 `master`） |
 | `limits` | `{ entry_max_files, entry_max_lines, checkpoint_max_modules, checkpoint_max_lines, module_timeout_min, module_budget_usd }`——單個 entry 允許的最大檔數/行數、多少模組或多少行累積後自動開一個斷點、單模組跑多久算超時、單模組預算上限。這組值由 runner 啟動時從環境變數寫入，skill 執行期只讀不寫 |
-| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是這次暫停的簽名，給「同簽名連續第二次就鎖定」用：runner 未預期例外時是 `<例外類別>@<檔>:<行>`，整合分支推送失敗時（1.1.1）是 `integration_push_failed`，其餘暫停原因為 `null`；`hold`（1.1.0）為 `true` 表示 runner 鎖定——同簽名例外已發生兩次，或（1.1.1）第一次就必須人工確認的狀況：殘留行程、ff-merge 後 HEAD 不符、本機整合分支領先遠端——每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉；`reason` 是 integration 類時另需 `unblock --integration-tip`（見 `docs/environment.md`「整合分支守則」） |
-| `integration_tip_sha` | runner 每次 push 整合分支後寫入的 HEAD SHA。每次要處理新模組之前，runner 會把這個值跟遠端整合分支的實際 tip 比對；不同就代表有人在 runner 不知道的情況下動過整合分支，runner 會暫停並發通知，不會繼續往下處理。首次啟動時這個值是 `null`，runner 會直接把當下的遠端 tip 寫進來當基線 |
+| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是這次暫停的簽名，給「同簽名連續第二次就鎖定」用：runner 未預期例外時是 `<例外類別>@<檔>:<行>`，整合分支推送失敗時（1.1.1）是 `integration_push_failed`，發佈段 ff-merge 環境類失敗（暫停原因 `ff_merge_env_failed`，1.1.2 第三批）是同一個字串 `ff_merge_env_failed`，hard 斷點開不起來（暫停原因 `checkpoint_open_failed`）是同一個字串 `checkpoint_open_failed`，CLI 呼叫後判出 `auth_expired`（1.1.2 第六批；pre-flight 認證 smoke 判出的不帶）是 `cli_auth_expired`，其餘暫停原因為 `null`（完整清單以 `runner.py` 裡所有帶 `signature=` 的 `enter_paused` 呼叫為準）；`hold`（1.1.0）為 `true` 表示 runner 鎖定——同簽名例外已發生兩次，或（1.1.1）第一次就必須人工確認的狀況：殘留行程、ff-merge 後 HEAD 不符、本機整合分支領先遠端——每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉；`reason` 是 integration 類時另需 `unblock --integration-tip`（見 `docs/environment.md`「整合分支守則」）。`state` 與 `hold` 的合法組合、誰設誰清見下方「runner_state：state 與 hold」 |
+| `integration_tip_sha` | runner 每次 push 整合分支後寫入的 HEAD SHA。每次要處理新模組之前，runner 會把這個值跟遠端整合分支的實際 tip 比對；不同就代表有人在 runner 不知道的情況下動過整合分支，runner 會暫停並發通知，不會繼續往下處理。首次啟動時這個值是 `null`，runner 會直接把當下的遠端 tip 寫進來當基線。推送之後、寫回之前被中斷時，下次啟動的重啟對帳（1.1.2 第五批）在確認遠端多出來的正是某個 pending entry 的 commit 之後，與該 entry 的 done 一起補寫（條件見 environment.md「出錯時怎麼做」第 9 點）；不要用 `unblock --integration-tip` 代替它 |
 | `checkpoints[]` | 斷點清單，見下方「checkpoint 物件」 |
 | `modules[]` | entry 清單，見下方「entry 物件」 |
+
+## runner_state：state 與 hold
+
+（1.1.2 第六批階段 C 讀碼整理；行為沒有改變。）`state` 與 `hold` 是**兩個獨立欄位**：`state` 描述 runner 上一次寫下的狀態，`hold` 描述「下次啟動能不能自己往下跑」。改 `state` 的呼叫一律不動 `hold`（`set_runner_state` 只寫 `extra` 給的欄位），所以兩者要分開看。
+
+誰設、誰清：
+
+| 欄位值 | 寫入者（函式） | 時機 |
+|---|---|---|
+| `state=idle` | `import-inventory`（`build_queue`，只在沒有 `runner_state` 時補初始值）；`cmd_run` | 達到 `--max-modules`、佇列全部完成 |
+| `state=idle`（解除暫停） | `unblock_integration_tip`、`unblock_runner`、`cmd_unblock`（entry 模式） | 分別解除 integration 類暫停、crash／帶簽名／以 `integration_diverged` 鎖定的暫停、`circuit_breaker` 暫停；三者都同時把 `reason` 清成 `null` |
+| `state=running` | `cmd_run`（pre-flight 通過後）、`wait_until`（額度等待結束）、`wait_for_release`／`hold_hard_checkpoint`（斷點放行後） | |
+| `state=waiting_quota` | `wait_until` | 等額度恢復期間 |
+| `state=paused_for_review` | `wait_for_release` | 等 hard 斷點放行期間 |
+| `state=paused` | `enter_paused`（唯一寫入點） | 任何暫停；同一次寫入一併寫 `crash_signature` 與 `hold` |
+| `hold=true` | `enter_paused` | `force_hold`（殘留行程、ff-merge 後 HEAD 不符／退不回去、本機整合分支領先遠端），或同簽名連續第二次；已經是 `true` 時之後的暫停一律保持 `true`（`hold = 上一次 hold or …`） |
+| `hold=false` | `unblock_runner`（`unblock --runner`，唯一清除點） | 同時清 `crash_signature` |
+
+讀取點：`cmd_run` 在 pre-flight 之前只看 `hold`（為真就記 `hold_active`、退出碼 3，**不看 `state`**）；`enter_paused` 讀上一次的 `hold` 決定這次要不要通知「新鎖定」；`unblock --integration-tip` 回報 `hold` 是否仍在；`status` 印出提示。
+
+合法組合：
+
+| `state` | `hold` | 意思 |
+|---|---|---|
+| `paused` | `true` | 鎖定。launchd 每次重啟都靜默退出，要 `unblock --runner` |
+| `paused` | `false`／缺欄位 | 一般暫停。重啟後照常 pre-flight、續跑 |
+| `idle` | `true` | 鎖定中先跑了 `unblock --integration-tip`（它把 integration 類暫停改成 `idle`、刻意不動 `hold`）。`state` 看起來沒事，但 runner 仍會在 pre-flight 之前退出，還要 `unblock --runner` |
+| `idle`／`running`／`waiting_quota`／`paused_for_review` | `false`／缺欄位 | 正常。runner 已經沒在執行、檔案卻還是 `running` 等三種，代表上一個行程被停掉或中斷；下次啟動直接覆寫 |
+| `running`／`waiting_quota`／`paused_for_review` | `true` | 程式不會產生：`hold` 為真時 `cmd_run` 在寫 `running` 之前就退出，而 `hold` 只在 `enter_paused`（同時寫 `paused`）時變真 |
+
+`crash_signature` 只由 `enter_paused`（寫這次的簽名或 `null`）與 `unblock --runner`（清成 `null`）寫；之後的 `set_runner_state("running")` 不清它，所以 `state=running` 時可能還留著上一次暫停的簽名。這不影響判斷：暫停去重的第二層只在 `state=paused` 時才比簽名（`runner_paused_for`），第一層用的是啟動當下存進 config 的值。
+
+程式裡「`state` 是 `paused` 而且 `reason` 是某幾種」的判斷抽成 `runner_paused_for(runner_state, reasons)`（去重第二層、`unblock --integration-tip`、`unblock <entry>` 的熔斷解除三處共用）；它不看 `hold`，後兩處照舊只清 `state`／`reason`。
 
 ## checkpoint 物件
 
 | 欄位 | 說明 |
 |---|---|
-| `id` | 斷點識別碼 |
+| `id` | 斷點識別碼；auto 斷點由 runner 產生，形如 `auto-YYYYMMDD-HHMMSS`，queue 裡已有同名時加 `-2`、`-3`…（1.1.2 第五批收尾：原本只到分鐘，同一分鐘第二次觸發會撞到在審的斷點） |
 | `after` | `{ wave: N }`——這個 wave 的全部 entry 都變成 `done` 時觸發這個斷點 |
 | `mode` | `soft`（開完 PR 繼續往下跑）或 `hard`（停下等待人工放行） |
 | `pr_base` | 這個斷點對應的 PR 要開去哪個分支 |
 | `title` | 斷點標題（給 PR 用） |
-| `status` | `pending` \| `opened` \| `failed` \| `released` \| `merged` |
-| `branch` | 這個斷點凍結出來的分支名稱 |
-| `pr_url` | 對應的 PR 連結；`status` 是 `opened` 但這裡是空字串＝`gh pr create` 退出碼 0 卻沒印連結，runner 不知道 PR 有沒有真的開成，通知會請人到 GitHub 看 `branch` 那支分支（1.1.1 已知缺口，1.1.2 改成查既有 PR 沿用） |
+| `status` | `pending` \| `opening` \| `opened` \| `failed` \| `released` \| `merged`（轉移見下方） |
+| `branch` | 這個斷點凍結出來的分支名稱；`opening` 時就已寫入（write-ahead，分支與 PR 可能還沒建） |
+| `pr_url` | 對應的 PR 連結；`status` 是 `opened` 但這裡是空字串＝連結未知，見 `pr_unverified` |
+| `pr_unverified` | `true`＝`gh pr create` 退出碼 0 卻沒印連結、再查也沒查到：runner 仍寫 `opened`、蓋章（閘門與 auto 門檻照常），但不知道 PR 有沒有真的開成。runner 啟動時、每完成一個模組後、hard 斷點等待放行期間（第 1、3、7、15…次輪詢，間隔倍增、上限 6 小時，1.1.2 第五批收尾）用 `gh pr list --head <branch>` 補查，查到就補上 `pr_url` 並改回 `false`；查詢失敗只記事件（`checkpoint_pr_verify_failed`），不改狀態（1.1.2 第五批階段三）。重新 `import-inventory` 會保留 |
+| `last_error` | 上一次開啟失敗的原因（hard 斷點保持 `opening` 時由暫停通知、`PROGRESS.md` 顯示）；開成功時清成 `null`。重新 `import-inventory` 會保留 |
 | `opened_at` / `last_remind_at` | 時間戳 |
+| `frozen_sha` | write-ahead 時凍結的整合分支 tip（1.1.2 第五批收尾 review）：cp 分支一律建在這裡、重試不跟著整合分支前進；補完 `opening` 時「已合併」只看它。重新 `import-inventory` 會保留 |
+| `covered_entries` | write-ahead 時已 `done`、還沒蓋章的 entry id 清單：開成 `opened` 或判 `merged` 時只替它們蓋章（之後才 done 的不在凍結的 commit 裡）；`null`＝舊記錄，蓋所有還沒蓋章的 done entry。重新 `import-inventory` 會保留 |
 
 `hard` 斷點卡住時，靠外部下 release 指令來放行，不是靠人工直接改這個欄位。
+
+狀態轉移（1.1.2 第五批階段三起）：
+
+- `pending` →（wave 完成，或 auto 門檻成立時新建）→ `opening`：**任何 side effect 之前**先落盤，含 `branch`；auto 斷點的 id 也在這時第一次進 queue。
+- `opening` → `opened`：推送 cp 分支、查到既有 open PR 就沿用（head 須是剛推上去的 tip）、沒有才 `gh pr create`、拿不到連結再查一次，最後一次寫入才改 `opened` 並替還沒歸屬斷點的 done entry 蓋章。
+- `opening` 停留：上一輪在開啟途中被中斷（SIGKILL、斷電、crash），或 **hard** 斷點開啟失敗（建分支／推送／查 PR／開 PR）——後者 runner 以 `checkpoint_open_failed` 暫停，重啟時先處理 `opening` 斷點（同一個 id、同一支分支重做一次、查到既有 PR 就沿用）才取件；同原因連續第二次鎖定（hold）。
+- `opening` 補完時先看遠端（1.1.2 第五批收尾）：先 `git fetch origin`；`frozen_sha` 是 `origin/<pr_base>` 的**真祖先**（人在重啟前把 PR 合併了；不看本機 cp 分支，沒有 `frozen_sha` 的舊記錄不判）→ 直接 `opening` → `merged`，不再開、hard 閘門視為已過、替 `covered_entries` 蓋章；遠端 cp 分支已含本機 tip（人在 cp 分支上推了修正）→ 不推，以遠端 tip 查 PR 沿用。fetch、`ls-remote`、祖先判斷本身失敗都當開啟失敗（hard 暫停、soft／auto `failed`），不猜。
+- `opening` → `failed`：soft／auto 斷點開啟失敗（沿用 1.1.1 起的行為，不暫停、不擋下一個模組）。開啟途中已被 `release` 的維持 `released`。
+- `opened` → `merged`：cp 分支已是基準分支的祖先（前置作業偵測）。
+- `opened`／`failed`／`opening` → `released`：`runner.py release <id>`。從 `opening` 放行＝放棄讓 runner 開 PR：分支／PR 若已部分建立要人工處理，涵蓋的模組沒有蓋章、會算進下一個 auto 斷點。例外：放行時開啟正在進行、之後 PR 真的開成——狀態維持 `released`，連結照補、模組照蓋章（1.1.2 第五批收尾）。
+- 只有 `pending`／`opening` 可以被開：其他狀態 runner 一律拒絕重開（`CheckpointStateConflict`，不改寫 queue），不會把在審的 cp 分支往前移。
+- 讀取點：只有 `opened`（加上 hard 的 `opening`）會擋取件；前置作業只回流 `opened` 的分支（`opening` 的分支就是整合分支當時的 tip，沒有東西要回流）；auto 門檻的比較基準是 `opened`／`merged`／`released` 中最新、而且本機分支真的存在的那一支（從 `opening` 放行、分支從沒建立的跳過；查分支或 diff 失敗會 raise，不當成 0 行）。
+
+寫入點（1.1.2 第六批階段 C 讀碼整理；程式裡的狀態值具名為 `runner.CheckpointStatus`，`pr_unverified` 欄位名為 `CHECKPOINT_PR_UNVERIFIED_FIELD`）：
+
+| 轉移 | 函式 | 呼叫路徑 |
+|---|---|---|
+| `pending`（或新建）→ `opening` | `begin_checkpoint_opening`（拒絕 `CHECKPOINT_OPENABLE_STATUSES` 以外的狀態，拋 `CheckpointStateConflict`） | `open_checkpoint` ← `handle_checkpoints`（`due_checkpoint`：wave 完成；`auto_checkpoint_needed`：auto 門檻）／`resume_opening_checkpoints`、`hold_hard_checkpoint`（補完 `opening`） |
+| `opening` → `opened` | `persist_checkpoint_opened`（只在仍是 `opening` 時改狀態；已被 `release` 的維持 `released`，連結與蓋章照寫） | `open_checkpoint` |
+| `opening` → `merged` | `mark_opening_checkpoint_merged`（只在仍是 `opening` 時改） | `open_checkpoint`（`opening_checkpoint_merged` 判定凍結點已合進遠端基準分支） |
+| `opening` → `failed` | `mark_checkpoint_failed`（只在仍是 `opening` 時改） | `checkpoint_open_failed`，只限 soft／auto；hard 在同一個函式只記 `last_error`、狀態留在 `opening` |
+| `opened` → `merged` | `sync_merged_checkpoints` | `module_preflight` |
+| `opened`／`failed`／`opening` → `released` | `cmd_release` | `runner.py release <id>` |
+| `pr_unverified` → `true`／`false` | `persist_checkpoint_opened`（開成時照實寫） | `open_checkpoint` |
+| `pr_unverified` `true` → `false` | `refresh_unverified_checkpoint_prs`（補上 `pr_url`） | `cmd_run` 啟動時、每完成一個模組後、`wait_for_release` 輪詢時 |
+
+`merged`、`released` 之後沒有任何轉移（`CHECKPOINT_PASSED_STATUSES`：人工閘門已過）；`failed` 只能被 `release`。
 
 ## entry 物件（`modules[]` 的元素）
 
@@ -71,11 +135,11 @@
 | `last_session_id` | 最後一次執行用的 session 識別碼 |
 | `last_commit` | 最後一次 commit 的 hash |
 | `last_error` | 最後一次失敗訊息 |
-| `pr_url` / `pr_failed` | 這個 entry 對整合分支開的 PR 連結；開 PR 失敗時 `pr_failed` 設 `true` |
+| `pr_url` / `pr_failed` | 這個 entry 對整合分支開的 PR 連結；開 PR 失敗時 `pr_failed` 設 `true`。`pr_url` 為空時 runner 開 PR 之前先查該分支開往整合分支的 open PR 沿用（上一輪開了、連結沒寫回就被中斷；重啟對帳也一樣補查），查詢失敗也算 `pr_failed`（1.1.2 第五批階段二） |
 | `r15_hashes` | 這個 entry 涵蓋的每個 R15 原始檔在遷移當下的內容 hash，用於偵測「遷移完之後 R15 原始檔又被別的分支改過」這種情況 |
 | `checkpoint_id` | 這個 entry 被哪個斷點凍結 |
 | `started_at` / `finished_at` | 時間戳 |
-| `cost_usd_total` | 這個 entry 累積花費——每一輪呼叫不論結果（done／blocked／error／timeout／等額度）都累加（1.1.0 起；之前只在 done 累加，失敗輪次的花費只留在 `cli_outcome` 事件） |
+| `cost_usd_total` | 這個 entry 累積花費——CLI 判讀為 done（發佈成功寫回時）／blocked／hook_denied／error／timeout／等額度（quota 類）的那一輪都累加（1.1.0 起；之前只在 done 累加，失敗輪次的花費只留在 `cli_outcome` 事件；L1 沒過與沒有 commit 兩條路徑 1.1.2 第六批才補上）。**不累加的例外**（花費只留在 `cli_outcome` 事件的 `cost_usd`）：CLI 判讀為 `auth_expired`（直接走 runner 暫停）；L1 通過後發佈段以 runner 暫停收場的（ff-merge 環境類失敗、整合分支推送失敗、ff-merge 後 HEAD 不符等 `enter_paused` 路徑，entry 沒寫結果，重啟後由前置作業放回 pending）；CLI 呼叫或判讀之後 runner 以例外／停止訊號中斷（crash 流程）；寫回時 entry 已不在 queue 裡 |
 | `last_diagnostics` | （1.1.0）最近一次失敗自動凍結出來的診斷包，相對狀態目錄的路徑（例如 `diagnostics/<entry>-1-<時間>`）；判讀為 timeout／error／blocked／hook_denied／auth_expired 或 L1 沒過時寫入，`unblock` 後仍保留供回溯；手動 `diagnose` 產的包不寫這欄 |
 
 ## `result.schema.json`（skill 每次呼叫最後一則輸出；runner 用它強制 skill 輸出符合結構的結果）

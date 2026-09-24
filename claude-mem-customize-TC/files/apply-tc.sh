@@ -1,11 +1,11 @@
 #!/bin/bash
 # claude-mem 繁體中文化套用腳本
-# 適用版本：claude-mem 13.9.3（thedotmack/claude-mem plugin）
+# 適用版本：claude-mem 13.24.23（thedotmack/claude-mem plugin）
 # 用法: ./apply-tc.sh <scripts目錄>
 # 例：
 #   ./apply-tc.sh ~/.claude/plugins/cache/thedotmack/claude-mem/<VERSION>/scripts
 #   ./apply-tc.sh ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts
-# 版本升級後 Terminal 標籤函式名稱（fh/ph/H/X）幾乎必變，先跑：
+# 版本升級後 Terminal 標籤函式名稱（fy/my/k/w）幾乎必變，先跑：
 #   grep -o -E '.{0,8}"Investigated"' worker-service.cjs context-generator.cjs | sort -u
 # 確認新版函式名，再更新本檔案的 Terminal 標籤區塊。
 # 腳本可重複執行（已翻譯的字串不再匹配，自動跳過）。
@@ -47,25 +47,25 @@ for F in "$W" "$C"; do
   sed -i '' 's/Session started/工作階段已開始/g' "$F"
 done
 
-# ---- worker-service.cjs 專用：Terminal 標籤（v13.9.3: fh()/ph()，取代 v13.9.1 的 dg/pg）----
-sed -i '' 's/fh("Investigated"/fh("已調查"/g' "$W"
-sed -i '' 's/fh("Completed"/fh("已完成"/g' "$W"
-sed -i '' 's/fh("Learned"/fh("已學習"/g' "$W"
-sed -i '' 's/fh("Next Steps"/fh("後續步驟"/g' "$W"
-sed -i '' 's/ph("Investigated"/ph("已調查"/g' "$W"
-sed -i '' 's/ph("Completed"/ph("已完成"/g' "$W"
-sed -i '' 's/ph("Learned"/ph("已學習"/g' "$W"
-sed -i '' 's/ph("Next Steps"/ph("後續步驟"/g' "$W"
+# ---- worker-service.cjs 專用：Terminal 標籤（v13.24.23: Hh()/zh()，取代 v13.24.0 的 fy/my、v13.9.3 的 fh/ph）----
+sed -i '' 's/Hh("Investigated"/Hh("已調查"/g' "$W"
+sed -i '' 's/Hh("Completed"/Hh("已完成"/g' "$W"
+sed -i '' 's/Hh("Learned"/Hh("已學習"/g' "$W"
+sed -i '' 's/Hh("Next Steps"/Hh("後續步驟"/g' "$W"
+sed -i '' 's/zh("Investigated"/zh("已調查"/g' "$W"
+sed -i '' 's/zh("Completed"/zh("已完成"/g' "$W"
+sed -i '' 's/zh("Learned"/zh("已學習"/g' "$W"
+sed -i '' 's/zh("Next Steps"/zh("後續步驟"/g' "$W"
 
-# ---- context-generator.cjs 專用：Terminal 標籤（v13.9.3: H()/X()，取代 v13.9.1 的 X/G；v13 起新增此區塊）----
-sed -i '' 's/H("Investigated"/H("已調查"/g' "$C"
-sed -i '' 's/H("Completed"/H("已完成"/g' "$C"
-sed -i '' 's/H("Learned"/H("已學習"/g' "$C"
-sed -i '' 's/H("Next Steps"/H("後續步驟"/g' "$C"
-sed -i '' 's/X("Investigated"/X("已調查"/g' "$C"
-sed -i '' 's/X("Completed"/X("已完成"/g' "$C"
-sed -i '' 's/X("Learned"/X("已學習"/g' "$C"
-sed -i '' 's/X("Next Steps"/X("後續步驟"/g' "$C"
+# ---- context-generator.cjs 專用：Terminal 標籤（v13.24.0~13.24.23: k()/w()，取代 v13.9.3 的 H/X）----
+sed -i '' 's/k("Investigated"/k("已調查"/g' "$C"
+sed -i '' 's/k("Completed"/k("已完成"/g' "$C"
+sed -i '' 's/k("Learned"/k("已學習"/g' "$C"
+sed -i '' 's/k("Next Steps"/k("後續步驟"/g' "$C"
+sed -i '' 's/w("Investigated"/w("已調查"/g' "$C"
+sed -i '' 's/w("Completed"/w("已完成"/g' "$C"
+sed -i '' 's/w("Learned"/w("已學習"/g' "$C"
+sed -i '' 's/w("Next Steps"/w("後續步驟"/g' "$C"
 
 # ---- worker-service.cjs 專用：Session 摘要 Markdown 標籤（先長後短）----
 sed -i '' 's/# Recent Session Context/# 近期工作階段脈絡/g' "$W"

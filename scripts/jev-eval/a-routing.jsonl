@@ -1,0 +1,47 @@
+{"id": "A01", "prompt": "幫我看一下 ABC-11967 的需求，順便建 branch", "skill": "jira", "correction": false, "task_type": "ops", "note": "關鍵字會命中"}
+{"id": "A02", "prompt": "不是這個 PR，我要你審的是 #1140，審完貼回 GitHub", "skill": "pr-reviewer", "correction": true, "task_type": "ops", "note": "糾正＋skill 同時成立；關鍵字「審 PR」不會命中"}
+{"id": "A03", "prompt": "剛剛那個 commit 還沒跑 review，補跑一下", "skill": "commit-review", "correction": false, "task_type": "ops", "note": "關鍵字「跑 review」會命中"}
+{"id": "A04", "prompt": "Claude Code 這幾天又出了新版，更新了什麼翻成中文給我", "skill": "translate-claude-code-releases", "correction": false, "task_type": "ops", "note": "改寫說法；keywords 沒命中，但 intentPatterns 正則會命中"}
+{"id": "A05", "prompt": "把這週已經上架的 commit 對應的 jira 單結案", "skill": "jira-release-sync", "correction": false, "task_type": "ops", "note": "關鍵字同時命中 jira 與 jira-release-sync"}
+{"id": "A06", "prompt": "我們之前是怎麼解決 claude-mem worker 載錯路徑的？", "skill": "claude-mem:mem-search", "correction": false, "task_type": "question", "note": "keywords 沒命中，但 intentPatterns 正則會命中"}
+{"id": "A07", "prompt": "Confluence 上有沒有寫居服派班規則的文件？找給我", "skill": "atlassian:search-company-knowledge", "correction": false, "task_type": "question", "note": "關鍵字「confluence」會命中"}
+{"id": "A08", "prompt": "這是今天的會議記錄，把分給我的待辦開成 jira task", "skill": "atlassian:capture-tasks-from-meeting-notes", "correction": false, "task_type": "ops", "note": "關鍵字同時命中 jira"}
+{"id": "A09", "prompt": "ClockInPage 的 getSupportCost 太長了，幫我把這個方法瘦身", "skill": "none", "correction": false, "task_type": "small_change", "note": "「瘦身」不含關鍵字；2026-09-21 改標：method-refactor 已被 skillOverrides 設為 off，改 none（變陷阱題）"}
+{"id": "A10", "prompt": "幫 shift 模組產一份 spec 文件", "skill": "spec-module", "correction": false, "task_type": "ops", "note": "「產一份 spec」不含「產生 spec」"}
+{"id": "A11", "prompt": "ServiceRecordCalculator 完全沒有測試，幫我補齊", "skill": "none", "correction": false, "task_type": "multi_step", "note": "「補齊」不含「寫測試」；2026-09-21 改標：test-module 已被 skillOverrides 設為 off，改 none（變陷阱題）"}
+{"id": "A12", "prompt": "剛改完的這幾個檔案，幫我看有沒有重複或可以寫更簡潔的地方", "skill": "simplify", "correction": false, "task_type": "ops", "note": "「簡潔」不含「簡化」"}
+{"id": "A13", "prompt": "這個 bug 回報看起來跟之前某張單很像，幫我查是不是重複的", "skill": "atlassian:triage-issue", "correction": false, "task_type": "ops", "note": "關鍵字「bug 回報」會命中"}
+{"id": "A14", "prompt": "整理一份 ERPD 專案這個 sprint 的進度報告", "skill": "atlassian:generate-status-report", "correction": false, "task_type": "ops", "note": "關鍵字同時命中 jira（ERPD）"}
+{"id": "A15", "prompt": "你剛剛只看了一個檔案，其他還沒 commit 的改動也要一起抓 bug", "skill": "code-review", "correction": true, "task_type": "ops", "note": "糾正＋skill；關鍵字不會命中"}
+{"id": "A16", "prompt": "Confluence 上那份打卡需求規格，幫我拆成 jira ticket", "skill": "atlassian:spec-to-backlog", "correction": false, "task_type": "ops", "note": "關鍵字命中 confluence 與 jira，但沒命中 spec-to-backlog"}
+{"id": "A17", "prompt": "HomeCareStaffRN 的推播相關程式散在好幾個資料夾，幫我看一下架構整理成報告", "skill": "none", "correction": false, "task_type": "question", "note": "與 spec-module 語意相近，易混淆；2026-09-21 改標：explore-report 已被 skillOverrides 設為 off，改 none（變陷阱題）；有爭議：spec-module 也說得通"}
+{"id": "A18", "prompt": "React 的 useMemo 和 useCallback 差在哪？", "skill": "none", "correction": false, "task_type": "question", "note": "純提問"}
+{"id": "A19", "prompt": "打卡時間不對，跟實際差了 8 小時，幫我查", "skill": "none", "correction": false, "task_type": "debug", "note": "陷阱：含「不對」但是回報資料問題，不是糾正 Claude"}
+{"id": "A20", "prompt": "不對，我要的是只改 iOS，你連 Android 都改了，把 Android 的部分還原", "skill": "none", "correction": true, "task_type": "small_change", "note": "典型糾正"}
+{"id": "A21", "prompt": "我說過 commit message 要用繁體中文，你又寫成英文了，重寫", "skill": "none", "correction": true, "task_type": "small_change", "note": "糾正；陷阱：含 commit 但不是 commit-review"}
+{"id": "A22", "prompt": "這個 issue 看起來是兩個 setState 互相覆蓋造成的 race condition，先幫我確認是不是", "skill": "none", "correction": false, "task_type": "debug", "note": "陷阱：含 issue，關鍵字會誤判成 jira"}
+{"id": "A23", "prompt": "班表頁新增請假狀態篩選，要能多選，後端 API 也要加參數", "skill": "none", "correction": false, "task_type": "multi_step", "note": "跨前後端新功能"}
+{"id": "A24", "prompt": "把 README 裡 recieve 這個錯字改掉", "skill": "none", "correction": false, "task_type": "small_change", "note": "typo"}
+{"id": "A25", "prompt": "你說根因是快取，但我清完快取還是一樣，再查", "skill": "none", "correction": true, "task_type": "debug", "note": "糾正結論；沒有「不對」等字眼"}
+{"id": "A26", "prompt": "打卡要加 GPS 定位驗證，離個案地址超過 200 公尺就擋下，前端要提示、後端也要驗", "skill": "none", "correction": false, "task_type": "multi_step", "note": "補充：跨前後端新功能"}
+{"id": "A27", "prompt": "把 ApiResponse 的 envelope 改成統一格式，所有 controller 都要跟著改", "skill": "none", "correction": false, "task_type": "multi_step", "note": "補充：共用結構改版，影響多檔"}
+{"id": "A28", "prompt": "家屬 App 要新增推播通知設定頁，每一類通知都可以單獨開關", "skill": "none", "correction": false, "task_type": "multi_step", "note": "補充：新頁面"}
+{"id": "A29", "prompt": "你只做了前端，後端的權限檢查也要一起加，還有對應的測試", "skill": "none", "correction": true, "task_type": "multi_step", "note": "補充：糾正＋多步驟"}
+{"id": "A30", "prompt": "班表 API 偶爾回傳空陣列，但 DB 裡明明有資料，找不出規律", "skill": "none", "correction": false, "task_type": "debug", "note": "補充：間歇性問題"}
+{"id": "A31", "prompt": "升級 RN 0.74 之後 Android release build 就打不開，debug 版正常", "skill": "none", "correction": false, "task_type": "debug", "note": "補充：環境差異問題"}
+{"id": "A32", "prompt": "幫我整理這週的週報，順便清一下記憶", "skill": "weekly-review", "correction": false, "task_type": "ops", "note": "新 skill；易混淆 neat-freak（整理記憶）"}
+{"id": "A33", "prompt": "幫 XYZ-8340 跑驗收測試，截圖貼到 Jira 留言", "skill": "jira-test-report", "correction": false, "task_type": "ops", "note": "新 skill；易混淆 jira、cup-build-test"}
+{"id": "A34", "prompt": "把 attendance/list 這個 entry 從 React 15 遷到 18", "skill": "r15-r18-migrate", "correction": false, "task_type": "multi_step", "note": "新 skill；task_type 有爭議：跨檔改碼→multi_step，但也是跑既有流程（ops）"}
+{"id": "A35", "prompt": "attendance/list 遷到 R18 之後，幫我比對新舊兩版行為有沒有不一樣", "skill": "r15-r18-verify", "correction": false, "task_type": "ops", "note": "新 skill；易混淆 r15-r18-migrate"}
+{"id": "A36", "prompt": "這次 CUP 的幾個 commit，幫我反推要測哪些項目，再產 Playwright 腳本", "skill": "cup-build-test", "correction": false, "task_type": "multi_step", "note": "新 skill；易混淆 jira-test-report；task_type 比照 A11「補整批測試」→multi_step"}
+{"id": "A37", "prompt": "PM 要在班表頁加匯出 Excel，你先評估這個需求值不值得做", "skill": "linus-requirements-analysis", "correction": false, "task_type": "question", "note": "新 skill"}
+{"id": "A38", "prompt": "我改了一堆 hook 跟 rules，幫我把本機設定推到 repo 備份", "skill": "sync-my-claude-setting", "correction": false, "task_type": "ops", "note": "新 skill"}
+{"id": "A39", "prompt": "這個 session 燒了多少 token？哪個回合最貴？", "skill": "token-analyze", "correction": false, "task_type": "question", "note": "新 skill；只要資訊→question（比照 A06、A07）"}
+{"id": "A40", "prompt": "我要先離開一下，把目前進度跟還沒存的記憶先存起來", "skill": "save-progress", "correction": false, "task_type": "ops", "note": "新 skill"}
+{"id": "A41", "prompt": "這階段做完了，把 CLAUDE.md、README 跟記憶對一下，過時的清掉", "skill": "neat-freak", "correction": false, "task_type": "ops", "note": "新 skill；易混淆 weekly-review"}
+{"id": "A42", "prompt": "版號 PR 可以 merge 了，merge 完順便把已上架的 jira 單同步結案", "skill": "finalize-release", "correction": false, "task_type": "ops", "note": "新 skill；易混淆 jira-release-sync；本 repo 專案層設為 user-invocable-only，評估用 user 層選項"}
+{"id": "A43", "prompt": "我想填一份 AI 效益案例：這次用 Claude 自動產測試報告，省了大概兩天", "skill": "ai-case-report", "correction": false, "task_type": "ops", "note": "新 skill；本 repo 專案層設為 off，評估用 user 層選項"}
+{"id": "A44", "prompt": "React 15 跟 18 的 setState 批次更新行為差在哪？", "skill": "none", "correction": false, "task_type": "question", "note": "陷阱：提到 R15/R18，但只是提問"}
+{"id": "A45", "prompt": "測試報告裡那張截圖按鈕沒出來，幫我查是頁面壞了還是腳本等太短", "skill": "none", "correction": false, "task_type": "debug", "note": "陷阱：含「測試報告」「截圖」，但是除錯"}
+{"id": "A46", "prompt": "把登入 token 的過期時間從 1 小時改成 8 小時", "skill": "none", "correction": false, "task_type": "small_change", "note": "陷阱：含 token，不是 token-analyze"}
+{"id": "A47", "prompt": "sync repo 的 main 是 protected branch，force push 被擋，要去哪裡開權限？", "skill": "none", "correction": false, "task_type": "question", "note": "陷阱：含 sync／push，不是 sync-my-claude-setting"}

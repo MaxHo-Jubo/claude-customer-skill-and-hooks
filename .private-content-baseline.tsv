@@ -13,9 +13,9 @@ CATALOG.md	~/.secret-client-work	local-project-path
 CATALOG.md	~/Desktop	local-project-path
 CATALOG.md	~/Documents	local-project-path
 CATALOG.md	~/Downloads	local-project-path
-CLAUDE.md.20260918	ERPD-11696	private-identifier
-CLAUDE.md.20260918	ERPD-7777	private-identifier
-CLAUDE.md.20260918	LVB-7866	private-identifier
+CLAUDE.md.20260924	ERPD-11696	private-identifier
+CLAUDE.md.20260924	ERPD-7777	private-identifier
+CLAUDE.md.20260924	LVB-7866	private-identifier
 CODE-REVIEW-RULE.md	ERPD-11696	private-identifier
 CODE-REVIEW-RULE.md	ERPD-12345	private-identifier
 CODE-REVIEW-RULE.md	ERPD-7777	private-identifier
@@ -78,6 +78,8 @@ scripts/add-obsidian-tags.ts	DayCareStaff	private-identifier
 scripts/add-obsidian-tags.ts	FamilyMember	private-identifier
 scripts/detect-jira-issue.sh	ERPD-5678	private-identifier
 scripts/detect-jira-issue.sh	LVB-1234	private-identifier
+scripts/jev-eval/REVIEW.md	/Users/x/app	local-project-path
+scripts/jev-eval/c-repeat.jsonl	/Users/x/app	local-project-path
 scripts/lib/review-marker.ts	/Users/maxhero/...	local-project-path
 scripts/post-commit-review.ts	ERPD-11970	private-identifier
 scripts/pr-watcher.sh	compal-swhq	private-identifier
@@ -155,6 +157,7 @@ skills/neat-freak/references/agent-paths.md	~/.codex	local-project-path
 skills/neat-freak/references/agent-paths.md	~/.openclaw	local-project-path
 skills/pr-reviewer/references/review-spec.md	ERPD-11971	private-identifier
 skills/pr-reviewer/references/review-spec.md	luna_web	private-identifier
+skills/r15-r18-migrate/helpers/tests/test_review_112j.py	/Users/someone/work	local-project-path
 skills/sync-my-claude-setting/SKILL.md	$HOME/.claude.json	local-project-path
 skills/sync-my-claude-setting/SKILL.md	~/.acme-internal-project	local-project-path
 skills/sync-my-claude-setting/SKILL.md	~/.claude.json	local-project-path

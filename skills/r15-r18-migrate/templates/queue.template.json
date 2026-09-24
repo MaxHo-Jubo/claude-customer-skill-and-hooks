@@ -32,8 +32,12 @@
       "status": "pending",
       "branch": null,
       "pr_url": null,
+      "pr_unverified": false,
+      "last_error": null,
       "opened_at": null,
-      "last_remind_at": null
+      "last_remind_at": null,
+      "frozen_sha": null,
+      "covered_entries": null
     }
   ],
   "modules": [

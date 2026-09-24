@@ -47,8 +47,9 @@ readonly max_text_chars=300
 # curl 逾時秒數
 readonly curl_timeout_seconds=10
 
-# HIGH 類事件：不受 INFO 開關與月額度限制，一定送
-readonly high_events="module_failed module_blocked checkpoint_opened paused_for_review paused quota_wait_long queue_complete queue_stalled runner_crashed"
+# HIGH 類事件：不受 INFO 開關與月額度限制，一定送（module_done_pr_failed＝模組已完成、只是頁面 PR 沒開成或沒更新，
+# 要人補 PR；1.1.2 第五批收尾從 module_blocked 拆出來，維持原本的 HIGH 等級）
+readonly high_events="module_failed module_blocked module_done_pr_failed checkpoint_opened paused_for_review paused quota_wait_long queue_complete queue_stalled runner_crashed"
 
 # ---------------------------------------------------------------- 參數
 
@@ -121,6 +122,7 @@ event_emoji() {
     module_done|queue_complete) echo "✅" ;;
     module_failed|runner_crashed) echo "❌" ;;
     module_blocked|queue_stalled) echo "⛔" ;;
+    module_done_pr_failed) echo "⚠️" ;;
     paused|paused_for_review) echo "⏸" ;;
     checkpoint_opened) echo "🔖" ;;
     quota_wait_started|quota_wait_long) echo "⏳" ;;

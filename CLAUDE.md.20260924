@@ -4,6 +4,7 @@
 # v2.2（2026-09-14 weekly-review STEP 05，user 同意）：verify-the-observer 補否定結論前的對照組、uncertainty 補可查證事實先查證再斷言；改前備份 CLAUDE.md.bak-20260914
 # v2.3（2026-09-14 Opus 5，user 指示採納 /insights「根因紀律」建議）：root-cause 補「否證前不做修正性編輯」＋ harness 新增除錯動手前路由至 judgment-matrix.md §5；改前備份 CLAUDE.md.bak-20260914-2
 # v2.4（2026-09-14 Opus 5，user 指示採納 /insights「範圍控制」建議）：GATE-1 bugfix-scope 補共用/根層級檔案限制；裝置設定、順手刪 code 兩條改寫進 judgment-matrix.md §3 #8／§2；改前備份 CLAUDE.md.bak-20260914-3
+# v2.5（2026-09-24 Opus 5.5，user 同意）：harness 索引 §4 移除「弱模型」限定，品味決策不分模型一律走三選一（避免 Opus/Sonnet 切換時觸發條件漂移）；同批刪 rules/common/performance.md CONTEXT-WINDOW；改前備份 CLAUDE.md.bak-20260924
 # 收錄門檻：只收 (a)事實與連線資料 (b)codebase 慣例與踩坑 gotcha (c)user 明定偏好與工作協議；模型能自行判斷的通用工程常識不寫；rules/ 與 harness/ 已載明的不重複寫
 
 
@@ -26,7 +27,7 @@
 - 卡關（同錯 3 次/修A壞B/特判累積）→ harness/judgment-matrix.md §1 換路徑信號
 - 宣告完成前 → harness/judgment-matrix.md §2 完成判準（分任務型態 DoD checklist）
 - 想問 user 前 → harness/judgment-matrix.md §3 熔斷條件（該問 vs 自己解決）
-- 遇品味/美感決策 → harness/judgment-matrix.md §4（弱模型禁自行拍板）
+- 遇品味/美感決策 → harness/judgment-matrix.md §4（一律走三選一，不自行拍板）
 - git commit 成功後 → harness/commit-review-policy.md（Tier 0~3 分級審查，取代舊「強制六步」）
 - 被 user 糾正 / 要寫教訓 / 要改制度檔 → harness/knowledge-protocol.md（權限分級＋踩坑格式＋精簡門檻）
 - 質疑 session 注入成本 / 評估 plugin 去留 / 清理死引用 → harness/harness-diagnosis.md（本機實測診斷，status DONE，機器專屬不隨 sync；注入量數字是 2026-07-03 的，context-mode 已停用＋CLAUDE.md 已改 v2.1，絕對值須重量測，方法論與壞引用清單仍有效）

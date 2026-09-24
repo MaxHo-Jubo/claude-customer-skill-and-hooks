@@ -83,7 +83,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.0 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責） |
+| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
@@ -97,7 +97,7 @@
 | Hook 類型 | 觸發時機 | Matcher | 腳本 | 用途 |
 |-----------|----------|---------|------|------|
 | SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
-| UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 檢查是否需要啟動 skill |
+| UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 以 TypeSafe Jev（systemOne，第三方語意判斷 API）一次問三題（該用哪個 skill／是否在糾正 Claude／任務類型），達門檻時以 stdout 注入提示；取代舊版關鍵字比對（讀取的 `CLAUDE_USER_CONTENT` 環境變數從未存在，舊版形同虛設，見下方說明） |
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行 |
@@ -106,12 +106,16 @@
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
 | PostToolUseFailure | 所有工具（catch-all）失敗時 | —（空 matcher） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl`（讀 `error`/`is_interrupt`；使用者中斷、權限/sandbox 阻擋不觸發）；2026-09-14 前誤掛在 `PostToolUse`（只在成功時觸發，空轉未寫入），改掛獨立事件後才實際生效 |
+| PostToolUseFailure | 所有工具失敗時 | —（空 matcher） | `repeat-failure-detector.ts` | 同錯偵測（Jev C 掛載點）：新失敗字面相同或經 Jev 判定同問題就歸組，累積達 3 的倍數次時以 `additionalContext` 注入 judgment-matrix.md §1 換路徑提示；每 session 保留最近 3 組不同失敗 |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
 | Stop | 回合結束前 | —（所有回合） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員：marker 未清時 block 回合結束，reason 以指令級注入指派 `commit-review` skill；`sessionId` 優先比對、cwd repoRoot 補位；per-session 最多攔 3 次（保險絲）、plan mode 放行、逾期自動清除、失敗 fail-open |
+| Stop | 回合結束前 | —（所有回合） | `stop-claim-guard.ts` | 完成宣告檢查（Jev B 掛載點）：回覆宣稱已完成/已修好/已找到根因卻無驗證證據時，以 `{"decision":"block"}` 擋下回合結束一次；`stop_hook_active` 為真（已被擋過續跑）一律放行，同 session 最多擋 2 次；失敗 fail-open |
 | SubagentStop | 子 agent 結束 | — | `subagent-review-clear.ts` | **只記錄 `agent_type` 到 debug log，不再清除 marker**（2026-08-17 移除清除職責）。舊行為「型別含 review 就清」在 Tier 3 並行 6 個 agent 時，第一個完成的即解除閘門；full review 的面向 agent（`pr-1134-full-review` 等）也誤命中。marker 改由 `commit-review` skill §5 在「面向收齊 + Critical 處理完」後顯式清除 |
 | Notification | 通知 | * | (inline printf) | 終端機通知 |
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
+
+> **TypeSafe Jev 試用（2026-09-24）**：`skill-activation-hook.ts`／`repeat-failure-detector.ts`／`stop-claim-guard.ts` 三個 hook（對應掛載點 A/C/B）共用 `scripts/lib/jev-client.ts`（fail-open HTTP client）與 `scripts/lib/jev-questions.ts`（題目定義），門檻與題目經 `scripts/jev-eval/run-eval.ts` 離線評估後拍板，題目或門檻改動須重跑評估。任一 Jev 呼叫失敗一律 fail-open（不擋流程），決策記錄於 `~/.claude/state/jev/decisions.jsonl`（不含原文）；環境變數 `JEV_HOOKS_DISABLED=1` 為 kill switch。
 
 ## Agents 一覽
 
@@ -193,13 +197,13 @@
 
 > **2026-05-20 新增**：Live agent sessions 區塊 — 透過 `claude agents --json`（v2.1.145+）統計同帳號下其他 session 的 busy/idle 數量並顯示於 LINE 3，3 秒快取；舊版 CLI 不存在時安靜略過。
 
-## claude-mem 繁體中文化（11.0.0）
+## claude-mem 繁體中文化（13.24.23）
 
 詳見 [`claude-mem-customize-TC/README.md`](claude-mem-customize-TC/README.md)。
 
 claude-mem 插件的 UI 輸出預設英文，此資料夾保存繁體中文化的改動：
 - **修改後的完整檔案**（可直接覆蓋 plugin cache + marketplaces 兩個路徑）
-- **Patch 檔**（基於 11.0.0 版本的 diff，更新後可能失效）
+- **Patch 檔**（基於 13.2.0 版本的 diff，更新後可能失效）
 - **翻譯對照表**（插件更新後 patch 失效時，依此表手動替換）
 
 > 插件更新會覆蓋 cache，翻譯對照表是最可靠的重新套用方式。
@@ -242,6 +246,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-09-24: TypeSafe Jev 語意路由取代關鍵字 skill 觸發 + 兩個新 Jev hook + r15-r18-migrate 1.1.2 + judgment-matrix/performance 規則調整
+
+- **`skill-activation-hook.ts` 全面改寫（A 掛載點）**：舊版讀 `process.env.CLAUDE_USER_CONTENT` 比對 `skill-rules.json` 關鍵字，但該環境變數 Claude Code 從未提供，prompt 實際在 stdin JSON 的 `prompt` 欄位，舊版因此永遠讀到空字串直接放行、從未真正運作過。新版讀 stdin，改用 TypeSafe Jev（systemOne）一次問三題（該用哪個 skill／是否在糾正 Claude／任務類型），達門檻（skill 建議 conf ≥0.8、糾正偵測 conf ≥0.3）時以 stdout 注入提示；skill 選項動態讀取本機 `skillOverrides`／`disable-model-invocation` 過濾後的清單，slash command（`/` 開頭）不路由。
+- **新增兩個 Jev hook**：`repeat-failure-detector.ts`（PostToolUseFailure，C 掛載點）——同一失敗累積達 3 的倍數次時注入 judgment-matrix.md §1 換路徑提示；`stop-claim-guard.ts`（Stop，B 掛載點）——回覆宣稱完成/已修好/已找到根因卻無驗證證據時擋一次回合結束，同 session 最多擋 2 次。三者共用 `scripts/lib/jev-client.ts`／`scripts/lib/jev-questions.ts`，門檻由 `scripts/jev-eval/run-eval.ts` 離線評估後拍板，任一 hook 出錯一律 fail-open。
+- **`settings.json`**：`skill-activation-hook.ts`（UserPromptSubmit）與 `post_tool_error.py`（PostToolUseFailure）的 timeout 從 3000 降到 10，對齊本檔其他 hook 慣例。
+- **`r15-r18-migrate` 升到 1.1.2**：修復兩個 CRITICAL——舊 entry 分支重跑沒有煞車（重跑時整合分支可能已前進，發佈段 `merge --ff-only` 必敗會觸發無簽名的一般暫停、形成無限迴圈）、被訊號中斷的呼叫序號被下一次重用而覆寫前一次的 stream/log；`helpers/tests/` 同版大量擴充（checkpoint／reconcile／merge-integration／分支煞車等單元測試）。
+- **`jira-release-sync`**：新增 `tests/test_scan_commits_luna.py`，用真實臨時 git repo（bare origin + 工作 repo，不 mock git）驗證 luna 模式的 frontend/backend 判定與 tag ancestry。
+- **`rules/common/performance.md`**：移除 `CONTEXT-WINDOW` 段與 `COMPLEX-TASK` 的「啟用 extended thinking」步驟；`THINKING` 段改為「開關與深度由 user／設定決定，模型不假設自己能開關」，本機用 `effortLevel`（settings.json）與 session 內 `/effort`。
+- **`harness/judgment-matrix.md`**：§3 新增反例——沒被卡住就不該停下報告進度，狀態說明與下一步放同一則訊息；§4 品味決策移除「弱模型」限定，改為不分模型一律走三選一。
+- **claude-mem 中文化對齊 13.24.23**：Terminal 標籤函式名再變（worker `fy/my`→`Hh/zh`；context-generator 維持 `k/w`），`apply-tc.sh`／`translation-mapping.md` 同步更新。
 
 ### 2026-09-18: 新增發版/遷移三個 skill（jira-release-sync、finalize-release、r15-r18-migrate）+ PostToolUseFailure hook 事件 + luna-web-readonly MCP Server
 

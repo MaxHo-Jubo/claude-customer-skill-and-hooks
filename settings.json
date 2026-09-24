@@ -218,7 +218,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh UserPromptSubmit bun /Users/maxhero/.claude/scripts/skill-activation-hook.ts",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Checking skill activation..."
           }
         ]
@@ -279,7 +279,12 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUseFailure python3 /Users/maxhero/.claude/hooks/post_tool_error.py",
-            "timeout": 3000
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUseFailure bun /Users/maxhero/.claude/hooks/repeat-failure-detector.ts",
+            "timeout": 10
           }
         ]
       }
@@ -353,6 +358,12 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh Stop bun /Users/maxhero/.claude/hooks/stop-review-guard.ts",
             "timeout": 10,
             "statusMessage": "Checking pending-review stop gate..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh Stop bun /Users/maxhero/.claude/hooks/stop-claim-guard.ts",
+            "timeout": 10,
+            "statusMessage": "Checking completion claim evidence..."
           }
         ]
       }

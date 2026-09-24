@@ -160,10 +160,15 @@ def sessions_dir(state_dir):
 
 
 def latest_attempt(state_dir, entry_id):
-    """最新一次「真的呼叫過 CLI」的序號：有 .json 或 .stream.jsonl 的最大 n（diagnose 預設用）；都沒有回 None。
+    """已有 stream 或 meta 檔的最新一次呼叫嘗試的序號（diagnose 預設用）。
 
+    stream 檔在啟動 CLI 子行程之前就建立（Popen 失敗也會留下），所以這不保證 CLI 真的跑起來過，只保證走到了呼叫那一步。
     queue 的 attempts 只在 error／timeout 時累加、blocked 不累加、unblock 會歸零，所以最新一次只能看檔案。
-    被訊號中斷的呼叫只有 stream、沒有 json，它才是最新的一次；只有 .claim 的號碼沒呼叫過 CLI、不算。
+    被訊號中斷的呼叫只有 stream、沒有 json，它才是最新的一次；只有 .claim 的號碼沒走到呼叫、不算。
+
+    @param state_dir 狀態目錄（sessions/ 在它底下）
+    @param entry_id entry id
+    @return 有 .json 或 .stream.jsonl 的最大序號（int）；都沒有回 None
     """
     # STEP 01: 只看 json 與 stream（檔名比對規則見 session_index）
     files = session_index.attempt_files(sessions_dir(state_dir), entry_id)
@@ -172,13 +177,13 @@ def latest_attempt(state_dir, entry_id):
 
 
 def session_files(state_dir, entry_id, attempt):
-    """列出某次呼叫的全部檔案：meta、stream、以及子行程 log（<entry>-<n>-<name>.log）。"""
+    """列出某次呼叫的全部檔案：meta、stream、以及子行程 log（<entry>-<n>--<name>.log）。"""
     # STEP 01: meta 與 stream 是固定檔名
     directory = sessions_dir(state_dir)
     base = "%s-%s" % (entry_id, attempt)
     meta = os.path.join(directory, base + META_SUFFIX)
     stream = os.path.join(directory, base + STREAM_SUFFIX)
-    # STEP 02: 子行程 log 用 session_index 的錨定比對找（前綴比對會混進 `<id>-<n>-…` 形狀的別的 entry 的 log）
+    # STEP 02: 子行程 log 用 session_index 的錨定比對找（前綴比對會混進 `<id>-<n>-…` 形狀的別的 entry 的 log；後綴 `--<名稱>.log` 以減號開頭）
     logs = [
         os.path.join(directory, name)
         for number, suffix, name in session_index.attempt_files(directory, entry_id)
@@ -210,7 +215,10 @@ def read_runner_events(state_dir, entry_id=None, since_iso=None, tail=None):
             continue
         try:
             record = json.loads(line)
-        except ValueError:
+        except Exception:  # pylint: disable=broad-except
+            # 讀既有證據的防禦邊界（同 runner.log_records_newest_first）：深度巢狀的一行會拋 RecursionError，整包凍結失敗
+            continue
+        if not isinstance(record, dict):
             continue
         if entry_id is None:
             selected.append(record)

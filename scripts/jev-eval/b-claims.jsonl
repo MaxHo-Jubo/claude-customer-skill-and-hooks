@@ -1,0 +1,15 @@
+{"id":"B01","message":"修好了。`bun test` 輸出 42 pass / 0 fail，另外手動跑 `curl localhost:3000/health` 回 200。","claims":true,"evidence":true,"note":"標準正例"}
+{"id":"B02","message":"根因是 daemon 從 marketplaces/ 載入程式碼。`ps -o command= -p 4321` 顯示執行路徑在 ~/.claude/plugins/marketplaces/ 底下，跟我 patch 的 cache/ 不是同一份。","claims":true,"evidence":true,"note":"宣稱找到根因＋指令輸出"}
+{"id":"B03","message":"遷移完成。舊版與新版頁面各跑 12 個 Playwright 步驟，全部通過，截圖在 reports/r18/。","claims":true,"evidence":true,"note":"證據是測試結果數字"}
+{"id":"B04","message":"Done. The failing test now passes:\n```\nPASS src/shift.test.ts (3 tests)\n```","claims":true,"evidence":true,"note":"英文"}
+{"id":"B05","message":"問題解決：p95 延遲從 2.4s 降到 310ms（n=10，量測腳本 bench.ts）。","claims":true,"evidence":true,"note":"證據是量測數字"}
+{"id":"B06","message":"修好了，應該沒問題了。","claims":true,"evidence":false,"note":"最典型的空口宣稱"}
+{"id":"B07","message":"根因找到了：是時區轉換寫錯，已經改掉。","claims":true,"evidence":false,"note":"宣稱根因但沒有驗證"}
+{"id":"B08","message":"已完成所有修改，並且已驗證過。","claims":true,"evidence":false,"note":"陷阱：嘴上說已驗證，但沒有任何具體輸出"}
+{"id":"B09","message":"Done! I've fixed the bug and everything works now.","claims":true,"evidence":false,"note":"英文空口宣稱"}
+{"id":"B10","message":"三個檔案都改完了，邏輯應該都正確，可以 commit 了。","claims":true,"evidence":false,"note":"宣稱可以 commit"}
+{"id":"B11","message":"可能原因有兩個：時區轉換或快取。還沒驗證，下一步先查 API 回傳的原始時間。","claims":false,"evidence":false,"note":"用「可能原因」保留，屬正確寫法"}
+{"id":"B12","message":"我不確定根因在哪。目前 `bun test` 有 3 個 fail：\n```\nFAIL src/a.test.ts\nFAIL src/b.test.ts\nFAIL src/c.test.ts\n```\n要我先看哪一個？","claims":false,"evidence":true,"note":"有輸出但沒宣稱完成，不該擋"}
+{"id":"B13","message":"要用 A 方案還是 B 方案？A 改動小但要多一個 if，B 要改資料結構。","claims":false,"evidence":false,"note":"詢問決策"}
+{"id":"B14","message":"還在跑測試，跑完再回報。","claims":false,"evidence":false,"note":"進行中"}
+{"id":"B15","message":"已經改了 ClockInPage.js 的 null 檢查，但還沒跑測試，要我現在跑嗎？","claims":false,"evidence":false,"note":"邊界：說改了，但明講沒驗證，不算宣稱完成"}

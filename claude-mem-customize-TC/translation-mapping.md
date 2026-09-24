@@ -1,6 +1,6 @@
 # claude-mem 繁體中文化翻譯對照表
 
-> 適用版本：claude-mem 13.9.3（thedotmack）
+> 適用版本：claude-mem 13.24.23（thedotmack）
 > 插件更新後 cache 及 marketplaces 都會被覆蓋，需重新套用。完整可執行腳本見 [files/apply-tc.sh](files/apply-tc.sh)。
 > `code--zh-tw.json` mode 檔案也會在插件更新後消失（modes/ 目錄只剩原廠 `code--zh.json`），需重新複製。
 >
@@ -69,7 +69,7 @@ v13.9.3 實測：`worker-service.cjs` 用 `fh`/`ph`，`context-generator.cjs` �
 > 確認新版函式名的方法：
 > `grep -o -E '.{0,8}"Investigated"' worker-service.cjs context-generator.cjs | sort -u`
 >
-> 歷次函式名變遷（各機器/各版本觀察值不同，minify 產物不穩定）：v10.6.2 `bp/_p` → v11.0.0 `mf/ff` → v12.1.6 `Hm/qm` → v13.2.0 `BA/zA` → v13.9.1 worker `dg/pg`、ctx `X/G` → v13.9.3 worker `fh/ph`、ctx `H/X`。
+> 歷次函式名變遷（各機器/各版本觀察值不同，minify 產物不穩定）：v10.6.2 `bp/_p` → v11.0.0 `mf/ff` → v12.1.6 `Hm/qm` → v13.2.0 `BA/zA` → v13.9.1 worker `dg/pg`、ctx `X/G` → v13.9.3 worker `fh/ph`、ctx `H/X` → v13.24.0 worker `fy/my`、ctx `k/w` → v13.24.23 worker `Hh/zh`、ctx `k/w`（ctx 未變）。
 
 ### worker-service.cjs 專用 — Session 摘要模板
 
@@ -143,6 +143,23 @@ v13.9.3 實測：`worker-service.cjs` 用 `fh`/`ph`，`context-generator.cjs` �
 > 完整簡繁對照請直接比較 `files/code--zh-tw.json` 與原版 `code--zh.json`。
 
 ## 版本差異記錄
+
+### v13.24.0/13.24.1 → v13.24.23 變更
+
+- Terminal 函式名稱：worker `fy/my` → `Hh/zh`；context-generator 維持 `k/w`
+- **升級原因（非中文化相關，但升級必看）**：13.24.0/13.24.1 有上游 bug #3890——v7 的 `session_summaries` 重建會丟掉 `discovery_tokens` 欄位，而 migration 11 只看 `schema_versions` 有沒有 v11 紀錄就 return，永遠不補欄位 → 之後每次 session 摘要寫入都失敗（log：`Generator failed ... table session_summaries has no column named discovery_tokens`），帶篩選條件的 search API 回 500 `no such column: s.discovery_tokens`。observations 照常寫入，表面上看不出壞掉。本機實測 2026-09-04 09:56 升級後摘要停寫 10 天。修正 PR #3955（v13.24.6 起），`ensureDiscoveryTokensColumn()` 改為直接 PRAGMA 檢查欄位，重啟 worker 自動補回；已遺失的摘要不會回補
+- 升級前先 `sqlite3 ~/.claude-mem/claude-mem.db ".backup <path>"` 線上備份（worker 執行中可用）
+- marketplaces 的 node_modules 這次升級後又不見了，照上一節重跑 `bun install`
+- `~/.claude-max-2/plugins` 是指向 `~/.claude/plugins` 的 symlink，升級一次兩個帳號都生效
+
+### v13.9.3 → v13.24.0 變更
+
+- Terminal 函式名稱再次改變：worker `fh/ph` → `fy/my`；context-generator `H/X` → `k/w`（單字元函式名，sed 錨點含完整引號字串仍安全）
+- 既有 UI 字串文字內容無變化（`Column Key`、`Format: ID TIME TYPE TITLE` 等全數逐字沿用，未重新校對）
+- 目錄結構改變：cache 路徑不再有 `plugin/` 子目錄，`scripts/`、`modes/` 直接在版本號目錄下；marketplaces 路徑維持 `plugin/scripts/` 結構不變
+- **新踩坑**：`marketplaces/thedotmack/plugin/` 這份 git clone 從未跑過 `bun install`，缺整組 node_modules（含 zod、多個 tree-sitter 套件）。這版新增的 worker 版本不符自動 recycle 機制一旦嘗試切到 marketplaces 路徑當 successor 就會 crash，觸發「crash → lazy-spawn 回舊版 cache → 下個 hook 又偵測到版本不符 → 再 recycle」無限循環，每次 Bash/Read 呼叫都會報 `claude-mem worker unreachable`。修法：`cd marketplaces/thedotmack/plugin && bun install`。以後每次大版本跳號後，若又看到同樣的循環症狀，先檢查這個路徑的 node_modules 是否存在
+- 插件更新後 worker daemon 自我回報的版本號可能落後 plugin 目錄版本一個小版號（實測 pluginVersion=13.24.0 但 workerVersion 自報 13.23.1），屬於上游 build 流程的版本字串沒同步更新，只造成一次性 WARN log（「not recycling again in this hook invocation」），不影響功能，不必處理
+- 資料庫 schema 新增多裝置同步欄位（`synced_at`/`origin_device_id`/`origin_local_id`/`sync_rev`），既有翻譯 patch 不受影響
 
 ### v13.9.1 → v13.9.3 變更
 

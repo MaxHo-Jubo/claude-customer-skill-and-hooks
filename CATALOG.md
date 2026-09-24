@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-09-18（新增 `jira-release-sync`／`finalize-release`／`r15-r18-migrate` 三個 skill；`post_tool_error.py` 改掛 `PostToolUseFailure` 事件；新增 `luna-web-readonly` MCP Server；前次內容更新 2026-08-24 commit-review codex 引擎路徑，見 README.md 變更紀錄）
+> 上次更新：2026-09-24（`skill-activation-hook.ts` 改用 TypeSafe Jev 語意路由；新增 `repeat-failure-detector.ts`／`stop-claim-guard.ts` 兩個 Jev hook；`r15-r18-migrate` 升至 1.1.2；前次內容更新 2026-09-18 新增三個發版/遷移 skill，見 README.md 變更紀錄）
 
 ---
 
@@ -88,7 +88,8 @@
 
 #### `/jira-release-sync` — 發版狀態同步（v1.5.0）
 
-- **位置**：`~/.claude/skills/jira-release-sync/SKILL.md`（含 `scan_commits.py`、`scan_commits_luna.py`）
+- **位置**：`~/.claude/skills/jira-release-sync/SKILL.md`（含 `scan_commits.py`、`scan_commits_luna.py`、`tests/test_scan_commits_luna.py`）
+- **測試（2026-09-24 新增）**：`tests/test_scan_commits_luna.py` 用真實臨時 git repo（bare origin + 工作 repo，不 mock git）驗證 luna 模式——release fast-forward、`max[_ ]?ho` 作者過濾、frontend/backend 依路徑判定、`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD` tag ancestry、跨 component 完成度判斷、路徑判不出 component 進 `manual_review`
 - **用法**：`/jira-release-sync`（掃預設 1 週）、`/jira-release-sync --weeks 3`（clamp 到 1~8）、「掃描已上架的commit留言jira」、「同步發版狀態到jira」
 - **功能**：掃描一段期間內的 commit，判定哪些 `[ISSUE-ID]` commit 已隨某版本上架，自動在對應 Jira issue 留言版本資訊、轉換狀態為 Resolved、附上結案日。**不寫入 Fix Version 欄位**（使用者帳號無新增 Version 權限，版本資訊已含在留言文字內）
 - **兩套完全不同的判定規則（依路徑判定 `REPO_MODE`，不可混用）**：
@@ -391,9 +392,9 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
-#### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.1.0）
+#### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.1.2）
 
-- **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness）、`CHANGELOG.md`）
+- **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness／`tests/` 單元測試）、`CHANGELOG.md`）
 - **用法**：`/r15-r18-migrate <entry-id>`、`/r15-r18-migrate <entry-id> --resume`
 - **定位**：headless 無人看管模式下，由外層排程程式（runner）逐 entry 呼叫；本 skill 一次只處理 `queue.json` 裡的一個 entry，在**目前所在分支**完成遷移並 commit，然後輸出結構化 JSON 結果。分支切換、合併、推送、開 PR、建置複驗、通知全部是 runner 的職責，本 skill 一律不做；任何猶豫都收斂成 `blocked`，不能靠猜、不得提問
 - **硬性不變量**：保留 class component（不轉 functional／hooks／TypeScript）、命名沿用 R15（action 常數、reducer 檔名、state 欄位一律照搬不加前綴）、機制沿用 R18（saga 基礎層零改動）、註解逐字照搬（不補 STEP／JSDoc）、R15 檔一律不刪（回退手段是把 feature flag 關回 false）
@@ -407,6 +408,7 @@
 - **八種 `blocked_reason`**（字面值不得增減）：`inventory_incomplete`／`too_large`／`git_state`／`build_env`／`no_mapping`／`unsupported_ajax_field`／`build_failed`／`needs_human`；blocked 時保留已完成工作、更新 progress、輸出結構化結果，**不回退不清理**
 - **流程邊界（硬性）**：不執行 `checkout`/`switch`/`merge`/`rebase`/`push`/`reset`/`restore`/`stash`/`clean`/`cherry-pick`/`worktree`/`commit --amend`，不 `gh pr merge|close`，不 `rm -rf`；`git add` 範圍嚴格限定本 entry 路徑 + 明列的共用註冊檔
 - **v1.1.0（2026-09-18）完整錯誤回報機制**：CLI 改 `stream-json --verbose` 逐事件落檔（逾時被殺 stdout 不再是空的）；新模組 `helpers/diagnostics.py` 在判讀失敗當下自動凍結診斷包（stream/meta/子行程 log/progress/queue 快照 + 給 Claude 讀的 `SUMMARY.md`，命中 secret pattern 整行 `[REDACTED]`）；`helpers/stream_events.py` 抽出 stream-json 解析供 runner 與 diagnostics 共用；runner 未預期例外統一走 `handle_runner_crash`（寫 traceback、`enter_paused` 而非直接 raise，同簽名第二次進入 `hold` 狀態靜默退出直到手動 unblock）；新子命令 `diagnose`
+- **v1.1.2（2026-09-23～24）修復兩個 CRITICAL**：D1 舊 entry 分支重跑沒有煞車——重跑時整合分支可能已前進，發佈段 `merge --ff-only` 必敗會觸發無簽名的一般暫停，重啟後前置作業放行、同 entry 放回 pending 再燒一次模組預算且不再通知，形成無限迴圈；修法分兩層：CLI 之前 `prepare_branch` 先 `merge --ff` 追上整合分支（失敗依有無衝突分流 `blocked(git_state)`／runner 級暫停），發佈段的 ff-merge 失敗改回新結果 `entry_not_ff` 讓 entry 標 blocked 而非一般暫停。D2 被訊號中斷的呼叫序號會被下一次重用而覆寫前一次的 stream/子行程 log——`next_call_number` 改用 `O_CREAT|O_EXCL` 佔號式取號（新模組 `helpers/session_index.py`）。`helpers/tests/` 同版大量擴充（checkpoint hold/reconcile、merge-integration、call-number、process-shutdown 等單元測試）
 - **`skill-rules.json` 未註冊**：與 `finalize-release` 一樣純手動 slash command 觸發，不會被自動建議
 - **依賴**：`helpers/runner.py`（外層 runner，不屬本 skill 執行範圍但共用同一目錄）、`helpers/diff-test/` jest harness、`helpers/boot-smoke.cjs`（Playwright）、vite build、git repository
 
@@ -494,7 +496,9 @@
 
 | 腳本 | 用途 |
 |------|------|
-| `skill-activation-hook.ts` | 分析使用者輸入，檢查是否觸發特定 skill |
+| `skill-activation-hook.ts` | 用 TypeSafe Jev（systemOne，第三方語意判斷 API）對 user prompt 一次問三題（該用哪個 skill／是否在糾正 Claude／任務類型），達門檻時以 stdout 注入提示（下方有詳細說明） |
+
+> **v2 改寫（2026-09-24）**：舊版讀 `process.env.CLAUDE_USER_CONTENT` 比對 `skill-rules.json` 關鍵字，但該環境變數 Claude Code 從未提供（2.1.278 binary 內 0 次出現）——prompt 實際在 stdin JSON 的 `prompt` 欄位，舊版因此永遠讀到空字串直接放行，從未真正運作過。新版讀 stdin，slash command（`/` 開頭）不路由；skill 選項動態讀取本機 `skillOverrides`（`off`／`user-invocable-only` 隱藏）與 SKILL.md frontmatter 的 `disable-model-invocation` 過濾後的清單。門檻：skill 建議 conf ≥0.8（2026-09-21 選項改動態讀取後重跑評估 n=47，t=0.8 時 27 次推薦僅 1 次推錯、26 句正例全數召回）、糾正偵測 conf ≥0.3（上線當天兩筆誤報 conf 僅 0.40／0.00）。題目定義在 `scripts/lib/jev-questions.ts`、HTTP client 在 `scripts/lib/jev-client.ts`，任一 Jev 呼叫失敗一律 fail-open。
 
 ### PreToolUse
 
@@ -522,8 +526,11 @@
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
 | —（catch-all，所有工具呼叫失敗） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl`（輸入含 `error`／`is_interrupt`／`duration_ms`，無 `tool_response`；使用者中斷、權限/sandbox 阻擋的呼叫兩種事件都不觸發） |
+| —（catch-all，所有工具呼叫失敗） | `repeat-failure-detector.ts` | 同錯偵測（Jev C 掛載點，2026-09-24 新增）：新失敗與 state 中最近 3 組不同失敗比對，字面完全相同直接歸組，否則平行呼叫 Jev 語意比對（判「是」且 conf ≥0.3 才歸組）；所屬組累積次數達 3 的倍數次時以 `additionalContext` 注入 judgment-matrix.md §1 換路徑提示 |
 
 > **與 PostToolUse 的區別（2026-09-14 實測確認，Claude Code 2.1.270）**：`PostToolUse` 只在 tool **成功**時觸發，失敗走獨立的 `PostToolUseFailure` 事件。`post_tool_error.py` 原本誤掛在 `PostToolUse` 讀 `tool_response.exit_code`，因為失敗的呼叫根本不會觸發該事件而空轉——2026-08-14 那次只驗證了「PostToolUse 不觸發」就推論「用 hook 捕捉 tool 失敗從根本不可行」，沒有查是否存在其他事件；改掛 `PostToolUseFailure` 後才實際生效。詳見 `rules/common/hooks.md` `HOOK-FAILURE-BLINDSPOT`。
+
+> **repeat-failure-detector 的 state**：`~/.claude/state/jev/repeat/<session>.json`，每 session 最多保留 3 組不同失敗；決策 log（不含失敗原文）另存 `~/.claude/state/jev/decisions.jsonl`，與其他兩個 Jev hook 共用同一份 log。
 
 ### PreCompact
 
@@ -536,6 +543,7 @@
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
 | —（所有回合結束） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員——marker 未清時 block 回合結束，reason 以指令級注入（user role）指派 `commit-review` skill，補上「commit 後只打字回覆、systemMessage 被無視」的生命週期缺口。比對雙鍵：`marker.sessionId` 優先（本 session 欠的 review，不 spawn git）、cwd repoRoot 補位（跨 session 接手）。指派字串的 engine 直接讀 `marker.engine`（只讀不重探測，同一輪 review 不換引擎；舊 marker 無此欄位時以 `LEGACY_MARKER_ENGINE` 推導）。防 brick：per-session 有界計數（同 session 最多攔 3 次，達上限放行印警告）、plan mode 放行、逾期 marker 自動清除、計數寫回失敗放行；失敗一律 fail-open |
+| —（所有回合結束） | `stop-claim-guard.ts` | 完成宣告檢查（Jev B 掛載點，2026-09-24 新增）：用 Jev 問 Claude 最後一則回覆是否宣稱完成/已修好/已找到根因、是否附具體驗證證據，兩題皆判「是」且 conf ≥0.3 時以 `{"decision":"block"}` 擋下回合結束一次，reason 依 judgment-matrix.md §2 完成判準要求補證據或改「待確認」；`stop_hook_active` 為真（已被擋過續跑）一律放行，同 session 最多擋 `MAX_BLOCKS=2` 次；不用 `exit 2`（會被 `hook-error-wrapper.sh` 誤記為 ERRORS.jsonl 錯誤），改用 stdout JSON `decision:block` + `exit 0`，與 `stop-review-guard.ts` 同做法；失敗一律 fail-open |
 
 ### SubagentStop
 
@@ -560,7 +568,10 @@
 | `generate-spec-mapping.ts` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
 | `spec-section-validator.ts` | 驗證 spec 必要區段是否存在 |
 | `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
-| `skill-activation-hook.ts` | 分析輸入文字判斷是否要啟動 skill |
+| `skill-activation-hook.ts` | UserPromptSubmit hook — 用 TypeSafe Jev 語意模型路由 user prompt（v2，2026-09-24 全面改寫，見上方 Hooks／UserPromptSubmit 章節） |
+| `lib/jev-client.ts` | Jev（TypeSafe systemOne）HTTP client 共用 lib（2026-09-24 新增）— `callJev`（丟錯版，供離線評估用）／`askJev`（fail-open 版，供 hook 用，出錯回 `null` 並寫 log）；含逾時（`HOOK_TIMEOUT_MS=2000`）、送出前遞迴遮罩憑證（`maskSecrets`）、決策 log（`logDecision`，不含原文）、per-session state 路徑推導（`sessionStatePath`）與原子寫入（`writeJsonAtomic`）；被三個 Jev hook 與 `jev-eval/run-eval.ts` 共用 |
+| `lib/jev-questions.ts` | 三個 Jev 掛載點的題目定義（2026-09-24 新增）— A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑 `jev-eval/run-eval.ts` |
+| `jev-eval/run-eval.ts` | Jev 離線評估 CLI（2026-09-24 新增）— 讀 `jev-eval/{a-routing,b-claims,c-repeat}.jsonl` 三份評估集直接呼叫 systemOne，輸出各題準確率／confidence 門檻表／錯誤案例／延遲，原始結果存 `results-<時間>.json`；門檻挑選規則（`MIN_PRECISION=0.9`／`MIN_COVERAGE=0.5`）事先寫死，不看結果再調 |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）、`stopBlockCounts`（per-session block 計數）與 `engine?`（本輪 review 引擎，選填以相容舊 marker）欄位 |
 | `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
@@ -730,7 +741,7 @@
 | `security.md` | SECRET-MGMT（含 `mcp-config`：MCP 連線字串用 `${VAR}` 展開、`pre-commit-scan` 正規表示式掃描）、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
 | `testing.md` | 80% coverage、TDD（RED→GREEN→IMPROVE）、unit/integration/e2e |
 | `git-workflow.md` | commit format、PR workflow |
-| `performance.md` | model selection（haiku/sonnet/opus）、context window 管理、thinking 設定 |
+| `performance.md` | model selection（haiku/sonnet/opus）、thinking 開關歸屬（2026-09-24 起改為由 user／設定決定，本機用 `effortLevel`＋`/effort`）、複雜任務流程（plan mode／多輪 critique／子 agent） |
 | `patterns.md` | skeleton project、repository pattern、API response envelope |
 | `hooks.md` | hook types（Pre/Post/Stop/PostToolUseFailure）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、HOOK-FAILURE-BLINDSPOT（失敗走獨立事件，非 PostToolUse）、auto-accept、TodoWrite |
 | `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
@@ -824,4 +835,10 @@ pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
 
 codebase-memory-mcp ──→ TOOL-USAGE graph-first 規則（已索引專案優先 search_graph/trace_path 取代 Grep/手動追呼叫鏈）
                       ──→ commit-review skill Tier 2/3 blast radius 分析
+
+TypeSafe Jev 試用（2026-09-24 新增，3 個 hook 共用底層）：
+  skill-activation-hook.ts（UserPromptSubmit，掛載點 A）─┐
+  repeat-failure-detector.ts（PostToolUseFailure，掛載點 C）├──→ lib/jev-client.ts（callJev/askJev）──→ TypeSafe systemOne API
+  stop-claim-guard.ts（Stop，掛載點 B）────────────────┘         lib/jev-questions.ts（三掛載點題目定義；A 動態讀本機 skill 清單）
+  jev-eval/run-eval.ts（離線評估）──→ 與上方三個 hook 共用 lib/jev-client.ts + lib/jev-questions.ts（題目／門檻改動需重跑評估，見 tasks/jev-trial-plan.md）
 ```
