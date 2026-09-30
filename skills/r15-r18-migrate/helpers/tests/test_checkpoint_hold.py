@@ -145,7 +145,15 @@ class HandleCheckpointsTest(unittest.TestCase):
             return len(handle.read().splitlines())
 
     def test_hard_checkpoint_without_link_still_pauses(self):
-        """hard 斷點沒拿到連結：仍然回 (True, id)，runner 才會停下來等人放行。"""
+        """hard 斷點沒拿到連結、再查也確定沒有 PR：閘門靠「開啟失敗 → 暫停」保住，不是靠算開成。
+
+        handle_checkpoints 回 (False, id)、斷點仍是 opening，settle_checkpoints 以 checkpoint_open_failed 暫停（EXIT_PAUSED；
+        連續第二次 hold）。原本斷言 (True, id)——算開成、等人放行——05aeecf review CRITICAL 指出那是讓人工閘門等一個確定不存在的
+        PR；hard 斷點在「確定沒有」時改走開啟失敗（這個假 gh 的 `pr list` 一律回 []，就是確定沒有）。閘門仍在、下一個模組不會被
+        處理，只是改由暫停擋住。soft／auto 沒有閘門，仍算開成、蓋章（K1 保護，見本類別另一條與 OpenCheckpointTest）。
+
+        @return None
+        """
         # STEP 01: 宣告一個 wave 0 之後的 hard 斷點
         def add_checkpoint(queue):
             """加入 pending 的 hard 斷點（就地修改，沿用 mutate_queue 的寫入契約）。
@@ -160,8 +168,38 @@ class HandleCheckpointsTest(unittest.TestCase):
 
         runner.mutate_queue(self.config, add_checkpoint)
 
-        # STEP 02: 閘門要在
-        self.assertEqual(runner.handle_checkpoints(self.config), (True, CHECKPOINT_ID))
+        # STEP 02: 經 settle_checkpoints 走一次（同時記下 handle_checkpoints 的回傳值）；暫停時的診斷包凍結不是受測對象。
+        # 等人放行（wait_for_release）換成立即回 False：修正前算開成會走進它，真的輪詢一次睡 10 分鐘
+        # 被替換前的 handle_checkpoints，替身轉給它
+        real_handle = runner.handle_checkpoints
+        # handle_checkpoints 每次的回傳值
+        results = []
+
+        def spy(config, include_auto=True):
+            """轉發給真的 handle_checkpoints 並記下回傳值。
+
+            @param config runner 設定
+            @param include_auto 原樣轉給真的 handle_checkpoints
+            @return 真的 handle_checkpoints 的回傳值
+            """
+            # STEP 01: 轉發、記錄
+            results.append(real_handle(config, include_auto=include_auto))
+            return results[-1]
+
+        with mock.patch.object(runner, "handle_checkpoints", spy), mock.patch.object(
+            runner, "freeze_runner_bundle", return_value=None
+        ), mock.patch.object(runner, "wait_for_release", return_value=False) as waited:
+            # settle_checkpoints 的退出碼
+            code = runner.settle_checkpoints(self.config, include_auto=True)
+
+        # STEP 03: 閘門要在：(False, id)、沒有進入等待放行、仍是 opening、以 checkpoint_open_failed 暫停
+        self.assertEqual(results, [(False, CHECKPOINT_ID)])
+        waited.assert_not_called()
+        # 暫停後落盤的 queue
+        queue = runner.load_queue(self.config)
+        self.assertEqual(runner.find_checkpoint(queue, CHECKPOINT_ID)["status"], "opening")
+        self.assertEqual(code, runner.EXIT_PAUSED)
+        self.assertEqual(queue["runner_state"].get("reason"), "checkpoint_open_failed", queue["runner_state"])
 
     def test_auto_checkpoint_without_link_does_not_repeat(self):
         """auto 斷點沒拿到連結：對同一份 queue 再呼叫一次不可以再開一次 PR，而且累積的模組數已經歸零。"""

@@ -13,8 +13,11 @@ fork 上同名分支的 PR 也會列出（cross=true）。
                head_oid（headRefOid；不給就取 write_scripted_gh 的 remote 上 head 分支現在的 commit）
   list_mode    ok／fail（非零退出）／notjson（exit 0 但輸出不是 JSON）／badshape（exit 0、JSON 但不是陣列）／
                notdict（陣列元素是字串不是物件）／nocross／nohead（每筆缺 isCrossRepository／headRefOid）／
-               ignorelimit（不理 --limit，符合的全部印出）
-  create_mode  ok／fail（非零退出、沒建立）／empty（建立了、exit 0 但沒輸出）／fail_after_create（建立了、非零退出）
+               ignorelimit（不理 --limit，符合的全部印出）／
+               ok_then_fail（前 list_ok_left 次照 ok、每次減一寫回，用完之後照 fail；造「create 前查詢正常、create 後再查失敗」）
+  list_ok_left list_mode 是 ok_then_fail 時還剩幾次照 ok（沒有這個欄位＝0，第一次就照 fail）；用 set_gh_modes 設
+  create_mode  ok／fail（非零退出、沒建立）／empty（建立了、exit 0 但沒輸出）／fail_after_create（建立了、非零退出）／
+               nolink（沒建立、exit 0，印一行不是連結的文字；不看既有 PR）
   next_number  下一個 PR 編號
 呼叫紀錄檔一行一個 JSON：{cmd, head, base, state}。
 """
@@ -63,6 +66,12 @@ with open(CALLS_PATH, "a", encoding="utf-8") as handle:
 same_pair = [pr for pr in state["prs"] if pr["head"] == head and pr["base"] == base]
 if command == "pr list":
     mode = state["list_mode"]
+    if mode == "ok_then_fail":
+        mode = "ok" if state.get("list_ok_left", 0) > 0 else "fail"
+        if mode == "ok":
+            state["list_ok_left"] -= 1
+            with open(STATE_PATH, "w", encoding="utf-8") as handle:
+                json.dump(state, handle)
     if mode == "fail":
         sys.stderr.write("HTTP 502: Bad Gateway (https://api.github.invalid/graphql)\n")
         sys.exit(1)
@@ -90,6 +99,9 @@ if command == "pr list":
     sys.exit(0)
 if command == "pr create":
     mode = state["create_mode"]
+    if mode == "nolink":
+        print("Creating pull request for %%s into %%s" %% (head, base))
+        sys.exit(0)
     if mode == "fail":
         sys.stderr.write("GraphQL: something went wrong\n")
         sys.exit(1)

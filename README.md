@@ -83,7 +83,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試 |
+| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
@@ -174,8 +174,8 @@
 
 | 層級 | 檔案數 | 涵蓋範圍 |
 |------|--------|---------|
-| common | 8 | coding-style、security、testing、git-workflow、performance、patterns、hooks、agents |
-| typescript | 5 | coding-style（含 REACT/REACT-NATIVE）、testing（Playwright）、patterns、hooks、security |
+| common | 6 | coding-style、security、testing、git-workflow、performance、hooks |
+| typescript | 4 | coding-style（含 REACT/REACT-NATIVE）、testing（Playwright）、hooks、security |
 
 重點規則：
 - **coding-style**: IMMUTABILITY、MAGIC-NUMBER、NULL-SAFETY、COMMENT-ACCURACY
@@ -246,6 +246,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-09-30: prompt audit 套用到 skills/rules/CLAUDE.md + r15-r18-migrate 第七批 + token-analyze 改 Opus 5.5 單價
+
+- **prompt audit 套用（2026-09-29）**：`skills/` 28 個 SKILL.md（不含 r15-r18-migrate）依審查 finding 修正。要點：`cup-build-test` 的 mutation 防護說明改為實情、並清掉事件考古註解；`jira-test-report` 移除無條件撤銷提醒與歷史案例引用；`spec-to-e2e-test` commit 格式改引用 CLAUDE.md 規則；`test-module`／`spec-to-e2e-test` 驗證迴圈加輪數上限；`jira-release-sync` 結案日欄位探測規則消除自相矛盾；`scan_commits.py` 掃描視窗改以「版本釋出日」過濾、fix commit 改取 `git log ^<視窗前最後一版>`（修正 fix 早於視窗下限卻隨視窗內版本釋出而漏掉；副作用：視窗前無任何版本時不再有日期下限，見審查備註）；`explore-report` 改報告回傳模式、`ai-md` 改時間戳備份；`ai-case-report` 路徑 B 說明與實作對齊；`sync-my-claude-setting` STEP 04 新增憑證掃描防線。
+- **`rules/`**：刪除 `common/patterns.md`、`typescript/patterns.md`（API envelope 屬專案特定規則，不該是全域預設）；`performance.md`、`hooks.md`、`testing.md`、`git-workflow.md` 等清理過時條目。common 剩 6 檔、typescript 剩 4 檔（CATALOG 一併移除已不存在的 `agents.md`／`patterns.md` 列）。
+- **`CLAUDE.md`**：GATE-1 exception 與 `auto-bugfix` 對齊（附具體證據的 bug report／CI 失敗直接修）、GATE-2 觸發條件簡化；常駐載入量約減 8%。
+- **`settings.json`**：新增 `modelSettings`（`claude-opus-5-5`／`claude-sonnet-5-5` 的 `effortLevel` 皆為 `high`）；本次同步依內容級過濾擋下 26 條含私有專案路徑／commit message 的 permission（逐條檢視皆為私有專案的一次性授權，無誤濾）。
+- **`token-analyze`**：`build-report.sh` 三處成本公式改為 Opus 5.5 單價（input 4／cache write 8／cache read 0.2／output 20 美元每百萬 token）。
+- **`r15-r18-migrate` 1.1.2 第七批**：`runner.log.jsonl` 輪替（`helpers/event_log.py`，5 MB × 5 份）、合併中斷自動收拾（`merge-intent.json`）、CLI 後暫停跨簽名煞車（門檻 3），另修 codex review 三條；`helpers/tests/` 275 → 363 個。
+- **`cup-build-test`**：新增 `CHANGELOG.md`。
+- **`docs/`**：新增 `prompting-claude-opus-5-5.zh-TW.md`、`prompting-claude-sonnet-5-5.zh-TW.md`（官方提示詞指南繁中翻譯）。
 
 ### 2026-09-24: TypeSafe Jev 語意路由取代關鍵字 skill 觸發 + 兩個新 Jev hook + r15-r18-migrate 1.1.2 + judgment-matrix/performance 規則調整
 

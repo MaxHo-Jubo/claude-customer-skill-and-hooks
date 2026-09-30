@@ -9,6 +9,6 @@ POST-TOOL-USE:
   console-log-warn: warn about console.log in edited files
 
 STOP-HOOKS:
-  console-log-audit: check all modified files for console.log before session ends
+  console-log-audit: check all modified files for console.log when Claude finishes responding (Stop)
 
 </rules>

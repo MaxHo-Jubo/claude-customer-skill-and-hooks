@@ -100,8 +100,8 @@ wc -l "$DIFF_FILE"
 **強制套用「慣例優先原則」**：風格類規則必須先執行 grep 慣例統計，與主流慣例一致的不記錄；規則 9/10/11 命中全新建立的檔案時套用「新增檔案例外」，跳過慣例檢查、違反即記錄。
 
 **Agent #2: Shallow Bug Scan**（`description: "shallow bug scan"`）
-只看 diff 內容，不讀額外上下文。聚焦大型 bug：邏輯錯誤、null/undefined 未處理、race condition、安全漏洞、記憶體洩漏。
-避免小問題和 nitpick，忽略可能的 false positive。
+只看 diff 內容，不讀額外上下文。回報所有可能造成錯誤行為、測試失敗或誤導結果的 bug（邏輯錯誤、null/undefined 未處理、race condition、安全漏洞、記憶體洩漏等），包含不確定或看似低嚴重度者；純風格或命名偏好不必列。
+本階段的目標是覆蓋率，信心篩選交給 STEP 05：每則附上你的信心與預估嚴重度，供其排序。
 
 **Agent #3: Git Blame Historical Context**（`description: "git history"`）
 讀取被修改檔案的 git blame 與歷史（`git log --follow -p -- <file>`），在歷史上下文中找出可能的 bug（例如某函式原本有特定邏輯但被移除了）。
@@ -248,4 +248,4 @@ v1.x 把整套流程包在 `pr-reviewer` subagent 內，由該 subagent 再 spaw
 
 v2.0.0 改拓撲而非再加約定：主 session 直接 orchestrate，巢狀深度 2→1，走的是最常用也最可靠的回流路徑；前置/後置的 PR 狀態查詢與 change summary 從 3 個 Haiku agent 改為直接跑 Bash，砍掉 3 輪 agent 往返；每個 STEP 印進度，使用者不再面對整段靜默。
 
-lite 模式仍留在 `~/.claude/agents/pr-reviewer.md`：commit 後自動觸發需要 context 隔離，且 SubagentStop hook 依賴 agent 型別自動清 pending-review marker。
+lite 模式仍留在 `~/.claude/agents/pr-reviewer.md`：commit 後自動觸發需要 context 隔離（不污染主 session）。

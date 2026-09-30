@@ -261,8 +261,8 @@
 - **功能**：
   - 探索目錄結構並強制產出結構化報告
   - 報告含：規模、目錄結構、關鍵發現、架構模式、品質觀察
-  - `--to-spec`：將探索報告轉換為正式 spec
-- **輸出**：`spec/.exploration-log.md`（append 模式）
+  - `--to-spec`：報告回傳後，由主 session 接著執行 `/spec-module` 產出正式 spec（本 skill 本身不呼叫 `/spec-module`）
+- **輸出**：報告作為最終回覆回傳，由主 session 以 append 模式寫入 `spec/.exploration-log.md`
 
 #### `/method-refactor <method>` — 方法重構（v1.0.0）
 
@@ -355,7 +355,7 @@
 - **功能**：
   - 將 human-written CLAUDE.md 轉為 AI-native 結構化格式
   - 經 5 輪、4 模型（GPT-5.3、Gemini 2.5 Pro、Grok-4、Claude Opus 4.6）實戰測試
-  - Structured-label 格式使 Codex compliance 從 6/8 提升至 8/8
+  - Structured-label 格式（R4）在各模型上與 R1 baseline 持平（8/8），不保證超越 baseline；相對 R3 精修版由 6/8 回到 8/8
   - 同樣規則、更少 token、更高精確度
 - **依賴**：無
 
@@ -394,7 +394,7 @@
 
 #### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.1.2）
 
-- **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness／`tests/` 單元測試）、`CHANGELOG.md`）
+- **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`event_log.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness／`tests/` 單元測試）、`CHANGELOG.md`）
 - **用法**：`/r15-r18-migrate <entry-id>`、`/r15-r18-migrate <entry-id> --resume`
 - **定位**：headless 無人看管模式下，由外層排程程式（runner）逐 entry 呼叫；本 skill 一次只處理 `queue.json` 裡的一個 entry，在**目前所在分支**完成遷移並 commit，然後輸出結構化 JSON 結果。分支切換、合併、推送、開 PR、建置複驗、通知全部是 runner 的職責，本 skill 一律不做；任何猶豫都收斂成 `blocked`，不能靠猜、不得提問
 - **硬性不變量**：保留 class component（不轉 functional／hooks／TypeScript）、命名沿用 R15（action 常數、reducer 檔名、state 欄位一律照搬不加前綴）、機制沿用 R18（saga 基礎層零改動）、註解逐字照搬（不補 STEP／JSDoc）、R15 檔一律不刪（回退手段是把 feature flag 關回 false）
@@ -414,7 +414,7 @@
 
 #### `/cup-build-test` — CUP 項目測試建立（v1.3.0）
 
-- **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`）
+- **位置**：`~/.claude/skills/cup-build-test/SKILL.md`（含 `templates/spec-template.md`、`templates/test-cjs-template.cjs`；`CHANGELOG.md`）
 - **用法**：`/cup-build-test`、「建立 CUP 測試」、「從 commit 反推測試」、「CUP 驗證腳本」
 - **功能**（6 階段）：
   - **階段 0**：開場提醒 codebase-memory-mcp 可選增強（`--with-graph` 旗標，auto-sync 不需 staleness 檢查；`trace_path` 對 callback 參照傳遞/dispatch 間接呼叫有已知盲區）
@@ -438,8 +438,8 @@
 - **用法**：`/token-analyze [filename] [uuid]`、「分析 token」、「這個 session 花了多少」、「token 報表」
 - **功能**：
   - 從 transcript JSONL 重建每個 assistant turn 的 token usage、工具呼叫、檔案存取
-  - 自動歸納 session 工作摘要（用 cc 跳幅、工具序列、檔案主題切段，3-8 段）
-  - 產出純 markdown 報表：Summary（含 Opus 4.x 成本）、Top 5 燒錢 turn、Per-turn 明細
+  - 自動歸納 session 工作摘要（用 cc 跳幅、工具序列、檔案主題切段）
+  - 產出純 markdown 報表：Summary（含 Opus 5.5 單價成本）、Top 5 燒錢 turn、Per-turn 明細
   - 支援自訂檔名與跨 session 分析（指定 uuid）
 - **bundled scripts**：`scripts/build-report.sh`（jq + awk 拼表，留 `__SUMMARY_PLACEHOLDER__` 給 Claude 填）
 - **evals**：`evals/evals.json` 5 案例（slash 觸發、自然語、自訂檔名、負面、跨 session）
@@ -741,10 +741,8 @@
 | `security.md` | SECRET-MGMT（含 `mcp-config`：MCP 連線字串用 `${VAR}` 展開、`pre-commit-scan` 正規表示式掃描）、LOG-SAFETY、SECURITY-INCIDENT；pre-commit checklist 9 項 |
 | `testing.md` | 80% coverage、TDD（RED→GREEN→IMPROVE）、unit/integration/e2e |
 | `git-workflow.md` | commit format、PR workflow |
-| `performance.md` | model selection（haiku/sonnet/opus）、thinking 開關歸屬（2026-09-24 起改為由 user／設定決定，本機用 `effortLevel`＋`/effort`）、複雜任務流程（plan mode／多輪 critique／子 agent） |
-| `patterns.md` | skeleton project、repository pattern、API response envelope |
-| `hooks.md` | hook types（Pre/Post/Stop/PostToolUseFailure）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、HOOK-FAILURE-BLINDSPOT（失敗走獨立事件，非 PostToolUse）、auto-accept、TodoWrite |
-| `agents.md` | agent registry（planner/architect/tdd-guide/code-reviewer…）、parallel execution |
+| `performance.md` | model selection（haiku/sonnet/opus）、thinking 開關歸屬（2026-09-24 起改為由 user／設定決定，本機用 `effortLevel`＋`/effort`）、CONTEXT-WINDOW 與 COMPLEX-TASK 段已移除 |
+| `hooks.md` | hook types（Pre/Post/Stop/PostToolUseFailure）、HOOK-OUTPUT（PostToolUse stdout 不注入 AI context）、HOOK-FAILURE-BLINDSPOT（失敗走獨立事件，非 PostToolUse）、auto-accept |
 
 ### typescript/
 
@@ -752,7 +750,6 @@
 |--------|---------|
 | `coding-style.md` | IMMUTABILITY（spread）、ERROR-HANDLING（async/await）、INPUT-VALIDATION（Zod）、CONSOLE-LOG、REACT（re-render/useEffect cleanup/class-context-consumption）、REACT-NATIVE（FlatList/StyleSheet.create） |
 | `testing.md` | E2E: Playwright |
-| `patterns.md` | ApiResponse\<T\>、useDebounce hook、Repository\<T\> |
 | `hooks.md` | PostToolUse: prettier/tsc/console-log-warn；Stop: console-log-audit |
 | `security.md` | SECRET-MGMT: process.env + startup validation |
 

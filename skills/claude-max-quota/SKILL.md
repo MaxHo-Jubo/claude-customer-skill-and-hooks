@@ -1,3 +1,8 @@
+---
+name: claude-max-quota
+description: "Claude Max 多帳號額度管理：查各帳號 5h／週額度並建議下個 session 用哪個帳號、切換帳號、幫新用戶設定多帳號與額度 statusline。當使用者說「cq」「額度」「quota」「剩多少」「帳號額度」「換帳號」「切帳號」「switch account」「設定多帳號」「哪個帳號最空」時觸發。"
+---
+
 # claude-max-quota
 
 Claude Max 多帳號額度管理。查額度、切帳號、設定 statusline。
@@ -10,7 +15,7 @@ Claude Max 多帳號額度管理。查額度、切帳號、設定 statusline。
 
 ## cq（查額度）
 
-跑 `bash ~/.claude/scripts/check-quota.sh` 拿到數據後，用這個格式列給 tkman 看：
+跑 `bash ~/.claude/scripts/check-quota.sh` 拿到數據後，用這個格式列給使用者看：
 
 | 帳號 | 週額度 | 週恢復 | 5h 額度 | 5h 恢復 | 狀態 |
 |------|--------|--------|---------|---------|------|
@@ -23,7 +28,7 @@ Claude Max 多帳號額度管理。查額度、切帳號、設定 statusline。
 
 最後加一行建議：下次開新 session 用哪個帳號（最空的那個）。
 
-重要：不能只跑腳本，必須列表格給 tkman 看。他不看終端機的 raw output。
+只跑腳本不算完成：Bash 的原始輸出不一定會顯示給使用者，表格要寫在回覆裡。
 
 ## 幫新用戶設定多帳號
 
@@ -49,7 +54,7 @@ alias cq="bash ~/.claude/scripts/check-quota.sh"
 ```json
 "statusLine": {
     "type": "command",
-    "command": "~/.claude/scripts/quota-statusline.sh"
+    "command": "~/.claude/statusline-command.sh"
 }
 ```
 

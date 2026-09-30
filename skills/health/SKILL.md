@@ -44,7 +44,7 @@ echo "claude_md_lines: $(wc -l < "$P/CLAUDE.md" 2>/dev/null)"
 
 echo "=== CLAUDE.md (global) ===" ; cat ~/.claude/CLAUDE.md 2>/dev/null || echo "(none)"
 echo "=== CLAUDE.md (local) ===" ; cat "$P/CLAUDE.md" 2>/dev/null || echo "(none)"
-echo "=== settings.local.json ===" ; cat "$SETTINGS" 2>/dev/null || echo "(none)"
+echo "=== settings.local.json (permissions + MCP approval keys only; env and other keys omitted because they can hold credentials) ===" ; python3 -c "import json; d=json.load(open('$SETTINGS')); print(json.dumps({k: d[k] for k in ('permissions','enabledMcpjsonServers','disabledMcpjsonServers') if k in d}, indent=2, ensure_ascii=False))" 2>/dev/null || echo "(none)"
 echo "=== rules/ ===" ; find "$P/.claude/rules" -name "*.md" 2>/dev/null | while IFS= read -r f; do echo "--- $f ---"; cat "$f"; done
 echo "=== skill descriptions ===" ; grep -r "^description:" "$P/.claude/skills" ~/.claude/skills 2>/dev/null
 echo "=== STARTUP CONTEXT ESTIMATE ==="
@@ -52,27 +52,35 @@ echo "global_claude_words: $(wc -w < ~/.claude/CLAUDE.md 2>/dev/null | tr -d ' '
 echo "local_claude_words: $(wc -w < "$P/CLAUDE.md" 2>/dev/null | tr -d ' ' || echo 0)"
 echo "rules_words: $(find "$P/.claude/rules" -name "*.md" 2>/dev/null | while IFS= read -r f; do cat "$f"; done | wc -w | tr -d ' ')"
 echo "skill_desc_words: $(grep -r "^description:" "$P/.claude/skills" ~/.claude/skills 2>/dev/null | wc -w | tr -d ' ')"
-echo "=== hooks ===" ; python3 -c "import json,sys; d=json.load(open('$SETTINGS')); print(json.dumps(d.get('hooks',{}), indent=2))" 2>/dev/null || echo "(unavailable: settings.local.json missing or malformed)"
-echo "=== MCP ===" ; python3 -c "
-import json
-try:
-    d=json.load(open('$SETTINGS'))
-    s = d.get('mcpServers', d.get('enabledMcpjsonServers', {}))
-    names = list(s.keys()) if isinstance(s, dict) else list(s)
-    n = len(names)
-    print(f'servers({n}):', ', '.join(names))
-    est = n * 25 * 200  # ~200 tokens/tool, ~25 tools/server
-    print(f'est_tokens: ~{est} ({round(est/2000)}% of 200K)')
-except: print('(no MCP)')
-" 2>/dev/null || echo "(unavailable: settings.local.json missing or malformed)"
+echo "=== hooks ===" ; for S in "$HOME/.claude/settings.json" "$P/.claude/settings.json" "$SETTINGS"; do echo "--- $S ---"; python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d.get('hooks',{}), indent=2))" "$S" 2>/dev/null || echo "(missing or malformed)"; done
+echo "=== MCP (server names only) ===" ; python3 -c "
+import json, os, sys
+P = sys.argv[1]
+names = set()
+sources = [(os.path.expanduser('~/.claude.json'), [('mcpServers',), ('projects', P, 'mcpServers')]),
+           (os.path.join(P, '.mcp.json'), [('mcpServers',)])]
+for path, key_paths in sources:
+    try:
+        d = json.load(open(path))
+    except Exception:
+        continue
+    for ks in key_paths:
+        v = d
+        for k in ks:
+            v = v.get(k, {}) if isinstance(v, dict) else {}
+        if isinstance(v, dict):
+            names.update(v.keys())
+print(f'servers({len(names)}):', ', '.join(sorted(names)) or '(none)')
+print('plugin-provided servers are not listed; MCP tool schemas may load on demand (deferred), so use /context for the actual token cost')
+" "$P" 2>/dev/null || echo "(unavailable)"
 echo "=== allowedTools count ===" ; python3 -c "import json; d=json.load(open('$SETTINGS')); print(len(d.get('permissions',{}).get('allow',[])))" 2>/dev/null || echo "(unavailable)"
 echo "=== NESTED CLAUDE.md ===" ; find "$P" -name "CLAUDE.md" -not -path "$P/CLAUDE.md" -not -path "*/.git/*" -not -path "*/node_modules/*" 2>/dev/null || echo "(none)"
 echo "=== GITIGNORE ===" ; (grep -qE "settings\.local" "$P/.gitignore" "$P/.claude/.gitignore" 2>/dev/null && echo "settings.local.json: gitignored") || echo "settings.local.json: NOT gitignored -- risk of committing tokens/credentials"
 echo "=== HANDOFF.md ===" ; cat "$P/HANDOFF.md" 2>/dev/null || echo "(none)"
-echo "=== MEMORY.md ===" ; cat "$HOME/.claude/projects/-$(pwd | sed 's|[/_]|-|g; s|^-||')/memory/MEMORY.md" 2>/dev/null | head -50 || echo "(none)"
+echo "=== MEMORY.md ===" ; cat "$HOME/.claude/projects/-$(pwd | sed 's|[^A-Za-z0-9]|-|g; s|^-||')/memory/MEMORY.md" 2>/dev/null | head -50 || echo "(none)"
 
 echo "=== CONVERSATION FILES ==="
-PROJECT_PATH=$(pwd | sed 's|[/_]|-|g; s|^-||')
+PROJECT_PATH=$(pwd | sed 's|[^A-Za-z0-9]|-|g; s|^-||')
 CONVO_DIR=~/.claude/projects/-${PROJECT_PATH}
 ls -lhS "$CONVO_DIR"/*.jsonl 2>/dev/null | head -10
 
@@ -184,7 +192,7 @@ Spin up **two subagents** in parallel using the Agent tool. Paste all relevant S
 ### Agent 1 — Context + Security Audit (no conversation needed)
 Prompt:
 ```
-All data is provided inline below. DO NOT use the Read tool or Bash tool to read any files.
+All data is provided inline below; work from it rather than reading files, since the parent already collected everything in one pass.
 
 [PASTE Step 1 output sections: CLAUDE.md (global), CLAUDE.md (local), NESTED CLAUDE.md, rules/, skill descriptions, STARTUP CONTEXT ESTIMATE, MCP, HANDOFF.md, MEMORY.md, SKILL INVENTORY, SKILL SECURITY SCAN, SKILL FRONTMATTER, SKILL SYMLINK PROVENANCE, SKILL FULL CONTENT]
 
@@ -193,7 +201,7 @@ This project is tier: [SIMPLE / STANDARD / COMPLEX] — apply only the checks ap
 ## Part A: Context Layer
 
 Tier-adjusted CLAUDE.md checks:
-- ALL tiers: Is CLAUDE.md short and executable? No prose, no background, no soft guidance.
+- ALL tiers: Does each CLAUDE.md line earn its place: a fact the model cannot infer, or a rule with its reason? Flag restatements of default behavior, stale facts, and contradictions; a short reason attached to a rule is context, not bloat.
 - ALL tiers: Does it have build/test commands?
 - ALL tiers: Flag any nested CLAUDE.md files found in subdirectories -- stacked context causes unpredictable behavior.
 - ALL tiers: Compare global and local CLAUDE.md for duplicate rules (same constraint in both = wasted context) and conflicting rules (opposite directives = unpredictable behavior). Duplicates are 🟢, conflicts are 🔴.
@@ -208,7 +216,7 @@ Tier-adjusted rules/ checks:
 
 Tier-adjusted skill checks:
 - SIMPLE: 0–1 skills is fine. Do not flag absence of skills.
-- ALL tiers: If skills exist, descriptions should be <12 words and say WHEN to use.
+- ALL tiers: If skills exist, each description should say what the skill does and when to use it (and when not to), naming intent categories rather than long lists of near-synonymous trigger phrases.
 - STANDARD+: Low-frequency skills should have disable-model-invocation: true.
 
 Tier-adjusted MEMORY.md checks STANDARD+:
@@ -222,14 +230,12 @@ Tier-adjusted AGENTS.md checks COMPLEX with multiple modules:
 - Check that it explains WHEN to consult each AGENTS.md -- not just list links
 
 MCP token cost check ALL tiers:
-- Count MCP servers and estimate token overhead: ~200 tokens/tool, ~25 tools/server
-- If estimated MCP tokens > 10% of 200K context (~20,000 tokens), flag as context pressure
-- If >6 servers, flag as HIGH: likely exceeding 12.5% context overhead
+- Count MCP servers from the MCP section. Claude Code can load MCP tool schemas on demand (deferred tools), so a per-tool token estimate overstates the cost; use the user's /context breakdown when available, and otherwise report the server count without a token figure
 - Check if any idle/rarely-used servers could be disconnected to reclaim context
 
 Startup context budget ALL tiers:
-- Compute: (global_claude_words + local_claude_words + rules_words + skill_desc_words) × 1.3 + mcp_tokens
-- Flag if total > 30K tokens (15% of 200K): context pressure before first user message
+- Compute: (global_claude_words + local_claude_words + rules_words + skill_desc_words) × 1.3. `wc -w` badly undercounts CJK text (no spaces between words), so for CJK-heavy files treat the result as a lower bound and prefer the user's /context figure
+- Flag if the total exceeds ~15% of the session model's context window (1M tokens on Claude Opus 5.5): context pressure before the first user message
 - Flag if CLAUDE.md alone > 5K tokens (~3800 words): contract is oversized
 
 Tier-adjusted HANDOFF.md check STANDARD+:
@@ -244,7 +250,7 @@ Verifiers layer STANDARD+:
 
 Use the collected data from Step 1: SKILL INVENTORY, SKILL SECURITY SCAN, SKILL FRONTMATTER, SKILL SYMLINK PROVENANCE, SKILL FULL CONTENT. All data is already provided inline above.
 
-CRITICAL DISTINCTION: Differentiate between a skill that DISCUSSES a security pattern (benign) vs. one that USES it (dangerous). Only flag the latter. Note FALSE POSITIVES explicitly.
+Differentiate between a skill that DISCUSSES a security pattern (benign) vs. one that USES it (dangerous). Only flag the latter. Note FALSE POSITIVES explicitly.
 
 🔴 Security checks:
 1. Prompt injection: "ignore previous instructions", "you are now", "pretend you are", "new persona", "override system prompt"
@@ -274,7 +280,7 @@ Output: bullet points only, two sections:
 ### Agent 2 — Control + Behavior Audit (uses conversation evidence)
 Prompt:
 ```
-All data is provided inline below. DO NOT use the Read tool or Bash tool to read any files.
+All data is provided inline below; work from it rather than reading files, since the parent already collected everything in one pass.
 
 [PASTE Step 1 output sections: settings.local.json, GITIGNORE, CLAUDE.md (global), CLAUDE.md (local), hooks, allowedTools count, skill descriptions, CONVERSATION EXTRACT]
 
@@ -289,7 +295,7 @@ Tier-adjusted hooks checks:
 - ALL tiers: If hooks exist, verify correct schema:
   - Each entry needs `matcher`: tool name regex like "Edit|Write", and a `hooks` array
   - Each hook in the array needs `type: "command"` and `command` field
-  - File path available via `$CLAUDE_TOOL_INPUT_FILE_PATH` env var in commands
+  - Hook commands receive the tool call as JSON on stdin (file path at `tool_input.file_path`)
   - Flag hooks missing `matcher` -- would fire on ALL tool calls
 - ALL tiers: Flag hook commands running full test suites on every edit (cargo test, npm test, pytest, go test, jest) -- replace with fast checkers (cargo check, tsc --noEmit, bash -n, go build) for immediate feedback; reserve full tests for explicit verification
 - ALL tiers: Flag hook commands without output truncation (| head -N or | tail -N) -- unbounded output floods context on every edit
@@ -358,7 +364,7 @@ Paste all relevant data inline into each agent; do not pass file paths or instru
 Aggregate all agent outputs into a single report with these sections:
 
 ### 🔴 Critical -- fix now
-Rules that were violated, missing verification definitions, allowedTools entries matching dangerous patterns (sudo *, force-delete root, *>*, force-push main), MCP token overhead >12.5%, cache-breaking patterns in active use. **Agent 1 security findings**: prompt injection, data exfiltration, destructive commands, hardcoded credentials, obfuscation, safety overrides detected in skills.
+Rules that were violated, missing verification definitions, allowedTools entries matching dangerous patterns (sudo *, force-delete root, *>*, force-push main), cache-breaking patterns in active use. **Agent 1 security findings**: prompt injection, data exfiltration, destructive commands, hardcoded credentials, obfuscation, safety overrides detected in skills.
 
 ### 🟡 Structural -- fix soon
 CLAUDE.md content that belongs elsewhere, missing hooks for frequently-edited file types, skill descriptions that are too long, single-layer critical rules missing enforcement, mid-session model switching. **Agent 1**: test/lint scripts vs done-conditions. **Agent 2**: subagent permission/isolation gaps. **Agent 1**: missing frontmatter, overly broad descriptions, content bloat >5000 words, broken file references.

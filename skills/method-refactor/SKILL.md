@@ -27,7 +27,7 @@ version: 1.0.0
 ### 2. 型別常數化
 
 - 找出 library API 的固定參數（如日期格式、時間單位等）
-- 用 `as const` 宣告模組級常數，確保型別安全
+- 用 `as const` 宣告模組級常數，確保型別安全（僅 `.ts`／`.tsx`；`.js`／`.jsx` 用一般 `const`，`as const` 在 JS 是語法錯誤）
 - 同一常數在檔案中出現多處時，全檔統一替換
 
 ### 3. 邏輯扁平化
@@ -48,7 +48,7 @@ version: 1.0.0
 
 - 相同邏輯出現 2 次以上 → 提取為 helper function 或 class method
 - 命名遵循專案既有的命名慣例
-- helper 放在使用處的正上方，附上用途註解
+- 概念性判斷／驗證邏輯的 helper 放對應 utility 檔（同檔內重複也一樣）；只依賴該 class 內部狀態的邏輯才提取為 class method。附上用途註解
 
 ### 6. 冗餘操作移除
 

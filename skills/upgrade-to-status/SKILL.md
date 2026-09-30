@@ -2,7 +2,6 @@
 name: upgrade-to-status
 description: "將專案升級為 status.md 架構，在 tasks/status.md 建立共識文件（Milestone / 北極星 / Insight / Current / Next）。從現有 tasks/todo.md、tasks/lessons.md、README、git log 推斷初值，讓使用者確認後寫入。適用 side project，不適用已有 Jira 流程的公司專案。當使用者提到 /upgrade-to-status、「升級到 status.md」、「建立 status.md」、「這個專案弄 status」時觸發。"
 version: 1.1.0
-context: fork
 ---
 
 # Upgrade to Status — 建立專案 status.md
@@ -21,7 +20,7 @@ context: fork
 
 - **只用本 skill 定義的 6 個區段**：Milestone / 北極星 / Insight / Current / Next / Frozen。禁止發明 Risk、決議、深度反思等段落
 - **推斷不到就留空**：寫「待填」不要亂湊。北極星指標尤其必須使用者自己想，AI 不幫忙瞎猜
-- **不覆蓋**：status.md 已存在就只做檢查，不寫入
+- **不覆蓋**：status.md 已存在時不重寫整檔；使用者選「補全」才寫入，且只填空欄位、已填欄位不動
 
 ## status.md Schema
 
@@ -33,7 +32,7 @@ milestone: {current milestone label}
 
 # {專案名} — Status
 
-> 共識文件。session 開場讀這份，結束時用 `/daily-review` 或手動 busboy 回填。
+> 共識文件。session 開場讀這份，結束時手動 busboy 回填。
 
 ## Milestone
 { dev / alpha / beta / 上線 / 維護 }
@@ -125,7 +124,7 @@ test -f tasks/status.md && echo "EXISTS" || echo "NONE"
 
 ### STEP 05: 寫入 tasks/status.md
 
-- 用 Write tool 寫入（不存在才寫）
+- 檔案不存在 → 用 Write tool 寫入整檔；已存在（使用者選「補全」）→ 用 Edit 只填空欄位，已填欄位不動
 - frontmatter 的 `last_updated` 設今天
 - 提醒使用者：「tasks/status.md 已建立。下一步：git add 進版本控制」
 
@@ -150,13 +149,13 @@ test -f tasks/status.md && echo "EXISTS" || echo "NONE"
 
 - 每次 session 開場：讀 tasks/status.md 對齊上下文
 - Session 結束：手動更新 Insight / Current 進度
-- 定期檢視：/daily-review 或 /weekly-review
+- 定期檢視：/weekly-review
 - status.md 要跟 code 一起 commit（source of truth 跟專案同命運）
 ```
 
 ## 注意事項
 
 - 本 skill **不自動把 status.md 同步到任何地方**（無主控板、無 cloud）
-- 本 skill **不修改 daily-review / weekly-review skill**。這兩個 skill 目前仍讀 todo.md，未來若需要讀 status.md 再單獨處理
-- 重跑本 skill **不會覆蓋現有 status.md**，只做補全檢查
+- 本 skill **不修改其他 skill**；目前沒有其他 skill 會讀 status.md（weekly-review 也不讀），需要時再單獨處理
+- 重跑本 skill **不會覆蓋現有 status.md**，只檢查空欄位，使用者同意才補全（僅填空欄位）
 - 公司專案跑這個 skill 前先想清楚：你真的需要嗎？Jira + todo.md + lessons.md 已覆蓋大部分場景

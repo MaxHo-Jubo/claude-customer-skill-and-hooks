@@ -6,7 +6,7 @@ version: 2.0.0
 
 # Test Module 測試產生
 
-對指定模組掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代至零問題後執行測試驗證。
+對指定模組掃描可測試函式，產出單元測試，經 4 個面向的平行 review 迭代到 Phase 3 完成條件後執行測試驗證。
 
 框架無關 — 適用 Jest、Vitest、Mocha、flutter_test、pytest、go test 等。核心流程一致，差異僅在測試語法與 mock 機制。
 
@@ -149,7 +149,7 @@ version: 2.0.0
 
 3. **重新啟動 4 個 review subagent**
 
-4. **重複直到 🔴 = 0**
+4. **重複直到 🔴 = 0，最多 3 輪**：第 3 輪結束仍有 🔴 → 停止迭代，回報剩餘問題與原因，由使用者決定下一步，不自行繼續加輪
 
 5. **迭代完成條件**：
    - 🔴 = 0
@@ -163,7 +163,7 @@ version: 2.0.0
    - 如果 coverage 不足，針對未覆蓋的分支補寫 test case
 3. **若有失敗**，依原因分類：
    - 測試寫錯 → 改測試
-   - 程式碼有 bug → 獨立 commit：`fix: <描述>（unit test 發現）`
+   - 程式碼有 bug → 獨立 commit：格式依 CLAUDE.md commit-msg，說明後綴加「（unit test 發現）」
 
 ### Phase 5: 最終報告
 
@@ -200,7 +200,7 @@ version: 2.0.0
 ```
 
 Commit 測試檔案（遵循 CLAUDE.md commit 規則）：
-- message 格式：`test(專案標識): 新增 <模組名稱> 單元測試`
+- message 格式依 CLAUDE.md commit-msg，類型用 `test`，說明為「新增 <模組名稱> 單元測試」
 
 ## 注意事項
 
@@ -211,15 +211,3 @@ Commit 測試檔案（遵循 CLAUDE.md commit 規則）：
 - 使用專案既有的 mock 模式和測試工具，不要引入新的測試依賴
 - 測試不應依賴執行順序 — 每個 test case 必須獨立
 - 不 mock 被測函式本身的邏輯（只 mock 外部依賴）
-
-## 框架適配
-
-| 概念 | Jest/Vitest | flutter_test | pytest | go test |
-|------|-------------|-------------|--------|---------|
-| 分組 | `describe` | `group` | class | func Test |
-| 測試 | `it`/`test` | `test` | `def test_` | `func Test` |
-| 斷言 | `expect().toBe()` | `expect(x, y)` | `assert` | `assert/require` |
-| Mock | `jest.fn()`/`vi.fn()` | `MockClient` | `unittest.mock` | interface |
-| 覆蓋率 | `--coverage` | `--coverage` | `--cov` | `-cover` |
-
-進入 Phase 1 前，先偵測專案使用的框架和測試工具。

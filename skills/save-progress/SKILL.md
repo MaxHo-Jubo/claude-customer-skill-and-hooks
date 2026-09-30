@@ -1,7 +1,6 @@
 ---
 name: save-progress
 description: 手動存檔當前工作進度，將 task list 狀態和未存的記憶寫入磁碟，適合在 session 結束前、預感 rate limit、或長時間離開前使用
-user_invocable: true
 ---
 
 # Save Progress — 手動存檔工作進度
@@ -11,7 +10,7 @@ user_invocable: true
 ## STEP 01: Dump Task List
 
 1. 呼叫 `TaskList` 取得當前所有任務
-2. **有任務**：將完整狀態寫入 `tasks/todo.md`，格式：
+2. **有任務**：將完整狀態寫入 `tasks/progress-snapshot.md`（**不碰 `tasks/todo.md`**，那是 GATE-2 的計畫檔，含已確認的 checkbox），格式：
    ```markdown
    # Task Progress Snapshot
    > 自動存檔於 YYYY-MM-DD HH:mm
@@ -25,7 +24,7 @@ user_invocable: true
    ## 已完成
    - [x] [任務主題]
    ```
-3. **無任務**：回顧本次 session 對話，將工作摘要寫入 `tasks/todo.md`，格式：
+3. **無任務**：回顧本次 session 對話，將工作摘要寫入 `tasks/progress-snapshot.md`，格式：
    ```markdown
    # Session Progress Snapshot
    > 自動存檔於 YYYY-MM-DD HH:mm

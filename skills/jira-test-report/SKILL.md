@@ -102,7 +102,7 @@ EXPLICIT-RESUME:
 | 測試步驟來源 | `.claude/{ISSUE_KEY}.md` / `.claude/{ISSUE_KEY}-test-plan.md` 的「測試步驟」section |
 | Playwright 可用 | 互動模式：playwright MCP plugin；腳本模式：`playwright` npm package（`npx playwright install chromium` 一次） |
 
-**Token / email**：一律存 `.env.local`，**不在對話中貼明文**。token 用完仍提醒使用者去 Atlassian 後台撤銷。
+**Token / email**：一律存 `.env.local`，**不在對話中貼明文**。
 
 ### `.env.local` 完整範例
 
@@ -126,7 +126,7 @@ RESUME-DETECT-FSM:
   state-not-exist: 走完整流程（建檔在跑測試前）
   state-exist-with-resume: 進入續跑（refer RESUME-FSM）
     interactive: 主 context 跳過已 [x] 的 step
-    script: 用 RESUME_FROM_IDX={N} env 傳給 cjs
+    script: 用 RESUME_FROM={caseId} env 傳給 cjs（跳過 caseId ≤ 該值的 step）
   state-exist-no-resume: 問使用者三選一（不自動決定，refer prompt-block）
 
 prompt-block: |
@@ -168,7 +168,7 @@ local dev 與 CI 都統一走 API 登入：
 
 1. **檢查 `.env.local`** 在 frontend 根目錄存在；缺則提示使用者依「`.env.local` 完整範例」段建立（含 E2E + Atlassian 兩組 keys）
 2. **確認 `.gitignore` 含 `.env.local`**，缺則 append 並提示
-3. **互動模式**：透過 `mcp__plugin_playwright_playwright__browser_run_code_unsafe` 呼叫 `helpers/login.cjs::authStateFromApi` 直接取 storageState，無需手動填帳密
+3. **互動模式**：透過 `mcp__plugin_playwright_playwright__browser_run_code_unsafe` 在 MCP 瀏覽器的 context 內呼叫 `/account/login` API 登入（同 `helpers/login.cjs::loginInContext` 做法，cookies 直接進 context jar），無需手動填帳密；不用 deprecated 的 `authStateFromApi` + storageState（會漏 host-only cookie，見 S3「寫腳本準則」LOGIN）
 4. **腳本模式**：cjs 內 `launchBrowser({ login: env.login })` 自動處理，env.login 由 `helpers/env.cjs::parseEnv` 從 env var 組合
 5. **安全紀律**：密碼只放 `.env.local` 或 macOS Keychain，**不在對話中分享**、不寫進 cjs。skill 看到密碼字串立即中止
 
@@ -224,7 +224,7 @@ grep -E '^(ATLASSIAN_EMAIL|ATLASSIAN_API_TOKEN|ATLASSIAN_SITE)=' .env.local | wc
 
 ### 步驟 S3：生成 Playwright 腳本
 
-寫到 `.claude/{ISSUE_KEY}-test.cjs`（用 Write 工具，不要用 ctx_execute）：
+寫到 `.claude/{ISSUE_KEY}-test.cjs`（用 Write 工具）：
 
 #### Helpers 架構與 API 速查（v2.4.4+ 全面 helpers 化）
 
@@ -271,7 +271,7 @@ GEN-CJS-PIPELINE:
   step-3-fill-steps: 在 try{} 區塊「=== 測試步驟區塊（依 test plan 填充）===」與「=== 測試步驟區塊結束 ===」之間依 test plan 加 step()，遵守寫腳本準則 + S3.5 三合一 + S3.6 機構切換（若 case 屬非 compal）
   step-4-write: 用 Write 工具寫到 .claude/{ISSUE_KEY}-test.cjs
   mandatory: 必須先 Read templates/skeleton.cjs，禁止從記憶寫骨架
-  why-mandatory: 容易漏 helpers require / parseEnv / progress 寫入 / finally 收尾，且 Opus 4.7 預設較少 spawn tool call 容易跳過 Read
+  why-mandatory: 從記憶寫容易漏 helpers require / parseEnv / progress 寫入 / finally 收尾
   verify-high-risk: grep -E '<paste-staging-case-id>|\{ISSUE_KEY\}' .claude/{ISSUE_KEY}-test.cjs 應 0 命中（這兩個沒替換會直接讓執行失敗：staging fixture 不對 / progress.md 路徑錯）
   verify-low-risk: grep -E '\{[一-龥]' .claude/{ISSUE_KEY}-test.cjs 應 0 命中（中文 placeholder 都該已替換，如 `{一句話描述}` / `{場景一名稱}` 等）
   note: '{caseId}' 是 parseEnv runtime 佔位（entryPath 內由 process.env.CASE_ID 代入），**不需替換**；JS 物件解構如 `{ parseEnv }` 也不在 verify 範圍
@@ -509,9 +509,9 @@ node .claude/{ISSUE_KEY}-test.cjs
 # 看著瀏覽器跑（debug 用）
 HEADLESS=false node .claude/{ISSUE_KEY}-test.cjs
 
-# R15 / R18 比對：跑兩次，截圖分開存
-VARIANT=r15 BASE_URL=https://r15.example.com node .claude/{ISSUE_KEY}-test.cjs
-VARIANT=r18 BASE_URL=http://localhost:3000 node .claude/{ISSUE_KEY}-test.cjs
+# R15 / R18 比對：跑兩次，用 SCREENSHOT_DIR 分開存（helpers 預設目錄不分 variant，不帶會互相覆蓋）
+VARIANT=r15 BASE_URL=https://r15.example.com SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/r15 node .claude/{ISSUE_KEY}-test.cjs
+VARIANT=r18 BASE_URL=http://localhost:3000 SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/r18 node .claude/{ISSUE_KEY}-test.cjs
 ```
 
 stdout 每行一個 JSON 結果，最後一行是 summary。**不要** 把整個 stdout 倒進 context，用 `tail -20` 或讀 `_results.json`。
@@ -519,7 +519,9 @@ stdout 每行一個 JSON 結果，最後一行是 summary。**不要** 把整個
 ### 步驟 S5：分析結果
 
 ```bash
-cat .claude/{ISSUE_KEY}-temp/{variant}/_results.json
+R=.claude/{ISSUE_KEY}-temp/_results.json   # 雙 variant 時改用各自 SCREENSHOT_DIR 下的 _results.json
+jq '.summary' "$R"
+jq '[.results[] | select(.status=="FAIL") | {caseId, name, error}]' "$R"
 ```
 
 只讀 summary + fail 項目的 error，**不要** 把所有截圖貼進來。
@@ -617,16 +619,16 @@ PATCH-LIST:
   pre-handled-by-skeleton: [chromium-require, SCREENSHOT_DIR, env-local-load, progress-silent, 檔頭格式, step-中文化]
 ```
 
-骨架已預先處理的 6 項（為何不再需要 publish 時手動改）：
+骨架已處理、publish 時不需改的項目：
 
-| 原 # | 項目 | 為何不再需要 |
-|---|---|---|
-| 2 | chromium require | 骨架不直接 require playwright，全由 `launchBrowser` 從 helpers 內 node_modules 拿 |
-| 3 | SCREENSHOT_DIR | `parseEnv` 自動處理 `SCREENSHOT_BASE_DIR` env var（v0.4.0+），CI 設 `SCREENSHOT_BASE_DIR=.` 即可 |
-| 4 | .env.local 自動載入 | 骨架不寫此邏輯（依 release-tests/README 規範由 shell 預先 `set -a; source .env.local; set +a`） |
-| 5 | progress.md 寫入 | `createStepRunner` 內部已 silent（`progressPath` 對應檔案不存在時 noop） |
-| 6 | 檔頭格式 | 骨架已為 LVB-7963 風格 6 段（root cause / 修正 / 驗證情境 / 用法 / 前置 / exit codes） |
-| 7 | step 中文化 | 骨架已用 5 參數中文版簽名 |
+| 項目 | 骨架的處理方式 |
+|---|---|
+| chromium require | 骨架不直接 require playwright，全由 `launchBrowser` 從 helpers 內 node_modules 拿 |
+| SCREENSHOT_DIR | `parseEnv` 讀 `SCREENSHOT_BASE_DIR` env var，CI 設 `SCREENSHOT_BASE_DIR=.` 即可 |
+| .env.local 載入 | 骨架不寫此邏輯（依 release-tests/README 規範由 shell 預先 `set -a; source .env.local; set +a`） |
+| progress.md 寫入 | `createStepRunner` 內部已 silent（`progressPath` 對應檔案不存在時 noop） |
+| 檔頭格式 | 骨架已含 6 段（root cause / 修正 / 驗證情境 / 用法 / 前置 / exit codes） |
+| step 中文化 | 骨架已用 5 參數中文版簽名 |
 
 ```
 PUBLISH-VERIFY-GREP:
@@ -792,9 +794,9 @@ rm -rf .claude/{ISSUE_KEY}-temp
 `.env.local` **保留**（每次跑都 API 登入，無暫存 session 檔需要清理）。
 `.claude/{ISSUE_KEY}-progress.md` **預設保留**（執行歷史紀錄）；下次跑同 issue 全新流程前用 `rm` 或選擇 `[2] 刪除舊檔，重跑完整流程`。
 
-### 步驟 10：提醒撤銷 token（選用）
+### 步驟 10：提醒撤銷 token
 
-token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要 rotate，提醒去 https://id.atlassian.com/manage-profile/security/api-tokens 撤銷後從 `.env.local` 刪除舊值。
+token 存 `.env.local` 後會持續複用。**首次把 token 寫入 `.env.local` 時提醒使用者一次**：不再使用時可去 https://id.atlassian.com/manage-profile/security/api-tokens 撤銷，並從 `.env.local` 刪除舊值。之後每次執行不重複提醒，只在使用者要求一次性使用或要 rotate 時再提醒。
 
 ## Wiki Markup 速查
 
@@ -844,8 +846,6 @@ token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要
 
 ## 參考做法（記憶提示）
 
-- 第一次用這個 skill 的完整成功 case：ERPD-11841（2026-05-04），12 張截圖全 inline，互動模式
-- 腳本模式首發 case：CUP-80（2026-05-07），活動行事曆 R18 回歸驗證
 - attachment 上傳 endpoint v3 OK，但 comment 要用 v2 wiki 才能 inline
 - 不要嘗試從 attachment redirect 拿 media UUID 自己拼 ADF，太繞且 location header 可能被 CDN 截斷
 - 互動模式截圖**必指定 filename**，否則 base64 入 context 噴 token
@@ -854,12 +854,4 @@ token 已存 `.env.local` 持續複用；若使用者要求一次性使用或要
 
 ## Changelog
 
-歷史變更紀錄已抽到 [./CHANGELOG.md](./CHANGELOG.md)（v2.0.0 起的完整版本歷史）。
-
-**最近版本**（詳細見 CHANGELOG.md）：
-
-- **v2.5.5**（2026-05-22）— 剩餘 prose 段落 AI.MD v4 結構化（P1-P5），token -220
-- **v2.5.4**（2026-05-22）— 失敗處理抽到 `docs/troubleshooting.md`，SKILL.md 再瘦 -35 行
-- **v2.5.3**（2026-05-22）— Wiki Markup 速查 + Comment 範本抽到 `docs/`，SKILL.md 再瘦 -20 行
-- **v2.5.2**（2026-05-22）— S3.5 / S3.6 範例 cjs 抽到 `templates/snippets/`，SKILL.md 再瘦 -115 行
-- **v2.5.1**（2026-05-22）— progress.md 範本 + .env.local 範例抽到 `templates/`，SKILL.md 再瘦 -35 行
+版本歷史見 [./CHANGELOG.md](./CHANGELOG.md)。

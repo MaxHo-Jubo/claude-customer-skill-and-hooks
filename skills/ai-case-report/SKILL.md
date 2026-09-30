@@ -4,7 +4,7 @@ description: >
   引導工程師逐步填寫 AI 效益案例填報表，透過對話式訪談收集必要資訊，
   最終產出符合格式要求、具備量化數字的完整案例文件。
   若 Outline MCP 已連線，直接發佈至對應團隊的子文件集；
-  若未連線，產出 .md 檔案供使用者手動上傳。
+  若未連線，在對話中輸出完整 Markdown 供使用者複製貼上至 Outline。
   觸發時機：工程師提到「要填 AI 案例」、「我有個 AI 工具用得很好」、
   「幫我整理 AI 效益」、「填報 AI 效益案例」。
 ---
@@ -15,8 +15,8 @@ description: >
 
 | 環境 | 產出方式 |
 |------|------|
-| **Outline MCP 已連線** | 直接呼叫 `outline:create_document`，發佈至對應團隊子文件節點 |
-| **Outline MCP 未連線** | 產出 `.md` 檔案，並告知使用者手動上傳至哪個 Outline 路徑 |
+| **Outline MCP 已連線** | 直接呼叫 Outline MCP 的 `create_document`，發佈至對應團隊子文件節點 |
+| **Outline MCP 未連線** | 在對話中以 Markdown code block 輸出，並告知使用者貼上至哪個 Outline 路徑 |
 
 ---
 
@@ -175,19 +175,19 @@ description: >
 2. **數字優先**：每個效益陳述都要追問具體數字，沒有數字就協助工程師做粗估
 3. **一次一個問題**：避免一次丟出多個問題讓使用者不知從何回答
 4. **邊問邊整理**：每個區塊問完後，立即整理成草稿讓使用者確認，再繼續下一區
-5. **環境感知產出**：開始前偵測 Outline MCP 是否可用，決定走「直接發佈」或「產出 .md」路徑；兩條路徑產出的文件內容完全相同，差別只在交付方式
+5. **環境感知產出**：開始前偵測 Outline MCP 是否可用，決定走「直接發佈」或「對話輸出 Markdown」路徑；兩條路徑產出的文件內容完全相同，差別只在交付方式
 ---
 
 ## 完整執行流程
 
 ### 前置：偵測 Outline MCP 連線狀態
 
-**在開場之前，先判斷 `outline:create_document` 工具是否在當前工具清單中可用。**
+**在開場之前，先判斷 Outline MCP 的 `create_document` 工具是否可用。** Claude Code 中它的名稱形如 `mcp__plugin_mcp-outline_mcp-outline__create_document`，而且可能只以 deferred tool 名稱列出，要先載入 schema 才能呼叫。
 
 | 情境 | 判斷方式 | 後續行為 |
 |------|------|------|
-| 工具清單中有 `outline:*` 系列工具 | MCP 已連線 | 走「路徑 A：直接發佈」 |
-| 工具清單中無 `outline:*` 工具 | MCP 未連線 | 走「路徑 B：產出 .md 檔」 |
+| 工具清單（含 deferred tools）中有 Outline MCP 的 `create_document` | MCP 已連線 | 走「路徑 A：直接發佈」 |
+| 找不到 Outline MCP 工具 | MCP 未連線 | 走「路徑 B：對話輸出 Markdown」 |
 
 不論哪條路徑，**訪談流程完全相同（階段 0–6）**，差別只在階段 7 的產出方式。
 
@@ -313,18 +313,18 @@ description: >
 - **整體推廣效益**：月節省人時 × 30 人外推
 #### 7.2 套用填報表格式（兩條路徑共用）
 
-依完整的空白模板結構（Section 1–7）組裝 Markdown 內容。
+依完整的空白模板結構（Section 1–6）組裝 Markdown 內容。
 
 ---
 
 #### 路徑 A：Outline MCP 已連線 → 直接發佈
 
-**使用 `outline:create_document`**：
+**使用 Outline MCP 的 `create_document`**：
 
 ```
 title:              案例標題
-collectionId:       1b37ce1a-c547-4427-92d8-1b99997e9ece
-parentDocumentId:   依團隊查上方對照表
+collection_id:      1b37ce1a-c547-4427-92d8-1b99997e9ece
+parent_document_id: 依團隊查上方對照表
 icon:               📝
 publish:            true
 text:               [完整 Markdown 內容]
@@ -336,7 +336,7 @@ text:               [完整 Markdown 內容]
 >
 > 如果需要修改任何數字或內容，直接告訴我，我會更新 Outline 上的文件。
 
-**後續修改**：使用 `outline:update_document`，以 `editMode: "patch"` 精準更新對應 section。
+**後續修改**：用 Outline MCP 的 `edit_document`（`old_string` / `new_string` 字串替換）精準更新對應 section；`update_document` 會整份覆寫內容，只在要重寫全文時使用。
 
 ---
 
@@ -393,7 +393,7 @@ text:               [完整 Markdown 內容]
 - [ ] Section 5.3 整體推廣效益有估算
 - [ ] 數字欄位無「感覺」、「大概」等模糊詞語（應換成粗估數字）
 路徑 A 額外確認：
-- [ ] parentDocumentId 對應正確的團隊節點（JCP 與 QA 已移除，勿填入舊 ID）
+- [ ] parentDocumentId 對應正確的團隊節點（取自上方對照表）
 路徑 B 額外確認：
 - [ ] 完整 Markdown 已在對話中以 code block 形式輸出（不使用 create_file / present_files）
 - [ ] code block 後附上正確的 Outline 貼上目標 URL
@@ -407,7 +407,7 @@ text:               [完整 Markdown 內容]
 > 2. 導入前後各花多少時間？
 > 3. 幾個人用、每週幾次？
 >
-> 其他的我幫你補齊格式，確認後視 Outline MCP 連線狀態直接發佈或產出 .md 供手動上傳。
+> 其他的我幫你補齊格式，確認後視 Outline MCP 連線狀態直接發佈，或在對話中輸出 Markdown 供你複製貼上。
 
 ---
 
@@ -423,7 +423,7 @@ text:               [完整 Markdown 內容]
 
 **AI（最終）**：所有資訊都確認了！我現在發佈到 Outline 的 JEM 2 - Go 子文件下。
 
-*[呼叫 outline:create_document，parentDocumentId: e69bfd3b-61cc-4b93-97f0-a7cfd3dfd5d2]*
+*[呼叫 Outline MCP 的 create_document，parent_document_id: e69bfd3b-61cc-4b93-97f0-a7cfd3dfd5d2]*
 
 > ✅ 已發佈至 Outline！
 > 🔗 [Claude - API 文件撰寫，時間縮短 60%](https://jubo.getoutline.com/doc/...)

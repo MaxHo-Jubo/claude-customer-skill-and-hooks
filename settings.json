@@ -422,6 +422,14 @@
   },
   "language": "繁體中文",
   "effortLevel": "xhigh",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    },
+    "claude-sonnet-5-5": {
+      "effortLevel": "high"
+    }
+  },
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "remoteControlAtStartup": false,

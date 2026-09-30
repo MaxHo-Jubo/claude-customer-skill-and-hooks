@@ -4,8 +4,6 @@ version: 4.0.0
 description: >
   AI.MD — Convert any human-written CLAUDE.md into AI-native structured format.
   Your CLAUDE.md is read by AI every single turn, not by you — so write it in AI's language.
-  Battle-tested: 5 rounds, 4 models (GPT-5.3, Gemini 2.5 Pro, Grok-4, Claude Opus 4.6).
-  Structured-label format raised Codex compliance from 6/8 → 8/8 on identical content.
   Same rules, fewer tokens, higher precision.
   This skill contains the complete methodology: how to take natural language instructions
   and convert them into a format that LLMs actually follow better.
@@ -118,7 +116,7 @@ For each sentence, I ask:
 2. **Is this an ACTION?** (What should the AI do?)
 3. **Is this a CONSTRAINT?** (What should the AI NOT do?)
 4. **Is this METADATA?** (Priority, timing, persistence, exceptions?)
-5. **Is this a HUMAN EXPLANATION?** (Why the rule exists — delete this)
+5. **Is this a REASON?** (Why the rule exists — keep it, attached to the rule as a `why:` label; delete only metaphor or backstory that carries no constraint)
 
 Example analysis:
 
@@ -128,7 +126,7 @@ Input: "收到任務→先用一句話複述(防搞混)(長對話中每個新任
 Decomposition:
   ├─ TRIGGER:    "收到任務" → new-task
   ├─ ACTION:     "先用一句話複述" → first-sentence="你要我做的是___"
-  ├─ DELETE:     "(防搞混)" → human motivation, AI doesn't need this
+  ├─ WHY:        "(防搞混)" → why: 防止誤解任務 (keep: names the failure the rule prevents)
   ├─ METADATA:   "(長對話中每個新任務都重新觸發)" → persist: every-new-task
   └─ EXCEPTION:  "例外: signals命中「處理一下」=直接執行" → exception: signal=處理一下 → skip
 ```
@@ -265,9 +263,9 @@ GATE-4 報結論:
 This was discovered because Gemini 2.5 Pro kept triggering GATE-4 on simple number queries
 like "成功率怎麼樣?". Adding `not-triggered: 純指標查詢` fixed it immediately.
 
-### Phase 6: TEST — Multi-Model Validation (Non-Negotiable)
+### Phase 6: TEST — Multi-Model Validation
 
-**This is not optional.** Every conversion MUST be validated by 2+ different LLM models.
+Validate every conversion with at least two different models before it replaces the original.
 
 Why? Because a format that works perfectly for Claude might confuse GPT, and vice versa.
 The whole point of AI.MD is that it works ACROSS models.
@@ -372,25 +370,21 @@ MOAT:
   new-api: 必確認health-check.py覆蓋(GATE-5)    ← cross-ref, not duplicate
 ```
 
-### Technique 5: The "What Not Why" Principle
+### Technique 5: Keep the Why — Label It
 
-Delete ALL text that exists to explain WHY a rule exists.
-AI needs WHAT to do, not WHY.
+Keep the reason behind each rule, moved out of parentheses into a `why:` label beside it.
+The reason is context only the author has: it names the failure the rule prevents, which
+lets the model apply the rule sensibly in cases the rule text did not anticipate.
+Delete only text that carries no constraint at all.
 
 ```
-# DELETE these human explanations:
-(防搞混)                     → motivation
-(不是大爆破,是每次順手一點)    → metaphor
-(想清楚100倍後才做現在的)     → backstory
-(因為用戶是非工程師)          → justification
+# KEEP as a labeled reason:
+(防搞混)                     → why: 防止誤解任務
+(因為用戶是非工程師)          → why: 使用者非工程師，輸出避免術語
 
-# KEEP only the actionable instruction:
-action: first-sentence="你要我做的是___"
-refactor: 同區塊連續第3次修改 → extract
+# DELETE (no constraint beyond what the rule already says):
+(不是大爆破,是每次順手一點)    → already expressed by: refactor: 同區塊連續第3次修改 → extract
 ```
-
-Every deleted explanation saves tokens AND removes noise that could confuse the model
-about what it should actually DO.
 
 ---
 
@@ -401,7 +395,7 @@ about what it should actually DO.
 ```bash
 echo "=== Current Token Burn ==="
 claude_md=$(wc -c < ~/.claude/CLAUDE.md 2>/dev/null || echo 0)
-rules=$(cat ~/.claude/rules/*.md 2>/dev/null | wc -c || echo 0)
+rules=$(find ~/.claude/rules -name '*.md' -type f -exec cat {} + 2>/dev/null | wc -c)
 total=$((claude_md + rules))
 tokens=$((total / 4))
 echo "CLAUDE.md:     $claude_md bytes"
@@ -416,7 +410,7 @@ Then: Read all auto-loaded files. Identify redundancy, prose overhead, and dupli
 
 ### Stage 2: DISTILL — Convert with Safety Net
 
-1. **Backup**: `cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.bak-pre-distill`
+1. **Backup**（檔名帶時間戳，每次執行各自一份，不覆寫舊備份）: `BAK=~/.claude/CLAUDE.md.bak-pre-distill-$(date +%Y%m%d-%H%M%S) && cp ~/.claude/CLAUDE.md "$BAK" && echo "$BAK"`，記下印出的路徑供最後報告使用
 2. **Phase 1-5**: Run the full conversion process above
 3. **Phase 6**: Run multi-model test (minimum 2 models, 8 questions)
 4. **Report**: Show before/after scores
@@ -428,8 +422,8 @@ Before: {old} bytes ({old_score} compliance)
 After:  {new} bytes ({new_score} compliance)
 Saved:  {percent}% bytes, +{delta} compliance points
 
-Backup: ~/.claude/CLAUDE.md.bak-pre-distill
-Restore: cp ~/.claude/CLAUDE.md.bak-pre-distill ~/.claude/CLAUDE.md
+Backup: {BAK 路徑，例如 ~/.claude/CLAUDE.md.bak-pre-distill-20260929-160000}
+Restore: cp {BAK 路徑} ~/.claude/CLAUDE.md
 ```
 
 ---
@@ -493,7 +487,7 @@ how system evolves over time
 |-------|------------|-----|
 | Human prose in CLAUDE.md | Structured labels | Prose requires inference; labels are direct |
 | Multiple rules on one line | One concept per line | Attention splits across dense lines |
-| Parenthetical explanations | Remove them | AI needs "what" not "why" |
+| Reasons buried in parentheses | Move them into a `why:` label | The reason names the failure the rule prevents |
 | Same rule in 3 places | Single source + cross-ref | Duplicates can diverge and confuse |
 | 20+ flat rules | 5-7 domains with sub-items | Hierarchy helps model organize behavior |
 | Compress without testing | Validate with 2+ models | What works for Claude might fail for GPT |
@@ -514,11 +508,9 @@ Tested 2026-03, washinmura.jp CLAUDE.md, 5 rounds, 4 models:
 | R3 (refined prose) | +exceptions +non-triggers | 6/8 | 6.5/8 | — |
 | R4 (AI-native convert) | structured labels | **8/8** | **7/8** | **8/8** |
 
-Key findings:
-1. **More prose rules = worse compliance** (R1→R3: scores dropped as rules grew)
-2. **Structured format = restored + exceeded** (R4: back to max despite more rules)
-3. **Cross-model consistency**: Format that works for one model works for all (except Grok)
-4. **Semantic anchoring**: The `new-api:` label fix was the single most impactful change
-
-**The uncomfortable truth: Your beautiful, carefully-written CLAUDE.md
-might be HURTING your AI's performance. Structure > Prose. Always.**
+What this test shows: scores dropped as prose rules were added (R1→R3) and recovered after
+conversion (R4). R4 matched the R1 baseline on every model rather than exceeding it, and
+Claude Opus 4.6 scored 8/8 on both. Read it as evidence that conversion can undo the damage
+of rule accretion, not as a guaranteed gain; re-run Phase 6 on the model that will read the file.
+Structure helps most for triggers, exceptions, priorities, and reference facts; keep each
+behavioral rule's reason beside it (Technique 5).

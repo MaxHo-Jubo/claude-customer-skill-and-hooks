@@ -31,7 +31,7 @@ version: 2.1.0
 - `/plan-and-execute --resume <change-name>` — 從上次中斷處繼續（讀 plan.md checkbox 狀態）
 - `/plan-and-execute --wave <N> <change-name>` — 只執行指定 Wave
 
-## STEP 00: 前置檢查（MANDATORY — 必須最先執行）
+## STEP 00: 前置檢查（最先執行）
 
 **任何 Phase 開始前**，先驗證 superpowers plugin 啟用狀態。
 
@@ -112,12 +112,6 @@ openspec list
 - `design.md` — 技術設計（用於理解架構決策）
 - `tasks.md` — openspec checkbox（執行完同步更新）
 
-### 1.4 Context Window 檢查
-
-- 評估剩餘 token 與預估執行量（Wave 數 × Task 數）
-- 若不足以完成所有 Wave，報告可完成的 Wave 數量
-- 建議使用者用 `--wave <N>` 或 `/loop` 分批執行
-
 ## Phase 2: 逐 Wave 執行
 
 > **Import（整體節奏）**：`Skill("superpowers:executing-plans")`
@@ -170,8 +164,8 @@ openspec list
 
 | 情況 | 處理 |
 |------|------|
-| 單 task 測試 FAIL | 同 subagent 重試修正（最多 3 次） |
-| 重試 3 次仍 FAIL | 標記 task 為 `SKIP`，在 plan 中記錄原因，繼續下一個 task |
+| 單 task 測試 FAIL | 依 `harness/model-dispatch.md` §4 升級改派：Haiku 錯 1 次改派 Sonnet；Sonnet 同一 task 連錯 2 次，帶失敗軌跡改派 Opus |
+| 升級狀態機走完仍 FAIL | 標記 task 為 `SKIP`、在 plan 中記錄失敗軌跡，依 `harness/judgment-matrix.md` §3 #5 暫停並向使用者報告 |
 | 同 Wave 多個 task FAIL | 暫停 Wave，向使用者報告失敗 tasks，等指示 |
 | 後續 Wave 發現前一 Wave 設計有問題 | 停止執行，向使用者報告，建議回到 `spec-design` 修正 plan（已 commit 的程式碼不 revert，用新 commit 修正） |
 
@@ -180,7 +174,6 @@ openspec list
 ### 2d. Wave 驗證
 
 - 該 Wave 所有 tasks 完成後（含 SKIP），跑全部測試確認無 regression
-- **Context window 檢查**：若 context 不足以完成下一個 Wave，commit 當前進度並結束（使用者可用 `--resume` 繼續）
 - 向使用者報告進度：`Wave N/M 完成，X tasks pass / Y tasks skip`
 - 進入下一個 Wave
 
@@ -275,7 +268,7 @@ openspec list
 /plan-and-execute --resume my-change
 ```
 
-**場景**：跑到 Wave 3 時 context window 不夠了自動停止。關掉 session，隔天開新 session 用 `--resume` 繼續。
+**場景**：跑到 Wave 3 時因 BLOCKED 停下或被手動中斷，處理完後開新 session 用 `--resume` 繼續。
 
 ### `--wave <N>`：只跑指定 Wave
 
@@ -289,7 +282,7 @@ openspec list
 
 ### `/loop` + `--resume`：全自動分批（推薦）
 
-搭配 loop skill 全自動分批執行。每次 session 跑到 context 不夠時自動停止，loop 開新 session 用 `--resume` 繼續，直到全部完成。
+搭配 loop skill 反覆以 `--resume` 觸發，每一輪從 plan.md 第一個未勾選的 task 繼續，直到全部完成。
 
 ```
 /loop 0 /plan-and-execute --resume my-change
@@ -310,8 +303,8 @@ openspec list
 | 角色 | Model | 原因 |
 |------|-------|------|
 | 寫 unit test (test-module) | 依 test-module 預設 | test-module 自行管理 |
-| 實作 subagent (簡單) | Haiku | 1-2 檔、明確 spec |
-| 實作 subagent (標準) | Sonnet | 多檔整合 |
+| 實作 subagent (批次套用) | Haiku | 已定型 pattern 套到多檔、樣板生成 |
+| 實作 subagent (標準) | Sonnet | 明確 spec 的實作（含 1-2 檔）、多檔整合 |
 | 實作 subagent (複雜) | Opus | 架構判斷 |
 | Spec compliance review | Sonnet | 比對 spec 和程式碼 |
 | Code quality review | Sonnet | 品質檢查 |

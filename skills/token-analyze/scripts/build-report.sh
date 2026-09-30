@@ -23,7 +23,7 @@ read N TIN TCC TCR TOUT < <(jq -r '
 ' "$DATA")
 
 COST=$(awk -v i=$TIN -v c=$TCC -v r=$TCR -v o=$TOUT \
-    'BEGIN { printf "%.2f", (i*15 + c*18.75 + r*1.5 + o*75) / 1000000 }')
+    'BEGIN { printf "%.2f", (i*4 + c*8 + r*0.2 + o*20) / 1000000 }')
 
 GEN_TIME=$(date '+%Y-%m-%d %H:%M')
 SHORT_UUID=${SESSION_UUID:0:8}
@@ -36,7 +36,7 @@ PER_TURN=$(jq -r '
   [$i+1, $t.ts[11:19], $t.in, $t.cc, $t.cr, $t.out, $tools_str] | @tsv
 ' "$DATA" | awk -F'\t' '
 {
-  cost = ($3*15 + $4*18.75 + $5*1.5 + $6*75) / 1000000
+  cost = ($3*4 + $4*8 + $5*0.2 + $6*20) / 1000000
   # 格式化 token 數
   for (i=3; i<=6; i++) {
     n = $i + 0
@@ -50,7 +50,7 @@ PER_TURN=$(jq -r '
 
 # Top 5 燒錢 turn
 TOP5=$(jq -r '
-  to_entries | map(. + {cost: ((.value.in*15 + .value.cc*18.75 + .value.cr*1.5 + .value.out*75) / 1000000)})
+  to_entries | map(. + {cost: ((.value.in*4 + .value.cc*8 + .value.cr*0.2 + .value.out*20) / 1000000)})
   | sort_by(-.cost) | .[0:5]
   | .[] | .key as $i | .value as $t |
   ($t.tools | reduce .[] as $x ({}; .[$x] = (.[$x] // 0) + 1) |
@@ -86,8 +86,8 @@ __SUMMARY_PLACEHOLDER__
 ### 三種 input token 的意義（提醒）
 
 - \`input_tokens\`：純新寫、沒進快取的輸入（100% 計費）
-- \`cache_creation_input_tokens\`：第一次寫入快取的內容，**新讀檔案的真正成本**（125%）
-- \`cache_read_input_tokens\`：從快取重讀（10%）
+- \`cache_creation_input_tokens\`：第一次寫入快取的內容，**新讀檔案的真正成本**（1 小時快取寫入 200%）
+- \`cache_read_input_tokens\`：從快取重讀（5%）
 
 ## Top 5 燒錢 turn
 

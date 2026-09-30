@@ -29,11 +29,11 @@ version: 1.1.0
 
 第一次使用 `/jira` 相關指令時：
 
-1. 讀取使用者的 `~/.claude/CLAUDE.md`（全域）或專案 `.claude/CLAUDE.md`，尋找 `## Jira 設定` section
-2. 若找不到設定：
+1. 讀取使用者的 `~/.claude/CLAUDE.md`（全域）或專案 `.claude/CLAUDE.md`，尋找 Jira 設定。兩種格式等價：`## Jira 設定` 表格，或 `<conn>` 區塊內的 `JIRA:`（`cloud-id` = `JIRA_CLOUD_ID`、`username` = `JIRA_USERNAME`、`branch-prefix` = `BRANCH_PREFIX_MAP`）
+2. 兩種格式都找不到時：
    - 詢問使用者的 `JIRA_CLOUD_ID`（提示：可從 Atlassian 管理後台取得，或用 `getAccessibleAtlassianResources` MCP 工具查詢）
    - 詢問使用者的 `JIRA_USERNAME`（提示：通常是 branch 名稱中 `feat/xxx/` 的 xxx 部分）
-   - 將設定寫入使用者的 `~/.claude/CLAUDE.md`，格式如下：
+   - 把要新增到 `~/.claude/CLAUDE.md` 的段落先給使用者看，同意後再寫入，格式如下：
 
 ```markdown
 ## Jira 設定
@@ -58,7 +58,7 @@ version: 1.1.0
 
 ## 使用方式
 
-- `/jira` - 顯示當前 issue 資訊（等同舊版 `/jira show`）
+- `/jira` - 顯示當前 issue 資訊
 - `/jira fetch` - 從 Jira API 抓取 issue 詳情並建立文件
 - `/jira branch {ISSUE_ID}` - 根據 issue 建立 branch 並列出待辦事項
 

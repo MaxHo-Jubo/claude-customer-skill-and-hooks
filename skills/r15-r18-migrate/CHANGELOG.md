@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.1.2 (2026-09-23～24，第一批～第四批、第五批階段一～三與收尾修正、第六批)
+## 1.1.2 (2026-09-23～29，第一批～第四批、第五批階段一～三與收尾修正、第六批、第七批)
 
 1.1.1 收版後補做的 fresh-context stub 實跑驗收 18/18 通過，但兩個驗收 agent 各抓到一個驗收條件以外的缺陷，讀碼確認屬實。這一批只修這兩個（D1 兩層都做），加上設計紅隊在修法裡抓到、會自造新洞的三點。
 
@@ -20,9 +20,9 @@
 - 原 1.1.2 清單：(1) 重啟對帳——已知缺口 (a) PR 開了 URL 未落盤、(b) push 成功 done 未寫回、(c) 斷點 PR 空連結照寫 opened（含查既有 PR 沿用、`is_ancestor` 收尾）（第五批已處理：(b) 與 (c3) 在階段一、(a) 在階段二、(c1)(c2) 與「hard 斷點 push／gh 失敗 → 閘門消失」在階段三；`is_ancestor` 收尾沿用前置作業既有的 merged 偵測，未另做）；(2) 第一批（9/18）缺的回歸測試（ProcessLock 兩競爭者、`mutate_queue` 併發、`file_sha1` 真路徑、`git_out_or_raise` 路徑、jira-release-sync `scan_commits_luna.py`）；(3) `test_review_fixes.py` 拆檔；(4) rules 風格債（mutator 就地改 queue、magic number 200/12/10、變數註解、內部函式 STEP、`time.sleep(5)`）；(5) types（斷點 `pr_unverified` 狀態（第五批階段三已加欄位）、hold 與 idle 的關係、`MergeOutcome` 列舉）；(6) 丟棄的延後訊號只印 stderr。（(2)～(6) 第六批已處理，(4) 的 mutator 就地修改只文件化；見「第六批」）
 - 紅隊新增：`prepare_branch` 遇到本機沒有、origin 有的 entry 分支，會從整合分支重建、之後推送被拒；CLI 判 `auth_expired` 的暫停沒有簽名（認證 smoke 通過時每輪小額重燒）；`SKILL.md:80`「髒檔在範圍內」在 runner 下不可達；推送失敗通知的 stderr 只剩半截、指路被截掉（驗收 B BONUS-2）。
 - 第二批 fresh-context 驗收發現、未改：`config["current_entry"]` 設定後整個行程不清，`session_log_path` 的 runner 級命名（`runner-<ts>-<name>.log`）實跑中碰不到——目前沒有 entry 迴圈外的子行程，無害，但將來新增的話會記到上一個 entry 的序號下；重跑前合併衝突的 `blocked(git_state)` 在 `runner.log.jsonl` 沒有 entry 級事件（只有 entry=null 的 notify）；ff 失敗 detail 的 stderr 尾段 200 字會切掉 `index.lock` 這類關鍵字（同上方推送失敗通知那條）。診斷包例外與暫停不記花費已寫進 `docs/environment.md`「出錯時怎麼做」第 1、7 點。
-- 合併到一半被停止訊號打斷（第一批就有）：`prepare_branch` 的 `git merge` 或前置作業的基準分支／斷點合併執行中收到 SIGTERM，repo 會停在 entry 分支（或整合分支）的合併中（MERGE_HEAD 還在）。重啟後前置作業切換整合分支失敗（或看到殘留 MERGE_HEAD）→ `paused(integration_dirty)`、通知一次、之後同原因重複不再通知，要人 `git merge --abort` 收拾後重啟；不會燒預算（在 CLI 之前停下），但不會自己恢復。
-- CLI 之後才會發生的兩種暫停輪流出現時永遠不會鎖定（第四批 review 列入）：「同簽名連續第二次就鎖定」只比上一次的簽名，推送失敗（`integration_push_failed`）與切換整合分支失敗（`integration_diverged`、無簽名）、或推送失敗與 ff-merge 環境失敗（`ff_merge_env_failed`）輪流出現時，每一次都是新事件、每一輪都重跑一次 CLI。要環境持續不穩定才會觸發，而且每一輪都會通知，人看得到。
-- `runner.log.jsonl` 沒有輪替（第四批 review 列入，1.0 起）：只會一直長大，而去重第三層與診斷包沿用（第四批）每次暫停都整檔讀取，檔案越大越慢。
+- 合併到一半被停止訊號打斷（第一批就有）：`prepare_branch` 的 `git merge` 或前置作業的基準分支／斷點合併執行中收到 SIGTERM，repo 會停在 entry 分支（或整合分支）的合併中（MERGE_HEAD 還在）。重啟後前置作業切換整合分支失敗（或看到殘留 MERGE_HEAD）→ `paused(integration_dirty)`、通知一次、之後同原因重複不再通知，要人 `git merge --abort` 收拾後重啟；不會燒預算（在 CLI 之前停下），但不會自己恢復。（第七批已處理）
+- CLI 之後才會發生的兩種暫停輪流出現時永遠不會鎖定（第四批 review 列入）：「同簽名連續第二次就鎖定」只比上一次的簽名，推送失敗（`integration_push_failed`）與切換整合分支失敗（`integration_diverged`、無簽名）、或推送失敗與 ff-merge 環境失敗（`ff_merge_env_failed`）輪流出現時，每一次都是新事件、每一輪都重跑一次 CLI。要環境持續不穩定才會觸發，而且每一輪都會通知，人看得到。（第七批已處理）
+- `runner.log.jsonl` 沒有輪替（第四批 review 列入，1.0 起）：只會一直長大，而去重第三層與診斷包沿用（第四批）每次暫停都整檔讀取，檔案越大越慢。（第七批已處理）
 - 本批實作時發現、未改：L1 沒過（`build_unverified`／`secret_detected`）與沒有 commit（`no_commit`）兩條路徑一直沒把這一輪 CLI 的花費記進 `cost_usd_total`（抽 helper 時刻意保持原行為）。
 
 ### 第二批：c8093cb 的 codex review（tier 3，六面向）修正
@@ -181,9 +181,9 @@
 
 **不在這批（設計層，另議）**——各批「不在這批」累積、這批沒做的：
 1. `prepare_branch` 遇到本機沒有、origin 有的 entry 分支，會從整合分支重建，之後推送被拒。
-2. 合併途中被停止訊號打斷，會留下 MERGE_HEAD：重啟後以 `integration_dirty` 暫停，不會自己恢復。
-3. CLI 之後的兩種暫停輪流出現時永不鎖定（「同簽名連續第二次」只比上一次）。
-4. `runner.log.jsonl` 沒有輪替，去重第三層與診斷包沿用每次都要讀整檔。
+2. 合併途中被停止訊號打斷，會留下 MERGE_HEAD：重啟後以 `integration_dirty` 暫停，不會自己恢復。（第七批已處理）
+3. CLI 之後的兩種暫停輪流出現時永不鎖定（「同簽名連續第二次」只比上一次）。（第七批已處理）
+4. `runner.log.jsonl` 沒有輪替，去重第三層與診斷包沿用每次都要讀整檔。（第七批已處理）
 5. `gh pr create` 逾時被殺、GitHub 事後才建好 PR：當輪記 `pr_failed` 且沒有連結，之後也不會補。
 6. GitHub 更新 PR head 的延遲（未實測）會讓 `expected_head` 不符。
 7. `import-inventory` 重匯入會丟掉 auto 斷點。
@@ -204,6 +204,39 @@
 - `scan_commits_luna.py` 兩處 silent fallback：`detect_component` 在 `git show` 失敗時回 unknown；`load_component_releases` 讀不到 tag 時直接略過。
 - 在 release 分支上執行 `scan_commits_luna.py` 時，`fetch origin release:release` 可能被拒（未實測）。
 - 測試裡 mock 呼叫參數的位置索引（`call_args.args[3]` 等）是字面值，全庫舊測試都這樣寫。
+
+### 第七批：log 輪替、中斷合併自動收拾、CLI 後暫停跨簽名煞車（2026-09-24～29）
+
+範圍（user 決定）：第六批「不在這批（設計層）」的第 2、3、4 項，另併入 sync commit 05aeecf 的 codex review 三條。設計由 Plan agent 讀碼並自我紅隊，user 拍板三個參數：跨簽名煞車門檻 3、自動收拾年齡上限 900 秒、輪替 5 MB × 保留 5 份。
+
+- **CLI 後暫停跨簽名煞車**（第六批清單第 3 項）：「同簽名連續第二次就鎖定」只擋得住同一種失敗；推送失敗、切換整合分支失敗、ff-merge 環境類失敗、CLI 判 auth_expired、crash 輪流出現時，每次 launchd 重啟都再燒一次完整模組。新增 `runner_state.post_cli_pause_count`：`process_one_entry` 在呼叫 CLI 之前設 `config["cli_spent"] = (entry, 呼叫序號)`（`clear_entry_context` 一起清），`_enter_paused_uninterrupted` 對「這一輪 CLI 之後」的暫停 +1，累計到 `POST_CLI_PAUSE_HOLD_THRESHOLD`（3）就鎖定，不看原因與簽名；計數與 paused、hold 同一次落盤。CLI 之前的暫停（前置作業、準備分支、pre-flight、斷點、合併收拾）不計也不寫。有模組完成（含重啟對帳補 done）與 `unblock --runner` 歸零；欄位格式錯直接以門檻計（fail-closed）。鎖定通知動作在前，300 字截尾後 `unblock --runner` 仍在；同簽名與計數同時成立時沿用同簽名的文字。
+- **`runner.log.jsonl` 輪替**（第 4 項）：新模組 `helpers/event_log.py`（runner 與 diagnostics 共用；`diagnostics.py` 已近 800 行上限）。只有 `run` 輪替（取鎖後、主迴圈每輪開頭各檢查一次），超過 5 MB 改名成 `runner.log.<6 位序號>.jsonl`、保留最新 5 份；用序號不用時間戳（時鐘回撥），目標已存在就中止不覆寫，序號用完不輪替；其他子命令只追加。輪替失敗記 `log_rotate_failed`、照常執行（退回持續長大）。讀取端全部改成跨檔：去重第三層、診斷包沿用、重啟對帳取最後一筆 `cli_outcome`、診斷包的事件切片。**先讀完 current 才列封存檔**——反過來的話，列完目錄之後剛好輪替，current 那批會整批漏掉；讀不到的檔產出 None 哨兵，交給各呼叫端既有的壞行策略，不當成「沒有事件」。對帳取 `cli_outcome` 以 `entry.started_at` 界定，沒有 started_at 時花費與 session_id 都不取（否則會拿到更舊一輪、已記過的花費）。去重第三層跳過 `log_rotated`／`log_rotate_failed`：不跳的話每次啟動輪替後，上一次的 paused 都排在它後面，queue 損毀期間每次重啟都會重複通知。
+- **合併途中被打斷的自動收拾**（第 2 項）：三個會留下 MERGE_HEAD 的非快轉合併（前置作業合併基準分支、斷點回流、準備分支把整合分支合進既有 entry 分支）改走 `run_recorded_merge`：合併前先寫 `merge-intent.json`（種類、entry 與呼叫序號、repo 與 git 目錄、HEAD 指向的分支、合併前 HEAD、合併對象與 sha、寫下時間），寫不進去就不合併，照既有失敗路徑在 CLI 之前暫停；MERGE_HEAD 確定不在才刪記錄（嚴格三態 `merge_head_state`，讀不到不等於不在）。`cmd_run` 在 hold 檢查之後、pre-flight 之前呼叫 `recover_interrupted_merge`：沒有記錄就什麼都不做（人手動的合併交給既有守衛）；記錄讀不懂時，沒有 MERGE_HEAD 就刪記錄續跑、有就暫停；MERGE_HEAD 不在就刪記錄；在的話逐項比對——同一個 repo 與 git 目錄、HEAD 還在記錄的分支與 sha、MERGE_HEAD 恰一行而且是記錄的對象、MERGE_HEAD 寫在合併視窗內、記錄寫下不超過 900 秒、index 與 git status 列出的檔都不比 MERGE_HEAD 新、合併留下的檔沒被刪——全部吻合才 `git merge --abort`，事後嚴格驗證（MERGE_HEAD 不在、HEAD 與分支同記錄、工作樹全空）通過才續跑（`merge_recovered`，不通知）。任一項不符就不動 repo、保留記錄、以 `integration_dirty` 暫停，細節處理步驟在前、列出不符的欄位，記錄全文進 `merge_recovery_halted` 事件。收拾與收拾失敗的暫停都在 CLI 之前，不計入 CLI 後暫停計數；鎖定中不收拾。`abort_failed_merge` 改用嚴格三態：讀不到 MERGE_HEAD 時寫「無法判斷」，不再寫成「合併未開始」。刻意不做：不刪 `index.lock`（分不出是殘留、還是真的有 git 在跑）；合併本身不包停止訊號延後區間（merge 最長 600 秒，超過 `ExitTimeOut` 120 秒）。
+- **05aeecf 的 codex review 三條**（user 從另一個 session 轉來）：
+  - CRITICAL：`find_or_create_checkpoint_pr` 在 `gh pr create` 退出 0 沒印連結、再查也確定沒有 open PR 時仍回成功。**user 選 B**：只有 hard 斷點在這個情況算開啟失敗（走既有 `checkpoint_open_failed` 帶簽名暫停，人工閘門保留）；soft／auto 維持 1.1.1 的 c1 語意（opened＋`pr_unverified`、之後補查）。理由是 1.1.1 第六批 K1 回歸的教訓：把 soft／auto 也改成失敗，auto 斷點會每完成一個模組就再開一個真 PR。codex 指出的「soft／auto 不重試」那半條不修，靠通知與補查。
+  - IMPORTANT：`refresh_unverified_checkpoint_prs` 原本只補查 opened，放寬到 opened／released／merged；`find_pr_by_head` 加 `state` 參數（merged 查 `--state merged`），只補 `pr_url` 並清旗標，狀態不動。已知限制（寫進文件）：released 之後才被合併的 PR 查 open 查不到。
+  - IMPORTANT：`stamp_covered_entries` 就地修改 queue——只在兩個 mutator 內呼叫，屬第六批已文件化的「鎖內私有副本」例外，只補 docstring。
+- **項目 2 核對抓到的訊息錯誤**（2026-09-29，探針實測）：收拾時 abort 因 `index.lock` 失敗，原本的細節與文件叫人「刪掉 index.lock、再等 runner 重啟（下次會再試）」；但人超過 900 秒才處理時，重啟以 `age` 不符暫停、同原因不再通知，照做的人只會看到 runner 靜默停著——無人看管時這是常態。user 選只改訊息與文件（不削弱 900 秒的保護、不動去重語意）：細節與文件改成「刪掉 index.lock 後自己 `git merge --abort`，runner 重啟時會清掉記錄」，並寫明只刪 lock 的話要 900 秒內重啟才會自動再試。
+- **review（第七批 delta，六面向）**：codex 第一輪只拿到 silent-failure、types（其餘四個面向 codex 額度用完）；補跑時 tests 面向跑完，rules、code-review、comments 三個面向仍撞額度，改由 agent 審（code-review 用 opus，rules、comments 用 sonnet）。silent-failure 2 CRITICAL、types 1 IMPORTANT 逐條查證屬實（兩條以探針重現），全修：
+  - 收拾前比對把「檔案不存在」一律略過：人刪掉合併動過的檔（衝突檔被刪後 porcelain 仍顯示 `AA`），照樣 abort、刪除被還原、記 `merge_recovered` 不通知（設計原本列為已知盲點）。改成依狀態碼判斷：只有 `D `（合併刪掉的）、`DD`（兩邊都刪的衝突）與改名的原路徑可以不存在，其餘列進 `worktree_deleted` 不符；文件裡的「已知盲點」拿掉。
+  - `written_epoch` 只驗 int／float：NaN、Infinity（json 照樣解析）、轉 float 會溢位的超大整數一路放行到時間比對，拋例外變成 `runner_crashed`（第二次就鎖定）。新增 `is_finite_number`，不能運算的時間當成記錄讀不懂。
+  - `diagnostics.read_runner_events` 的讀取錯誤清單原本是選填，`freeze_entry` 第一次讀（找 attempt 起點）沒收：第一次讀不到、第二次讀得到時，起點缺失、runner 級事件整段不進切片，SUMMARY 卻沒有「事件不完整」的註記。改成必填（在共用層強制，將來的呼叫端忘不了）並去重，兩次讀取共用同一份清單。
+- **補跑的四個面向**（tests 用 codex，其餘三個用 agent）：0 CRITICAL，2 IMPORTANT，7 MINOR，全修：
+  - IMPORTANT（code-review，探針實測屬實）：合併收拾停下時 `halt_merge_recovery` 先記 `merge_recovery_halted` 才呼叫 `enter_paused`，這個事件不在去重第三層的跳過清單裡。queue.json 損毀時去重只能看事件紀錄，最後一筆永遠是它、判成不重複，launchd 每次重啟都再通知一次（探針：重啟 3 次、通知 3 次），而且收拾排在 pre-flight 之前，`queue_corrupt` 報不出來。跳過清單加上這個事件（與 `log_rotated` 同一類問題）。
+  - IMPORTANT（tests）：收拾 abort 之後驗 HEAD 與分支的那一段沒有測試（主 session 突變唯一存活的那一組）。補兩個測試：真的 `merge --abort` 成功之後立刻移走 HEAD、或換到同 sha 的另一支分支（工作樹保持乾淨），斷言以 `verify_failed` 暫停、沒有 `merge_recovered`、沒有呼叫 CLI。
+  - MINOR：輪替持續失敗時，同一個行程裡同一個錯誤只記一筆 `log_rotate_failed`、只印一次 stderr（原本主迴圈每輪開頭各記一次），輪替成功後重新起算；`CHECKPOINT_FIELD_DEFAULTS` 裡 `pr_unverified` 的註解改成 05aeecf 修正後的語意；`read_runner_events` 的 `@param` 順序對齊參數、`runner_events_table` 補完整 docstring（`diagnostics.py` 維持 799 行）；兩個新區域變數補用途註解；`docs/environment.md` 第 7 點補「讀不到 MERGE_HEAD」「寫合併記錄失敗」兩個成因，第 13 點補「abort 回報成功但 MERGE_HEAD 還在」這種細節開頭（記錄保留，與「沒回到合併前」記錄已刪不同）。
+- **文件**：`docs/queue-schema.md` 新增 `post_cli_pause_count` 一節（誰寫、誰清、誰讀）與 hold 的第三種原因；`docs/environment.md` 新增「出錯時怎麼做」第 12 點（CLI 後連續暫停鎖定）、第 13 點（合併收拾：條件、不收拾的原因與人工步驟、abort 失敗、記錄讀不懂），狀態目錄表加 `merge-intent.json`、改寫 `runner.log.jsonl` 一列（輪替、命名、手動查用 `grep x runner.log*.jsonl`）。
+- **測試**：275 → 363 個。新檔 `test_post_cli_brake.py`（14）、`test_log_rotation.py`（10）、`test_log_rotation_reads.py`（18）、`test_review_05aeecf.py`（9）、`test_merge_recovery.py`（18）、`test_merge_recovery_checks.py`（19）。外部狀態用真的：bare 遠端＋工作 repo、真 pre-receive hook、真衝突留下的真 MERGE_HEAD、真 `index.lock`、真封存檔與 chmod 000；「runner 留下的合併狀態」一律由真 `cmd_run` 跑到真衝突，只把合併失敗後的收尾換成拋停止訊號。R4 比對的每個測試只動受測的那一個條件，另有對照組（年齡上限內、換回原 repo、合併本身刪檔／改名）證明其餘條件成立時照樣收拾。既有測試只改了 `test_checkpoint_hold.py` 一條（05aeecf 選 B 之後，hard 斷點改由 settle 暫停）、兩個 c1 測試的情境造法、`test_reconcile.publish()` 補寫 started_at；測試用的假 `gh`（`fake_gh.py`）另加兩種模式。每一項實作完，主 session 都在獨立複本上做突變：項目 3 2 組（agent 另自報 7 組）、項目 1 2 組（agent 另自報 16 組）、05aeecf 2 組（agent 另 6 組）、項目 2 18 組、codex 三條修正 8 組，失敗全部落在 AssertionError。唯一存活的是「abort 之後不驗 HEAD 與分支」，review 後補了兩個測試，重跑這組突變已轉紅。補跑四面向的修正另做 4 組突變，stub 驗收後的修正 1 組。
+- **stub 實跑驗收**（2026-09-29，兩個 fresh-context agent，假 claude／假 gh／真 git 實跑 `runner.py run`，每次 run 當一次重啟）：10/10 PASS。A：push 被拒 → CLI 判 auth_expired → push 又被拒，第 3 輪依計數鎖定（count 3，通知截到 300 字仍有 `unblock --runner`）、第 4 次連認證 smoke 都不跑、`unblock --runner` 回 idle 歸零；CLI 前的暫停不計、done 歸零；事件紀錄預灌 5.2 MB 後輪替（封存檔 sha256 與輪替前相同），queue 損毀時跨檔去重仍判重複、通知 0 則（對照組 1 則）；hard 斷點「gh 成功沒連結、再查沒有 PR」停在 opening 並以 checkpoint_open_failed 暫停，soft 寫 opened＋`pr_unverified`。B：以包裝 git 在 merge 之後 sleep、`kill -9` 造出真的中斷合併——正常收拾、人動過衝突檔不收拾且只通知一次、人工 abort 後清記錄、index.lock 移除後自動收拾、刪掉衝突檔報 `worktree_deleted`、queue 損毀＋記錄不符只通知一次、記錄寫不進去不合併。驗收另抓到兩件事，已修：
+  - abort 因 index.lock 失敗的細節把 `index.lock` 絕對路徑放在人工步驟前面，repo 路徑一長（驗收環境約 190 字），通知的 300 字截斷就切掉「再到 repo 執行 git merge --abort」（實測 LINE 內文停在 `.git/ind`）。路徑改排在人工步驟之後；新測試照 notify.sh 的組字方式斷言步驟在路徑之前、整段在 300 字內（修前紅）。
+  - 在殘留合併的現場跑一般的 `git status` 會刷新 `.git/index`，下次重啟就以 `index_mtime` 不符而不自動收拾。行為符合設計（人看過就可能在處理），`docs/environment.md` 第 13 點補一句：只想看現場、還想讓 runner 自動收拾時用 `git --no-optional-locks status`。
+
+**不在這批**：
+- 計數讀出到寫回之間剛好有人跑 `unblock --runner` 時，歸零可能被覆寫（與 hold 同一個既有的窗）；`status` 不顯示目前累計幾次。
+- 最新一筆同原因的 paused 落在讀不到的封存檔時，診斷包沿用可能拿到更舊的一包。
+- released 之後才被合併的斷點 PR 補查不到連結（見上方 05aeecf 第二條）。
+- `read_runner_events` 的去重沒有測試（只影響 SUMMARY 會不會把同一個檔列兩次）。
+- 既有函式的 docstring 缺 `@param`（pre-existing）。
 
 ## 1.1.1 (2026-09-18，2026-09-23 收版)
 

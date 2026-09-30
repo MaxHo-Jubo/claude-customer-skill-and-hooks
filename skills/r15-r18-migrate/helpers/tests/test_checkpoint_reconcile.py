@@ -55,11 +55,9 @@ from test_reconcile import (  # noqa: E402  pylint: disable=wrong-import-positio
 from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-position
     ENTRY_ID,
     INTEGRATION_BRANCH,
-    NON_PR_OUTPUTS,
     R15_RELATIVE_PATH,
     reject_entry_branch_push,
     remote_tip,
-    write_fake_gh,
 )
 
 # 宣告的斷點 w0 凍結出來的分支
@@ -437,11 +435,10 @@ class UnverifiedLinkTest(CheckpointHarness):
 
         @return None
         """
-        # STEP 01: gh 退出 0 但沒印連結（也沒真的建；pr list 回空）
+        # STEP 01: gh 退出 0 但沒印連結（也沒真的建）；create 前的查詢正常（沒有 PR）、create 後的再查失敗——無法確認才是 (c1)
+        # （再查確定沒有是開啟失敗，05aeecf review）
         self.set_checkpoint(mode="soft")
-        # 不印連結的假 gh
-        bin_path, _calls, _tips = write_fake_gh(os.path.dirname(self.fixture["remote"]), self.fixture["remote"], NON_PR_OUTPUTS[1])
-        self.config["gh_bin"] = bin_path
+        set_gh_modes(self.gh, list_mode="ok_then_fail", list_ok_left=1, create_mode="nolink")
         self.assertEqual(runner.handle_checkpoints(self.config, include_auto=False), (False, HARD_CHECKPOINT_ID))
         cp = checkpoint(self.config)
         self.assertEqual(cp["status"], "opened")

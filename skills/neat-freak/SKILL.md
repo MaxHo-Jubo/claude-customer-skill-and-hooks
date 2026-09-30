@@ -9,8 +9,7 @@ description: >
   "新人能直接上手", or any phrase suggesting a dev milestone where knowledge needs
   reconciliation. Also trigger when the user reports stale docs, conflicting memories,
   or wants a clean handoff to teammates or other agents. Bare "整理" / "tidy" with
-  prior dev context counts — do not under-trigger. Cross-platform: works on Claude Code,
-  OpenAI Codex, OpenCode, and OpenClaw.
+  prior dev context counts — do not under-trigger.
 ---
 
 # 洁癖 — Knowledge Base Neat-Freak
@@ -28,7 +27,7 @@ description: >
 
 ## 关键概念：三类知识，三种受众
 
-**必须先理解这件事，否则你会只改 CLAUDE.md 就结束，把下游同事和其他 agent 晾在那儿。**
+三层知识面向不同受众，同步时三层都要检查：只改 CLAUDE.md，下游同事和其他 agent 就拿不到更新。
 
 | 位置 | 受众 | 职责 | 不同步的代价 |
 |------|------|------|--------------|
@@ -39,6 +38,8 @@ description: >
 这三层**受众不同，职责不重叠**。CLAUDE.md 里写"新增了 device flow 五个路由" ≠ docs/integration-guide.md 里"下游怎么接这套 flow" —— 前者是提醒自己，后者是教别人。**两份都要写。**
 
 > **Agent 记忆系统的具体位置因平台而异**（Claude Code 在 `~/.claude/projects/<...>/memory/`，Codex 用 `AGENTS.md`，OpenCode 用 `.opencode/`，OpenClaw 用 `~/.openclaw/`）。完整路径速查见 [references/agent-paths.md](references/agent-paths.md)。如果当前 agent 没有独立的记忆系统，直接跳过这一层，把功夫全花在 docs 和项目根 markdown 上。
+>
+> **Claude Code 本机**：记忆的写入格式与删改门槛以 `~/.claude/harness/knowledge-protocol.md` 为唯一协议；周期性的记忆整并（合并同主题、抽象化）走 `/weekly-review` 步骤 5。
 
 ## 执行流程
 
@@ -77,7 +78,7 @@ description: >
 
 ### 第三步：实际修改（用工具，不只是描述）
 
-你必须**真的用 Edit 修改现有文件、用 Write 创建新文件、用删除命令清理废弃文件**。"我会怎么改"的描述不算完成。
+你必须**真的用 Edit 修改现有文件、用 Write 创建新文件、用删除命令清理废弃文件**。"我会怎么改"的描述不算完成。例外（Claude Code 本机）：`CLAUDE.md`（全局与项目）、`~/.claude/rules/`、`~/.claude/skills/` 属 `~/.claude/harness/knowledge-protocol.md` 的黄区，先把 diff 贴给用户、明确同意后再改（改前建 .bak）。
 
 **顺序建议**：先改 docs/（改错影响外部）→ 再改 CLAUDE.md/AGENTS.md → 最后理记忆。先动外部优先级最高的，即使中途被打断，读者看到的也是对齐的最新状态。
 
@@ -116,7 +117,7 @@ API 速查表、环境变量表、术语表是高频查询的结构化信息，*
 - [ ] 跨项目影响：下游项目的 docs 也跟着改了
 - [ ] 没有相对时间遗留（`grep -E "今天|昨天|刚刚|最近|上周|today|yesterday|recently"` 清零）
 
-哪条打不了勾，**回去补**。不要因为"差不多了"就跳过这一步——这是这个 skill 的灵魂。
+哪条打不了勾，**回去补**。
 
 ### 第五步：变更摘要
 
@@ -148,7 +149,7 @@ API 速查表、环境变量表、术语表是高频查询的结构化信息，*
 
 **对话没有产生新事实**：审查现有记忆和文档有没有过期 / 冲突 / 相对时间——审查本身就有价值。
 
-**记忆之间出现无法自动判断的矛盾**：列在「未处理」让用户决定。**这是唯一需要用户介入的情况**，其他都自己拍板。
+**记忆之间出现无法自动判断的矛盾**：列在「未处理」让用户决定。除此之外，只有第三步所列的黄区文件需要先征得用户同意，其他都自己拍板。
 
 **跨项目改动**：本次对话改了多个项目，每个项目都要跑一次完整的第一步（ls + 读 docs）。不要假设一个项目的 docs 改了，另一个就不用。尤其是上游-下游对接文档（集成指南 / SDK 说明 / API 协议），两边都要对齐。
 

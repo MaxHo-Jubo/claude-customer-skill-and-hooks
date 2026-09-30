@@ -54,10 +54,8 @@ from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-positi
     ENTRY_BRANCH,
     ENTRY_ID,
     INTEGRATION_BRANCH,
-    NON_PR_OUTPUTS,
     remote_tip,
     run_git,
-    write_fake_gh,
 )
 
 # GitHub 上已經存在、runner 不知道的斷點 PR（補查應找到它）
@@ -311,10 +309,9 @@ class RealTopologyRegressionTest(RealTopologyHarness):
 
         @return None
         """
-        # STEP 01: soft 斷點開成 c1
+        # STEP 01: soft 斷點開成 c1：create 前的查詢正常（沒有 PR）、create 退出 0 沒印連結、create 後的再查失敗（無法確認）
         self.set_checkpoint(mode="soft")
-        bin_path, _calls, _tips = write_fake_gh(os.path.dirname(self.fixture["remote"]), self.fixture["remote"], NON_PR_OUTPUTS[1])
-        self.config["gh_bin"] = bin_path
+        set_gh_modes(self.gh, list_mode="ok_then_fail", list_ok_left=1, create_mode="nolink")
         self.assertEqual(runner.handle_checkpoints(self.config, include_auto=False), (False, HARD_CHECKPOINT_ID))
         self.assertTrue(checkpoint(self.config)["pr_unverified"])
         # STEP 02: GitHub 上其實有 PR → 重啟補查

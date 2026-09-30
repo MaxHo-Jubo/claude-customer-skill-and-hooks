@@ -13,7 +13,7 @@ user_invocable: true
 
 Claude Code 沒有內建 per-session token 統計（dashboard 只有日級）。但 transcript JSONL 每個 assistant turn 都有完整 `message.usage`：`input_tokens` / `cache_creation_input_tokens` / `cache_read_input_tokens` / `output_tokens`，可離線重建。
 
-關鍵洞察：**「讀複雜 bug → token 多」對應的是 `cache_creation_input_tokens`（新讀的檔案），不是總輸入。** `cache_read` 看起來大但只算 10% 費用，`cache_creation` 才是 125% 的真正增量成本。
+關鍵洞察：**「讀複雜 bug → token 多」對應的是 `cache_creation_input_tokens`（新讀的檔案），不是總輸入。** `cache_read` 看起來大但單價只有 input 的 5%，`cache_creation`（1 小時快取寫入，input 的 2 倍）才是真正的增量成本（倍率以 Claude Opus 5.5 為準，見 STEP 03）。
 
 ## 參數解析
 
@@ -23,7 +23,7 @@ Claude Code 沒有內建 per-session token 統計（dashboard 只有日級）。
 
 ## 步驟
 
-依序執行，每步完成後標記 ✅。
+依序執行。
 
 ### STEP 01: 解析參數 + 找 transcript
 
@@ -46,7 +46,7 @@ Claude Code 沒有內建 per-session token 統計（dashboard 只有日級）。
 
 1. **當前 session**（沒給 uuid）：從環境讀 `transcript_path`（statusline 通常從 stdin 拿，但 skill 內部沒有 stdin）。改成：列出當前專案的 jsonl，挑最新一個（mtime 最新）：
    ```bash
-   ESCAPED_CWD=$(echo "$PWD" | sed 's|/|-|g')
+   ESCAPED_CWD=$(echo "$PWD" | sed 's|[^A-Za-z0-9]|-|g')
    PROJECT_DIR="$HOME/.claude/projects/${ESCAPED_CWD}"
    TRANSCRIPT=$(ls -t "$PROJECT_DIR"/*.jsonl 2>/dev/null | head -1)
    ```
@@ -83,15 +83,17 @@ jq -s '[.[] | select(.type == "assistant")]
   | sort_by(.ts)' "$TRANSCRIPT" > /tmp/token-analyze-turns.json
 ```
 
-### STEP 03: 計算成本（Opus 4.x 定價）
+### STEP 03: 計算成本（Claude Opus 5.5 定價）
 
 每 turn 與 session 累計都算。USD per 1M tokens：
-- input: $15
-- cache_creation: $18.75（input × 1.25）
-- cache_read: $1.50（input × 0.10）
-- output: $75
+- input: $4
+- cache_creation: $8（1 小時快取寫入，input × 2；5 分鐘寫入為 $5）。本機 transcript 的快取寫入記在 `usage.cache_creation.ephemeral_1h_input_tokens`（2026-09-29 抽查），故以 1 小時價計
+- cache_read: $0.20（input × 0.05）
+- output: $20
 
-公式：`cost = (in*15 + cc*18.75 + cr*1.5 + out*75) / 1_000_000`
+公式：`cost = (in*4 + cc*8 + cr*0.2 + out*20) / 1_000_000`
+
+每個 turn 的實際模型記在 `.message.model`；session 混用其他模型時，那些 turn 依該模型定價。`scripts/build-report.sh` 裡有同一組單價常數，改價時兩處一起改。
 
 ### STEP 04: 歸納 session 工作摘要
 
@@ -103,7 +105,7 @@ jq -s '[.[] | select(.type == "assistant")]
    - **cc 跳幅**：連續幾個 turn 的 cc 都很小（< 5k），突然跳到 > 20k → 新工作開始（讀新檔/換主題）
    - **工具序列轉換**：從 Read/Grep 切到 Edit/Write、或 Bash 連發 → 從探索進入實作
    - **檔案主題變化**：讀寫的檔名從 `tasks/*.md` 切到 `src/*.ts` → 從計畫進入 coding
-2. **段數**：3-8 段，少於 3 段資訊不夠，多於 8 段太碎
+2. **段數**：依實際工作轉折決定，每段對應一件可辨識的工作；切太粗看不出成本落在哪，切太碎就失去歸納的意義
 3. **每段歸納一句話**：時間範圍 + 主要工具 + 主要檔案/工作主題
 4. **特別標註高成本段**：哪段累積 cc 最高（用 cc 不用 cr，cr 是重複算）
 
@@ -139,7 +141,7 @@ bash "$SKILL_DIR/scripts/build-report.sh" "$OUT_PATH" "$SESSION_UUID" "$TRANSCRI
 
 ## Session 工作摘要
 
-<從 STEP 04 歸納的 3-8 段，每段一行>
+<從 STEP 04 歸納的各段，每段一行>
 
 > ※ 摘要從 turn 時間段 + 主要工具 + 主要檔名歸納，幫助判斷哪段工作 token 量較大。
 
@@ -157,8 +159,8 @@ bash "$SKILL_DIR/scripts/build-report.sh" "$OUT_PATH" "$SESSION_UUID" "$TRANSCRI
 ### 三種 input token 的意義（提醒）
 
 - `input_tokens`：純新寫、沒進快取的輸入（100% 計費）
-- `cache_creation_input_tokens`：第一次寫入快取的內容，**新讀檔案的真正成本**（125%）
-- `cache_read_input_tokens`：從快取重讀（10%）
+- `cache_creation_input_tokens`：第一次寫入快取的內容，**新讀檔案的真正成本**（1 小時快取寫入 200%）
+- `cache_read_input_tokens`：從快取重讀（5%）
 
 ## Per-turn 明細
 

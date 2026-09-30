@@ -22,7 +22,8 @@ import re
 import shutil
 import tarfile
 
-# sessions/ 呼叫檔的命名與掃描（runner.py 也直接用它；依賴方向：runner → diagnostics → session_index）
+# sessions/ 呼叫檔的命名與掃描、事件紀錄的跨檔讀取（runner.py 也直接用這兩個；依賴方向：runner → diagnostics → session_index／event_log）
+import event_log
 import session_index
 
 # stream-json 解析（runner.py 也直接用它；依賴方向：runner → diagnostics → stream_events）
@@ -196,41 +197,36 @@ def session_files(state_dir, entry_id, attempt):
     }
 
 
-def read_runner_events(state_dir, entry_id=None, since_iso=None, tail=None):
-    """讀 runner.log.jsonl 並切片。
+def read_runner_events(state_dir, unreadable, entry_id=None, since_iso=None, tail=None):
+    """讀事件紀錄並切片，由舊到新：current（runner.log.jsonl）與輪替出來的封存檔（跨檔讀取在 event_log）。
 
-    entry_id 給定時：取該 entry 的全部事件，加上 since_iso 之後的 runner 級事件（entry 為 null）。
-    entry_id 為 None 時：取全部事件。tail 給定時只留最後幾筆。壞行跳過。
+    entry_id 給定時：取該 entry 的全部事件，加上 since_iso 之後的 runner 級事件（entry 為 null）。entry_id 為 None 時：取全部事件。
+    tail 給定時只留最後幾筆（由新到舊收滿就停，更舊的檔不開）。壞行跳過（深度巢狀的 RecursionError 也是，見 event_log）。
+
+    @param state_dir 狀態目錄
+    @param unreadable out 參數（必填）：讀不到的檔、列不出的目錄的說明 append 進去、已有的不重複（切片只是讀得到的部分，
+        呼叫端寫進 SUMMARY）。不給預設值：可省略時忘了傳的呼叫端會把讀取失敗靜默吞成「事件就這些」
+    @param entry_id 只取這個 entry（與 since 之後的 runner 級事件）；None 取全部
+    @param since_iso runner 級事件的起點（ISO 字串）；None 不收 runner 級事件
+    @param tail 只留最後幾筆；None 全部
+    @return 事件 dict 清單（由舊到新）
     """
-    # STEP 01: 讀檔；不存在回空
-    path = os.path.join(state_dir, "runner.log.jsonl")
-    text = read_text(path)
-    if text is None:
-        return []
-    # STEP 02: 逐行篩選（entry 相符，或 since 之後的 runner 級事件）
-    selected = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-        except Exception:  # pylint: disable=broad-except
-            # 讀既有證據的防禦邊界（同 runner.log_records_newest_first）：深度巢狀的一行會拋 RecursionError，整包凍結失敗
-            continue
-        if not isinstance(record, dict):
-            continue
-        if entry_id is None:
-            selected.append(record)
-            continue
-        if record.get("entry") == entry_id:
-            selected.append(record)
-        elif record.get("entry") is None and since_iso and str(record.get("ts", "")) >= since_iso:
-            selected.append(record)
-    # STEP 03: 只留尾端
-    if tail:
-        selected = selected[-tail:]
-    return selected
+
+    def wanted(record):
+        """這筆事件要不要進切片。
+
+        @param record 事件 dict
+        @return bool
+        """
+        # STEP 01: 不指定 entry 全收；指定時收該 entry 的、以及 since 之後的 runner 級事件
+        if entry_id is None or record.get("entry") == entry_id:
+            return True
+        return record.get("entry") is None and bool(since_iso) and str(record.get("ts", "")) >= since_iso
+
+    # STEP 01: 跨檔讀、篩、取尾端；讀不到的檔交給呼叫端
+    records, gaps = event_log.read_chronological(state_dir, tail=tail, keep=wanted)
+    unreadable.extend(gap for gap in gaps if gap not in unreadable)
+    return records
 
 
 def attempt_started_iso(events, attempt):
@@ -330,10 +326,16 @@ def timeline_table(timeline):
     return "\n".join(lines)
 
 
-def runner_events_table(records):
-    """把 runner.log.jsonl 的紀錄列成 markdown 表格。"""
-    # STEP 01: 表頭；沒有紀錄補一列
-    lines = ["| ts | entry | event | attempt | detail |", "|---|---|---|---|---|"]
+def runner_events_table(records, unreadable=None):
+    """把事件紀錄列成 markdown 表格；unreadable 非空時表格前先註記：表格只是讀得到的部分，不代表沒有其他事件。
+
+    @param records 事件 dict 清單（由舊到新）
+    @param unreadable 讀不到的事件紀錄檔說明清單（read_runner_events 收集的）；None 或空清單不註記
+    @return markdown 文字
+    """
+    # STEP 01: 讀不到的檔先講；表頭；沒有紀錄補一列
+    lines = ["> 事件不完整，讀不到：%s" % "、".join(unreadable), ""] if unreadable else []
+    lines += ["| ts | entry | event | attempt | detail |", "|---|---|---|---|---|"]
     if not records:
         lines.append("| | | （無） | | |")
         return "\n".join(lines)
@@ -341,16 +343,11 @@ def runner_events_table(records):
     for record in records:
         detail = record.get("detail")
         detail_text = detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False)
-        lines.append(
-            "| %s | %s | %s | %s | %s |"
-            % (
-                record.get("ts", ""),
-                record.get("entry") or "",
-                record.get("event", ""),
-                "" if record.get("attempt") is None else record.get("attempt"),
-                clip(detail_text, 200).replace("|", "\\|"),
-            )
-        )
+        # 這一列的 attempt（沒有就留空）
+        attempt = "" if record.get("attempt") is None else record.get("attempt")
+        # 這一列的五格：ts、entry、event、attempt、detail 摘要（`|` 要跳脫）
+        cells = (record.get("ts", ""), record.get("entry") or "", record.get("event", ""), attempt, clip(detail_text, 200).replace("|", "\\|"))
+        lines.append("| %s | %s | %s | %s | %s |" % cells)
     return "\n".join(lines)
 
 
@@ -359,7 +356,7 @@ def render_entry_summary(ctx):
 
     ctx 欄位：entry, entry_id, attempt, reason, detail, fingerprint, meta, events, bad_lines,
     stream_error, result, timeline, stderr, progress, has_contract, has_report,
-    logs（[(名稱, 全文)]）, runner_events, files（診斷包內檔案清單）, generated_at
+    logs（[(名稱, 全文)]）, runner_events, runner_events_unreadable（讀不到的事件紀錄檔）, files（診斷包內檔案清單）, generated_at
     """
     entry = ctx.get("entry") or {}
     result = ctx.get("result") or {}
@@ -514,7 +511,7 @@ def render_entry_summary(ctx):
     # STEP 08: runner 事件與檔案清單
     lines.append("## 6. runner 事件（本 entry 全部 + 本次 attempt 期間的 runner 級事件）")
     lines.append("")
-    lines.append(runner_events_table(ctx.get("runner_events") or []))
+    lines.append(runner_events_table(ctx.get("runner_events") or [], ctx.get("runner_events_unreadable")))
     lines.append("")
     lines.append("## 7. 診斷包內檔案")
     lines.append("")
@@ -529,7 +526,7 @@ def render_runner_summary(ctx):
     """產出 runner 級 SUMMARY.md 的全文（尚未遮罩）。
 
     ctx 欄位：reason, detail, fingerprint, runner_state, queue_readable, trace_text,
-    runner_events, latest_session（meta dict 或 None）, files, generated_at
+    runner_events, runner_events_unreadable（讀不到的事件紀錄檔）, latest_session（meta dict 或 None）, files, generated_at
     """
     lines = []
     # STEP 01: 標頭
@@ -563,7 +560,7 @@ def render_runner_summary(ctx):
     # STEP 04: 事件與最近一次 session
     lines.append("## 3. 最近 %d 筆 runner 事件" % RUNNER_EVENTS_TAIL)
     lines.append("")
-    lines.append(runner_events_table(ctx.get("runner_events") or []))
+    lines.append(runner_events_table(ctx.get("runner_events") or [], ctx.get("runner_events_unreadable")))
     lines.append("")
     lines.append("## 4. 最近一次 CLI 呼叫")
     lines.append("")
@@ -666,9 +663,11 @@ def freeze_entry(state_dir, entry, attempt, reason, detail, fingerprint, secret_
             files.append(name)
     # STEP 02: queue entry 快照與 runner 事件切片
     files.append(write_bundle_file(bundle_dir, QUEUE_ENTRY_COPY_NAME, json.dumps(entry, ensure_ascii=False, indent=2) + "\n"))
-    entry_events = read_runner_events(state_dir, entry_id=entry_id)
+    # 讀不到的事件紀錄檔（寫進 SUMMARY）：兩次讀都收——第一次讀不到會讓起點缺失、runner 級事件整段不進切片
+    unreadable = []
+    entry_events = read_runner_events(state_dir, entry_id=entry_id, unreadable=unreadable)
     since = attempt_started_iso(entry_events, attempt)
-    runner_events = read_runner_events(state_dir, entry_id=entry_id, since_iso=since)
+    runner_events = read_runner_events(state_dir, entry_id=entry_id, since_iso=since, unreadable=unreadable)
     files.append(
         write_bundle_file(
             bundle_dir,
@@ -700,6 +699,7 @@ def freeze_entry(state_dir, entry, attempt, reason, detail, fingerprint, secret_
         "has_report": os.path.exists(os.path.join(state_dir, "%s-report.md" % entry_id)),
         "logs": logs,
         "runner_events": runner_events,
+        "runner_events_unreadable": unreadable,
         "files": files + [SUMMARY_NAME],
         "generated_at": now_iso(),
     }
@@ -758,8 +758,10 @@ def freeze_runner(state_dir, reason, detail, fingerprint, secret_labels, trace_t
         files.append(name)
     if trace_text:
         files.append(write_bundle_file(bundle_dir, TRACE_COPY_NAME, trace_text))
-    # STEP 02: runner 事件尾端
-    runner_events = read_runner_events(state_dir, tail=RUNNER_EVENTS_TAIL)
+    # STEP 02: runner 事件尾端（跨檔；尾端落在 current 就不開封存檔）
+    # 讀不到的事件紀錄檔（寫進 SUMMARY）
+    unreadable = []
+    runner_events = read_runner_events(state_dir, tail=RUNNER_EVENTS_TAIL, unreadable=unreadable)
     files.append(
         write_bundle_file(
             bundle_dir,
@@ -777,6 +779,7 @@ def freeze_runner(state_dir, reason, detail, fingerprint, secret_labels, trace_t
         "queue_readable": queue is not None,
         "trace_text": trace_text,
         "runner_events": runner_events,
+        "runner_events_unreadable": unreadable,
         "latest_session": latest_session_meta(state_dir),
         "files": files + [SUMMARY_NAME],
         "generated_at": now_iso(),

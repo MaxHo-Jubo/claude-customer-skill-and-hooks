@@ -1,10 +1,5 @@
 # MAX-HERO | lang:zh-TW | for-AI-parsing | optimize=results-over-format
-# v2 路由中心版（架構源自 M4 機器 Fable 5 重寫；2026-07-03 由 Sonnet 5 本機化；舊版全文保存於 CLAUDE.md.bak-20260703）
-# v2.1（2026-07-25 Fable 5）：依官方 Claude 5 context-engineering 指南對齊——單一出處去重、補 spec 高保真參照、移除平台已內建行為（context 自動摘要取代 token-check）；改前備份 CLAUDE.md.bak-20260725
-# v2.2（2026-09-14 weekly-review STEP 05，user 同意）：verify-the-observer 補否定結論前的對照組、uncertainty 補可查證事實先查證再斷言；改前備份 CLAUDE.md.bak-20260914
-# v2.3（2026-09-14 Opus 5，user 指示採納 /insights「根因紀律」建議）：root-cause 補「否證前不做修正性編輯」＋ harness 新增除錯動手前路由至 judgment-matrix.md §5；改前備份 CLAUDE.md.bak-20260914-2
-# v2.4（2026-09-14 Opus 5，user 指示採納 /insights「範圍控制」建議）：GATE-1 bugfix-scope 補共用/根層級檔案限制；裝置設定、順手刪 code 兩條改寫進 judgment-matrix.md §3 #8／§2；改前備份 CLAUDE.md.bak-20260914-3
-# v2.5（2026-09-24 Opus 5.5，user 同意）：harness 索引 §4 移除「弱模型」限定，品味決策不分模型一律走三選一（避免 Opus/Sonnet 切換時觸發條件漂移）；同批刪 rules/common/performance.md CONTEXT-WINDOW；改前備份 CLAUDE.md.bak-20260924
+# 改版紀錄：~/.claude/CLAUDE.changelog.md（不自動載入；改本檔時在該檔追加一行）
 # 收錄門檻：只收 (a)事實與連線資料 (b)codebase 慣例與踩坑 gotcha (c)user 明定偏好與工作協議；模型能自行判斷的通用工程常識不寫；rules/ 與 harness/ 已載明的不重複寫
 
 
@@ -30,21 +25,21 @@
 - 遇品味/美感決策 → harness/judgment-matrix.md §4（一律走三選一，不自行拍板）
 - git commit 成功後 → harness/commit-review-policy.md（Tier 0~3 分級審查，取代舊「強制六步」）
 - 被 user 糾正 / 要寫教訓 / 要改制度檔 → harness/knowledge-protocol.md（權限分級＋踩坑格式＋精簡門檻）
-- 質疑 session 注入成本 / 評估 plugin 去留 / 清理死引用 → harness/harness-diagnosis.md（本機實測診斷，status DONE，機器專屬不隨 sync；注入量數字是 2026-07-03 的，context-mode 已停用＋CLAUDE.md 已改 v2.1，絕對值須重量測，方法論與壞引用清單仍有效）
+- 質疑 session 注入成本 / 評估 plugin 去留 / 清理死引用 → harness/harness-diagnosis.md（本機實測診斷，機器專屬不隨 sync；檔內注入量數字已過期，引用前重量測；方法論與壞引用清單仍有效）
 
 </harness>
 
-<gates label="硬性閘門 | GATE-1>GATE-2 | 缺一=STOP">
+<gates label="閘門 | GATE-1 先於 GATE-2">
 
 GATE-1 需求確認:
   trigger: 收到新任務/需求
   action: 一句話重述需求請 user 確認；要具體案例（截圖/業務邏輯/觸發條件），不憑空分析；先解決眼前的具體案例，不做通用化；輸出【核心判斷】→【關鍵洞察】→【方案】
-  exception: 簡單明顯修正（單檔 bug、typo）直接做
+  exception: typo、以及附有具體證據（log／截圖／重現步驟）的 bug report／CI 失敗，直接做，不論幾個檔（規則見 rhythm 的 auto-bugfix）；沒附證據的 bug 描述仍走上面的「要具體案例」
   bugfix-scope: 最小化改動，不順便重構、不擴大範圍到無法驗證的頁面；共用/根層級檔案（App.js、全域 provider、共用設定、跨頁共用元件）只在 judgment-matrix.md §5 存活的根因就落在該檔時才改
   not-triggered: 問問題 | 閒聊 | 要求解釋
 
 GATE-2 Plan Mode:
-  trigger: 3+ 步驟 | 架構決策 | 需求模糊
+  trigger: 架構決策 | 需求模糊 | 有多種合理做法需 user 取捨
   action: 進 plan mode → 計畫寫 tasks/todo.md（checkbox）→ 確認後開工
   exception: 單步驟明確修正
   on-block: 立即停下重新規劃，不硬推
@@ -129,9 +124,8 @@ size-check: >20 檔或 >1000 行 → 建議 clone 本機用 Claude Code review
 
 frontend: 第 1 輪實作 70-80% → 第 2 輪 user 截圖標註精調 → 第 3 輪微調；標註不清主動問，不猜；tool-priority: 截圖標註 > DevTools > Figma
 backend-test: endpoint 改動先寫 integration test（supertest+jest）；錯誤路徑 400/401/403/404/重複操作；測試用 DB + transaction rollback 隔離
-task-mgmt: 計畫寫 tasks/todo.md（checkbox）→ 開工前確認 → 做完勾選 → 每步高層摘要 → 完成加 review section
-elegance: non-trivial 修改先暫停問「有沒有更優雅的方式？」；trivial 直接做不過度設計；commit 前挑戰自己的方案
-auto-bugfix: bug report / CI 失敗 / 錯誤 log → 直接修，不等人帶路
+task-mgmt: 計畫寫 tasks/todo.md（checkbox）→ 開工前確認 → 做完勾選 → 完成加 review section
+auto-bugfix: bug report / CI 失敗 / 錯誤 log → 直接修，不等人帶路；改動範圍受 GATE-1 bugfix-scope 約束，diff 超過 judgment-matrix.md §1 S6 的門檻就停下重診斷，不硬修
 spec-ref: 計畫/規格優先用高保真參照（可跑的測試套件、HTML mockup、可移植的既有程式碼）取代長篇文字描述；引用原檔勝過轉述
 incremental-delivery: 預估總結會破 3000 字或文字段數破 10 的任務，做完一個 user 能獨立驗證的階段就停下交付，不累積到回合末一次倒；階段邊界取「user 驗得動」的點，不是「我改完一組檔案」的點（實測 max 出現過單回合 39 段文字／4997 字元）
 
@@ -145,8 +139,8 @@ incremental-delivery: 預估總結會破 3000 字或文字段數破 10 的任務
 
 <ref label="細則檔（rules/ 自動載入，勿在本檔重複內容）">
 
-rules/common/{coding-style,testing,git-workflow,performance,patterns,hooks,security}.md
-rules/typescript/{coding-style,testing,patterns,hooks,security}.md
+rules/common/{coding-style,testing,git-workflow,performance,hooks,security}.md
+rules/typescript/{coding-style,testing,hooks,security}.md
 記憶與教訓寫入 → harness/knowledge-protocol.md 為唯一協議（取代舊版 LEARNING / SELF-IMPROVE / MEMORY-HYGIENE 段落；記憶整理仍用 /weekly-review skill 步驟 5）
 subagent 調度與工具鏈守則 → harness/model-dispatch.md（取代舊版 SUBAGENT-USAGE / TOOL-USAGE 段落與已移除的 rules/common/agents.md）
 commit 後審查 → harness/commit-review-policy.md（取代舊版 POST-COMMIT-REVIEW 段落）

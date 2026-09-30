@@ -10,8 +10,7 @@ version: 2.0.0
 依序完成：merge 版號 PR → 執行 `jira-release-sync`。
 
 **iOS／Android 的正式發布動作雙平台都由使用者自己到 App Store Connect／Google Play Console 網頁手動點擊，
-本 skill 完全不觸碰**（2026-09-04 使用者確認：原本規劃過的 `release_pending_ios_version`／
-`release_pending_android_version` 兩個 fastlane lane 構想已全部放棄，Fastfile／release.yml 不需要任何改動）。
+本 skill 完全不觸碰**（不需要任何 fastlane lane，也不改 Fastfile／release.yml）。
 
 **PR merge 是對外可見、有點難撤銷的動作**，只有一個確認點（STEP 02），確認後會連續執行到底，中途不會再問。
 

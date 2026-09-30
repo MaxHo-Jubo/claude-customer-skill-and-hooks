@@ -25,9 +25,9 @@ agent: Explore
 
 ## 執行步驟
 
-### 探索階段（限時：不超過整體 40% effort）
+### 探索階段（蒐集到足以填滿報告各欄位就轉入產出，不求讀遍）
 
-1. 用 Explore subagent 快速掃描目標目錄：
+1. 直接掃描目標目錄（本 skill 已在 Explore agent 裡執行，沒有再派 subagent 的工具）：
    - 檔案總數、行數統計
    - 目錄結構樹
    - 主要 export 和入口點
@@ -40,7 +40,7 @@ agent: Explore
 
 ### 產出階段（必須執行）
 
-3. 撰寫探索報告到 `spec/.exploration-log.md`（append 模式）：
+3. 撰寫探索報告，**作為最終回覆完整回傳，不在本 skill 內寫檔**（Explore agent 沒有 Write／Edit 工具，寫檔由主 session 收到報告後做），格式：
 
    ```markdown
    ---
@@ -73,9 +73,9 @@ agent: Explore
    ---
    ```
 
-4. 如果帶 `--to-spec`：
-   - 在報告完成後，調用 `/spec-module` 的邏輯產出正式 spec
-   - 報告作為 spec 的輸入素材
+4. 報告結尾附一段給主 session 的指示（主 session 讀得到回覆，讀不到本 skill 內文）：
+   - 「請把上方報告 append 到 `spec/.exploration-log.md`（檔案不存在就建立，保留歷次記錄）」
+   - 如果帶 `--to-spec`：再加「請以此報告為輸入，接著在主 session 執行 `/spec-module` 產出正式 spec」（本 skill 不呼叫 `/spec-module`，它需要寫檔）
 
 5. 報告完成後向使用者摘要：
    - 掃描了什麼
@@ -93,5 +93,5 @@ agent: Explore
 
 - 使用 Glob/Grep/Read 等原生工具進行探索，不要用 bash 的 cat/head/grep
 - 如果目錄超過 100 檔，先用 Glob 建立全局觀，再挑代表性檔案精讀
-- `spec/.exploration-log.md` 用 append 模式，保留歷次探索記錄
+- `spec/.exploration-log.md` 由主 session 用 append 模式寫入，保留歷次探索記錄
 - 每次報告用 `---` 分隔，方便閱讀

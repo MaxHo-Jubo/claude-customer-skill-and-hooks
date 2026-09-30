@@ -32,9 +32,9 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 使用 Atlassian MCP 工具 `getJiraIssue`，帶入以下參數：
 
-- `cloudId`: 從使用者的 CLAUDE.md 讀取 `JIRA_CLOUD_ID`
+- `cloudId`: 從使用者 CLAUDE.md 的 Jira 設定讀取（`## Jira 設定` 表格的 `JIRA_CLOUD_ID`，或 `<conn>` 區塊 `JIRA:` 的 `cloud-id`）
 - `issueIdOrKey`: 步驟 1 取得的 key
-- `fields`: `["summary", "description", "issuelinks", "subtasks", "acceptance criteria"]`
+- `fields`: `["summary", "description", "issuelinks", "subtasks"]`（驗收條件是自訂欄位 `customfield_*`，欄位顯示名稱不能直接當 field；需要時另用 `view: "evidence"` 取得自動對應的自訂欄位）
 
 抓取後提取：
 - **標題**（summary）
@@ -82,16 +82,11 @@ git diff $(git merge-base HEAD master)..HEAD
 
 ### 步驟 5: 逐條比對需求與改動
 
-對每條需求，分析 git diff 中的改動：
+對每條需求判定狀態，並列出對應的檔案路徑和行號範圍作為證據：
 
-1. 閱讀需求描述，理解其核心意圖
-2. 在 diff 中搜尋與該需求相關的程式碼改動
-3. 判定狀態：
-   - **✅ 已實作**：改動明確覆蓋了該需求的完整意圖
-   - **⚠️ 部分實作**：有相關改動但未完全覆蓋，或實作與需求有偏差
-   - **❌ 未實作**：diff 中找不到與該需求相關的改動
-
-4. 記錄證據：列出對應的檔案路徑和行號範圍
+- **✅ 已實作**：改動明確覆蓋了該需求的完整意圖
+- **⚠️ 部分實作**：有相關改動但未完全覆蓋，或實作與需求有偏差
+- **❌ 未實作**：diff 中找不到與該需求相關的改動
 
 判定原則：
 

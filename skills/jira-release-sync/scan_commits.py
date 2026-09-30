@@ -20,6 +20,12 @@
 只掃 master（或 main）分支的祖先歷史（不含尚未合併的 feature branch），
 因為未合併進 master 的 commit 一定還沒上架。
 
+掃描視窗（--weeks）以「版本釋出日」過濾，不是 fix commit 自己的日期（2026-09-30 修正）：
+  舊版對 fix commit 的 committer date 套 `--since`，導致 09-21 寫好的 fix 隨 09-30 的
+  1.50.36 釋出時，因 commit 日期早於視窗下限而整筆漏掉（實測漏掉 LVB-8443 / LVB-8418）。
+  現在的做法：只取視窗內的版本 merge 當釋出點；fix commit 則取「視窗前最後一個版本
+  尚未包含的全部 commit」（git log master ^prev_release），不設日期下限。
+
 用法：
   python3 scan_commits.py --weeks 2
   python3 scan_commits.py --weeks 2 --json-out /path/to/out.json
@@ -42,10 +48,12 @@ import json
 import re
 import subprocess
 import sys
+import time
 
 RELEASE_MERGE_RE = re.compile(r"^Merge pull request #\d+ from \S+/([0-9]+\.[0-9]+\.[0-9]+)\s*$")
 JIRA_RE = re.compile(r"^\[([A-Z]+-[0-9]+)\]")
 FIELD_SEP = "\x1f"
+SECONDS_PER_WEEK = 7 * 24 * 3600  # --weeks 換算成視窗下限（epoch 秒）
 
 
 def detect_main_branch() -> str:
@@ -59,11 +67,11 @@ def detect_main_branch() -> str:
     raise SystemExit("找不到 master 或 main 分支，請確認在正確的 repo 內執行")
 
 
-def load_commits(branch: str, weeks: int):
+def load_commits(branch: str, extra_args=None):
     r = subprocess.run(
         [
             "git", "log", branch,
-            f"--since={weeks} weeks ago",
+            *(extra_args or []),
             "--reverse",
             "--date=iso-strict",
             f"--format=%H{FIELD_SEP}%ct{FIELD_SEP}%cd{FIELD_SEP}%s",
@@ -101,10 +109,10 @@ def main():
 
     weeks = max(1, min(8, args.weeks))
     branch = detect_main_branch()
-    commits = load_commits(branch, weeks)
+    cutoff_epoch = time.time() - weeks * SECONDS_PER_WEEK
 
     releases = []
-    for c in commits:
+    for c in load_commits(branch, ["--merges"]):
         m = RELEASE_MERGE_RE.match(c["subject"])
         if m:
             releases.append({
@@ -115,11 +123,20 @@ def main():
             })
     releases.sort(key=lambda r: r["epoch"])  # 時間序最早的版本 merge 排最前面
 
+    # 視窗前最後一個版本：它的祖先屬於更早的版本，不是本期候選，用 ^ 排除即可，
+    # 剩下的 commit 不論日期多舊都要留（fix 可能早在視窗前就寫好，才隨視窗內版本釋出）
+    prev_release = None
+    for rel in releases:
+        if rel["epoch"] < cutoff_epoch:
+            prev_release = rel
+    window_releases = [rel for rel in releases if rel["epoch"] >= cutoff_epoch]
+    commits = load_commits(branch, [f"^{prev_release['hash']}"] if prev_release else [])
+
     def release_for(fix_hash: str):
         # 依時間序找「最早」把這個 commit 包進去的版本 merge，
         # 用 ancestry（真的被 merge 進去）而非日期比較，避免
         # 長壽命 feature branch 的 commit timestamp 早於實際 merge 時間造成誤判。
-        for rel in releases:
+        for rel in window_releases:
             if is_ancestor(fix_hash, rel["hash"]):
                 return rel
         return None

@@ -6,7 +6,7 @@ version: 3.2.0
 
 # Spec Design — 需求探索到設計 spec + 實作計畫
 
-從模糊需求出發，先用 openspec explore 自由探索問題空間，再透過 `superpowers:brainstorming` 結構化收斂，以 openspec 撰寫 spec 並經 4 輪平行 review，最後用 plan mode 產出實作計畫並經 4-agent plan review。所有互動式討論在此 skill 完成，產出物可直接交給 `plan-and-execute` 自動執行。
+從模糊需求出發，先用 openspec explore 自由探索問題空間，再透過 `superpowers:brainstorming` 結構化收斂，以 openspec 撰寫 spec 並經 4-agent 平行 review（迭代至 🔴 = 0，最多 3 輪），最後用 plan mode 產出實作計畫並經 4-agent plan review。所有互動式討論在此 skill 完成，產出物可直接交給 `plan-and-execute` 自動執行。
 
 **前置條件**：
 - superpowers plugin 必須安裝且啟用
@@ -23,7 +23,7 @@ version: 3.2.0
 - `/spec-design` — 互動式需求探索
 - `/spec-design <需求描述>` — 帶初始需求直接開始
 
-## STEP 00: 前置檢查（MANDATORY — 必須最先執行）
+## STEP 00: 前置檢查（最先執行）
 
 **任何 phase 開始前**，先驗證 superpowers plugin 啟用狀態。
 
@@ -276,7 +276,7 @@ openspec artifacts 寫入完成後，**不 commit、不停頓**，直接進入 P
 
 7. **Commit spec review 結果**：詢問使用者是否 commit，確認後執行 `git add` + `git commit`
 
-**⚠️ MANDATORY GATE：Phase 7 完成後 MUST 立即進入 Phase 8。不可跳到 Phase 10，不可向使用者提供「下一步選項」，不可結束流程。spec review 通過 ≠ 流程完成。流程完成 = Phase 10。**
+**Phase 7 完成後直接進入 Phase 8**：spec review 通過只是中間點，流程到 Phase 10 才算完成，這裡不要停下來向使用者提供下一步選項或結束流程。
 
 ## Phase 8: Plan Mode 互動式規劃
 
@@ -330,8 +330,8 @@ Expected: PASS
 ```
 
 **Model 分級標註**：
-- 1-2 檔 + 明確 spec → `haiku`（機械式實作）
-- 多檔整合 + pattern matching → `sonnet`（標準實作）
+- 已定型 pattern 的批次套用、樣板生成 → `haiku`（純機械）
+- 明確 spec 的實作（含 1-2 檔）、多檔整合 → `sonnet`（標準實作）
 - 架構判斷 + 跨模組協調 → `opus`（需要設計判斷）
 
 ### 8.2 使用者確認

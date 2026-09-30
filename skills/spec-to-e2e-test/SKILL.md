@@ -89,7 +89,6 @@ version: 1.2.0
 
 4. **評估複雜度**：
    - 向使用者報告：scenario 數量、涉及幾個畫面、預估 test case 數量
-   - 評估剩餘 token 是否足夠完成完整流程
 
 ### Phase 1: 撰寫測試
 
@@ -192,7 +191,7 @@ version: 1.2.0
 
 3. **重新啟動 4 個 review subagent**
 
-4. **重複直到 🔴 = 0**：
+4. **重複直到 🔴 = 0，最多 3 輪**（第 3 輪結束仍有 🔴 → 停止迭代，回報剩餘問題與原因，由使用者決定下一步）：
    - 若某個 🔴 問題經過 2 輪迭代仍無法解決：
      - 在測試檔案中將該 test case 加上 `skip` 註解
      - 在 test case 上方加文件說明原因
@@ -213,8 +212,8 @@ version: 1.2.0
    |----------|--------|------------|
    | 測試寫錯（finder 錯誤、缺 pumpAndSettle、斷言邏輯錯誤） | 改測試 | 歸入測試 commit，不另外分 commit |
    | 測試環境問題（overlay 多重匹配、IndexedStack 干擾） | 改測試 | 同上 |
-   | 程式碼有 bug（行為與 spec 定義不符） | 改程式碼 | 獨立 commit：`fix: <描述>（E2E 測試發現）` |
-   | Spec 與實作不一致（spec 定義的行為實作沒做到） | 改程式碼對齊 spec | 獨立 commit：`fix: <描述>（對齊 spec 定義）` |
+   | 程式碼有 bug（行為與 spec 定義不符） | 改程式碼 | 獨立 commit：格式依 CLAUDE.md commit-msg，說明後綴加「（E2E 測試發現）」 |
+   | Spec 與實作不一致（spec 定義的行為實作沒做到） | 改程式碼對齊 spec | 獨立 commit：格式依 CLAUDE.md commit-msg，說明後綴加「（對齊 spec 定義）」 |
 
    - Spec 是 source of truth — 測試是 spec 的翻譯，程式碼是被測對象
    - 程式碼 bug 和 spec 不一致的修正必須各自獨立 commit，不可與測試修正混在一起

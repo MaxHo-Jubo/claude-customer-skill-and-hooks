@@ -2,7 +2,6 @@
 name: r15-r18-verify
 description: "R15 到 R18 頁面遷移的功能等價性驗證。逐層比對 Redux、元件行為、錯誤處理等，產出結構化報告並修復發現的 bug。當使用者提到 /r15-r18-verify、「驗證 r18」、「比對 r15 r18」、「遷移驗證」時觸發。"
 version: 1.4.0
-context: fork
 ---
 
 # R15→R18 功能等價性驗證
@@ -48,7 +47,7 @@ context: fork
 
 ### 階段 0：確定範圍
 
-**CRITICAL**：驗證對象是**整個 branch 相對 master 的遷移**，不是單一 commit。即便最新 commit 看起來只改了 feature flag，也必須往前追到遷移本體 commit。
+驗證對象是**整個 branch 相對 master 的遷移**，不是單一 commit：即便最新 commit 看起來只改了 feature flag，也要往前追到遷移本體 commit。
 
 #### 0.1 列出 branch 所有改動
 
@@ -108,7 +107,7 @@ git log --all --full-history -- {path}
 
 ### 階段 1：Redux / Props 合約比對
 
-用 2 個平行 Explore agent 分別分析 R15 和 R18 的 Redux 層。
+用 4 個平行 Explore agent 分析 R15 與 R18 的 Redux 層（reducer、saga 各拆一個，分工見「平行化策略」）。
 
 #### Checklist
 
@@ -119,7 +118,7 @@ git log --all --full-history -- {path}
 
 ### 階段 2：元件行為清單比對
 
-用 2 個平行 Explore agent 分別分析 R15 和 R18 的元件。
+用 4 個平行 Explore agent 分析 R15 與 R18 的元件（元件、表格各拆一個，分工見「平行化策略」）。
 
 #### Checklist
 
@@ -439,8 +438,8 @@ Agent 產出的表格是**原始素材**，不是結論。主流程必須執行�
 - R15 class component 的 componentWillReceiveProps → R18 可能對應多個 useEffect，需逐一確認
 - Modal 狀態從 Redux 移到 local state 是常見且合理的遷移，不算 bug
 - 死 prop（R15 取了但沒用的 state）不需要在 R18 保留
-- **一定要讀 R15 原始碼驗證**，不要只靠 agent 報告的結論（本次就有 agent 誤判 ModifyModal endDate 自動計算的案例）
-- **驗證範圍是整個 branch，不是單一 commit**（2026-04-09 修正）：即便最新 commit 是 feature flag 切換，也要往前追遷移本體 commit；若 R15 檔案在 branch 中已被刪除，必須用 `git show {delete-commit}^:{path}` 取得刪除前版本當 ground truth，不能只讀 HEAD 的 R15 檔案
+- **一定要讀 R15 原始碼驗證**，不要只靠 agent 報告的結論（agent 曾把 ModifyModal 的 endDate 自動計算誤判為等價）
+- **驗證範圍是整個 branch，不是單一 commit**：即便最新 commit 是 feature flag 切換，也要往前追遷移本體 commit；若 R15 檔案在 branch 中已被刪除，必須用 `git show {delete-commit}^:{path}` 取得刪除前版本當 ground truth，不能只讀 HEAD 的 R15 檔案
 - **feature flag 並行切換 commit 不等於遷移等價性驗證**：flag 切換只驗「切換機制本身正確」，遷移本體的等價性（Redux/元件/生命週期/表格/日期邏輯）要對 P0 commit 獨立做
 - **L1+L2 完成不代表驗完**：Redux 合約對齊 + 元件欄位對齊只是 L1/L2，還有 L3 行為層（Modal 開關鏈路、成功後副作用、錯誤狀態流）才是最常出 bug 的地方，必做 MUST-CHECK 1/2/3
 - **react-bootstrap-table v1 → v2 filter 陷阱**：R15 `filterFormatted` 會對 formatter 後的字串比對；R18 `textFilter` 預設對原始 cell 值比對。若欄位是物件（例如 `{quota: 50000}`）或 ISO 日期字串，必須加 `filterValue: (cell) => formattedString` 讓 filter 對格式化後字串比對，否則 filter 會壞掉或顯示 `[object Object]`

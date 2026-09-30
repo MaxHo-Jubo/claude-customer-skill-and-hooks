@@ -179,11 +179,11 @@ version: 1.0.0
 
 1. 如果帶 `--commit` 參數：
    - `git add` 所有新增/修改的 spec 檔案
-   - commit message 格式：`docs: spec-module 產出 <模組名稱> spec`
-   - 如果是 `--verify` 模式：`docs: spec-module 驗證補完 <模組名稱> spec`
+   - commit message 格式依 CLAUDE.md commit-msg，類型用 `docs`，說明為「spec-module 產出 <模組名稱> spec」
+   - 如果是 `--verify` 模式，說明改為「spec-module 驗證補完 <模組名稱> spec」
 
 2. 檢查 `spec/file-mapping.json` 是否需要更新：
-   - 提醒執行 `node ~/.claude/scripts/generate-spec-mapping.cjs <project-root>`
+   - 提醒執行 `bun ~/.claude/scripts/generate-spec-mapping.ts <project-root>`
 
 3. 報告摘要：
    - 掃描了多少檔案
@@ -202,8 +202,6 @@ version: 1.0.0
 ## 注意事項
 
 - 探索階段用 subagent 保持主 context 乾淨
-- 預設模式：探索 50%、撰寫 50%（需讀完所有函式簽名，但不深入實作）
-- `--full` 模式：探索 60%、撰寫 40%（需逐行閱讀關鍵實作）
 - 如果模組超過 200 檔，拆成多個子系統 spec
 - 已有的 spec 只更新，不覆蓋（先讀取現有內容再決定改動）
 - Spec section 不是死板模板——根據模組實際特性選用，沒有 Redux 就不寫 Redux section

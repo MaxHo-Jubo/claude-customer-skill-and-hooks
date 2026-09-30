@@ -2,7 +2,6 @@
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
 version: 1.8.0
-context: fork
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -13,7 +12,6 @@ context: fork
 
 - **PostToolUseFailure hook**: `~/.claude/hooks/post_tool_error.py` — 自動記錄 tool 失敗到 `~/.claude/.learnings/ERRORS.jsonl`（使用者中斷、權限阻擋不記）。2026-09-14 前誤掛在 PostToolUse、從未寫入，所以在那之前的 ERRORS.jsonl 只有 hook 層（hook-error-wrapper）的紀錄
 - **摘要腳本**: `~/.claude/scripts/summarize_errors.py` — 錯誤統計報告
-- 安裝方式見 `skill-error-tracker/setup_skill_error_tracker.sh`
 
 ## 使用方式
 
@@ -32,7 +30,7 @@ context: fork
 - **不做創意判斷**：不對使用者的工作內容下價值判斷（「這個決策很棒」「這個錯誤很嚴重」），只陳述事實
 - **不重組輸入**：commit/memory/observation 原本的分類就是分類，不二次歸類
 
-違反紀律的徵兆：輸出變長、出現 schema 沒定義的 heading、開始講「我發現」「值得注意的是」。看到就停下。
+紀律到位的樣子：只出現各 STEP schema 定義的 heading，長度隨資料量而定，敘述只陳述事實、不加評論性開場。
 
 ## 每週觀察項目
 
@@ -95,7 +93,7 @@ weekly-review 需要 Atlassian MCP 來撈本週 Jira 活動（STEP 01.5）。請
 
 ### STEP 01: Git 工作摘要（透過 multi-repo-commit-scanner subagent 平行掃描）
 
-收集指定天數內所有專案的 commit 紀錄，按專案分組。**用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo，主 agent 等聚合**（取代過去逐 repo 序列跑 `git log`）。
+收集指定天數內所有專案的 commit 紀錄，按專案分組。**用 `multi-repo-commit-scanner` agent 平行掃 8 個 repo，主 agent 等聚合**。
 
 **呼叫方式：**
 
@@ -121,13 +119,13 @@ Agent(
       - /Users/maxhero/Documents/Compal/erpv3_web_backend
       - /Users/maxhero/Documents/Compal/erpv3_web_frontend_sidea
       - /Users/maxhero/Documents/projects/claude-customer-skill-and-hooks
-    days: 7
+    days: {days}   # 本 skill 的回顧天數（--days，預設 7）
     parallel: 9
   """
 )
 ```
 
-> **規則仍然成立**：`--all` 必開（feature branch commit 不可漏）、`--no-merges`、按 `git config user.name` 過濾。這些規則固化在 agent 內，主 agent 不需重複指定。
+> **掃描規則已固化在 agent 內**：`--all` 必開（feature branch commit 不可漏）、`--no-merges`、按 `git config user.name` 過濾，主 agent 不需重複指定。
 
 > **數字要引用哪一個**（agent v1.2.0+）：對外報告一律用 `summary.unique_commits`，不是 `total_commits` —— 後者對用 pathspec 拆 bucket 的 repo 會重複計算。窗口以 **author date** 為準（rebase 不會把上週工作推進本週）；`dedup_removed > 0` 時要在摘要中明說移除幾筆。
 
@@ -142,6 +140,8 @@ Agent(
   "summary": {
     "total_repos": 8,
     "total_commits": 68,
+    "unique_commits": 61,
+    "dedup_removed": 9,
     "all_jira_ids": ["ERPD-11870", "LVB-7963", ...],
     "by_type_aggregate": {"feat": 25, "fix": 28, ...}
   }
@@ -173,7 +173,7 @@ Agent(
 
 > 前置：STEP 00 已通過（MCP 可用、OAuth 有效）。`--skip-jira` 模式下本步驟整段跳過。執行中若發生非預期錯誤（超時、rate limit），回報使用者並詢問是否繼續，不自動 degrade。
 
-從 STEP 01 的 commit message 提取 Jira ID（符合 `\[([A-Z]+-\d+)\]` 的前綴，如 `[ERPD-7777]`、`[LVB-7866]`），並執行兩組查詢補齊事實：
+以 STEP 01 回傳的 `summary.all_jira_ids` 作為本週 commit 涉及的 Jira ID（`[ERPD-7777]`、`[LVB-7866]` 這類前綴，agent 已抽好），並執行三組查詢補齊事實：
 
 **查詢 A：commit 涉及的 ticket 當前狀態**
 

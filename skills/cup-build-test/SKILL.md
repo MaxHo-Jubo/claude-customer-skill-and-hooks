@@ -21,8 +21,6 @@ CUP 項目是日照系統 R15→R18 升級的單元工作。每個 CUP 都需要
 4. 跑完發現測試項目本身有錯（描述不符、selector 找不到、預期錯）→ 修正
 5. 修正後的腳本給 local / staging / R18 用
 
-之前 CUP-80 是手工建檔（test-plan + cjs），可重用但無流程固化。本 skill 把這一整套變成可重複呼叫的工具。
-
 ## 關鍵概念
 
 ### 雙用途文件
@@ -76,7 +74,7 @@ Last update: 2026-05-08 14:45
 - Status: FAIL → FIX → PASS
 - Attempts: 2
 - Failure type: #4 環境前置不足（公告 modal 蓋住刪除鈕）
-- Fix applied: cjs STEP 05.02 dismiss block
+- Fix applied: cjs STEP 06.02 dismiss block
 - Screenshots: .claude/CUP-XX-temp/r15/02a-fail.png, 02b-pass.png
 
 ### [x] B1.1 新增評估表單 [mutation]
@@ -128,11 +126,11 @@ Last update: 2026-05-08 14:45
 
 ### Playwright runtime：helpers/ user-level 安裝（**target 專案 0 dep**）
 
-CUP-179 實戰糾正（之前寫「不依賴 package.json，用 npx -p playwright@latest 動態取得」是**錯的假設**）：
+不用 `npx -p playwright@latest` 動態取得，原因：
 - `npx -p playwright@latest node script.js` **不會**讓 script 能 require playwright（NODE_PATH 沒被設）
 - 即使解決 module 解析，chromium 二進制檔還是要 `playwright install chromium` 才有
 
-正確設計：playwright 裝在 helpers/ 自己的 `node_modules`（user-level），target 專案保持 0 dep，跨專案共用。
+因此 playwright 裝在 helpers/ 自己的 `node_modules`（user-level），target 專案保持 0 dep，跨專案共用。
 
 **首次 setup（一次性，user 機器）**：
 
@@ -164,7 +162,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 |---|---|
 | `--from-stage N` | 從第 N 階段開始（1-6），跳過前面 |
 | `--issue CUP-XX` | 手動指定 issue（branch 名解析失敗時） |
-| `--with-graph` | 階段 1 加碼用 codebase-memory-mcp 分析間接依賴（原 `--with-gitnexus`；GitNexus 已於 2026-07-01 淘汰，見 CLAUDE.md TOOL-USAGE:graph-first） |
+| `--with-graph` | 階段 1 加碼用 codebase-memory-mcp 分析間接依賴（工具守則見 `~/.claude/harness/model-dispatch.md` §6 graph-first） |
 | `--focus auto\|equivalence` | 階段 2 test-plan 產出 focus；預設 `auto`（全功能列舉），`equivalence` 專注 R15/R18 行為差異（從 commit 訊息抽取「修正/修復 R18 升級」類字眼） |
 | `--only A1` | 階段 4 只跑特定 prefix |
 | `--resume` | 從 `.claude/{ISSUE_KEY}-progress.md` 第一個未勾選 case 續跑（跳過階段 1-3，省 token） |
@@ -175,11 +173,11 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 
 每次啟動做以下兩件事，**不阻塞流程**：
 
-1. **codebase-memory-mcp 偵測（用 MCP tool 不是 file system）**（2026-07-01 起：原 GitNexus 已淘汰，索引長期過期且連線不穩，改用 codebase-memory-mcp，詳見 CLAUDE.md TOOL-USAGE:graph-first）：
+1. **codebase-memory-mcp 偵測（用 MCP tool 不是 file system）**（工具守則見 `~/.claude/harness/model-dispatch.md` §6 graph-first）：
 
    呼叫 `mcp__codebase-memory-mcp__list_projects` → 看當前 repo 是否在清單。Project 名稱由絕對路徑推導：`pwd` 結果去掉開頭 `/`、其餘 `/` 換成 `-`（例：`/Users/maxhero/Documents/Compal/luna_web/frontend` → `Users-maxhero-Documents-Compal-luna_web-frontend`）。
 
-   codebase-memory-mcp 有 auto-sync（檔案變動自動更新圖），**不像 GitNexus 需要手動 `analyze` 才更新**，不需要 staleness 檢查這一步。
+   codebase-memory-mcp 有 auto-sync（檔案變動自動更新圖），不需要 staleness 檢查。
 
 2. **印提醒**：
 
@@ -232,10 +230,10 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 
 1. `git branch --show-current` → regex `CUP-\d+` → `ISSUE_KEY`
    - 解析失敗（含 detached HEAD）→ 要求使用者 `--issue CUP-XX` 或先 checkout branch
-2. `git diff --name-only main...HEAD` → 改動檔案清單（若空則中止）
+2. `git diff --name-only <default-branch>...HEAD`（`<default-branch>` 依「前置條件」自動偵測）→ 改動檔案清單（若空則中止）
 3. **將 diff 輸出寫到暫存檔**（避免 diff 入 context、subagent 讀檔比讀 stdout 容易）：
    ```bash
-   git diff main...HEAD > .claude/{ISSUE_KEY}-diff.tmp.txt
+   git diff <default-branch>...HEAD > .claude/{ISSUE_KEY}-diff.tmp.txt
    ```
 4. **平行**啟動 3 個 Explore subagent，**讀暫存檔 + 直接讀改動檔案 + 追周邊結構**做反推。**純看 diff 不夠** — luna 把 URL 寫在常數檔、Redux action 用 camelCase 字串、saga 是行為主體 — 需明確要求 subagent 同時做以下動作：
 
@@ -245,7 +243,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
    - **不列**：i18n key 完整清單、Bootstrap variant 列舉、reducer initState 完整結構、props type interfaces、CSS class 列表
    - 每個 agent 報告**總長 < 1500 字**，超出要先精簡再回
 
-   **若主流程帶 `--with-graph`，每個 subagent prompt 必須加入以下段落**（CUP-179 實戰糾正：原本只有主 context 跑 impact，subagent 用 grep 反推效率低、漏抓 caller；2026-07-01 起改用 codebase-memory-mcp）：
+   **若主流程帶 `--with-graph`，每個 subagent prompt 必須加入以下段落**（subagent 只用 grep 反推效率低、會漏抓 caller）：
 
    ```
    **可用工具**：mcp__codebase-memory-mcp__search_graph / mcp__codebase-memory-mcp__trace_path / mcp__codebase-memory-mcp__query_graph（project 參數固定填階段 0 推導出的 project 名）
@@ -274,9 +272,9 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
      - 抓 saga 的 `takeLatest(actionType, worker)` 與 `put({ type: ... })` 列副作用流程
      - **有 --with-graph 時**：對 action creator 函式名用 `trace_path(function_name="actionName", direction=both)` 找所有 dispatch 位置——**但 `dispatch(actionName(...))` 是已知盲區，trace_path 大概率抓不到任何 caller，仍需搭配 grep 找 `actionName(` 的呼叫點**
 5. **若 `--with-graph`**：對改動檔案**逐一**收集 importer / caller，併入 coverage。
-   - **檔案分類**（CUP-179 實戰新增）：用 `git cat-file -e $(git merge-base master HEAD):<file>` 判斷新增 vs 修改。
+   - **檔案分類**：用 `git cat-file -e $(git merge-base <default-branch> HEAD):<file>` 判斷新增 vs 修改。
    - **首次使用先跑 `mcp__codebase-memory-mcp__get_graph_schema`**（project=當前 repo）確認 File 節點路徑欄位與 IMPORTS 邊的實際 schema，不要憑記憶硬寫 Cypher（已驗證 luna_web-frontend 用 `file_path`，`IMPORTS` 是直接 edge type，其他 repo 若版本不同可能有差）。
-   - **工具選擇**（CUP-179 實戰糾正，2026-07-01 起改用 codebase-memory-mcp）：
+   - **工具選擇**：
      - **React 元件 / TS interface 檔（.tsx / .ts / .jsx）**：`trace_path(function_name=<name>, direction=inbound)` 對 React 元件多半回空（CALLS edge 不抓 JSX 元素使用）。**改用 query_graph 一次批次查 IMPORTS**：
        ```cypher
        MATCH (caller:File)-[:IMPORTS]->(f:File)
@@ -284,7 +282,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
        RETURN f.file_path AS target, caller.file_path AS importer
        ORDER BY f.file_path, caller.file_path
        ```
-       一次 query 拿到全部 18 檔的 importers，比逐檔 trace_path 快、覆蓋率高。
+       一次 query 拿到全部改動檔的 importers，比逐檔 trace_path 快、覆蓋率高。
      - **純函式 / class（.js / saga / reducer）**：用 `trace_path(function_name=<funcName>, direction=inbound, depth=2, risk_labels=true)` 找 CALLS chain。**但 `dispatch(actionCreator(...))` 這類間接呼叫是已知盲區**，callers 空陣列不代表無人呼叫，需 grep 補查。
      - **SCSS / JSON / .d.ts**：跳過（codebase-memory-mcp 多半不索引這類檔案的 IMPORTS）。
    - **批次 cypher 範例輸出**：每個改動檔列出 importer 清單；某 file 沒出現在結果代表「無人 import」（可能是 entry point 或新檔未被引用，**也可能是間接呼叫盲區**——兩者都要考慮，不要直接斷言「無人使用」）。
@@ -301,7 +299,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
      ```
    - **省 token**：每檔 trace_path 結果只保留 d=1（WILL BREAK），d=2 限 3 個樣本；超過寫 `"...and N more"`。
    - **失敗處置**：`trace_path` 找不到 symbol 時改用 file path 當 target 重試；仍失敗則跳過該檔，**不阻擋**主流程。
-   - 18 檔案逐一跑可能耗 30-60s，但比漏 caller 安全。本步驟設計為**完整覆蓋優先**，但完整覆蓋是「工具能力範圍內」的完整——callback/dispatch 呼叫模式的漏抓不會被這個流程解決，這是工具限制不是流程漏洞。
+   - 逐檔跑較慢（十幾個檔約 30-60s），但比漏 caller 安全。本步驟設計為**完整覆蓋優先**，但完整覆蓋是「工具能力範圍內」的完整——callback/dispatch 呼叫模式的漏抓不會被這個流程解決，這是工具限制不是流程漏洞。
 6. **刪除 diff 暫存檔** `.claude/{ISSUE_KEY}-diff.tmp.txt`（已被 subagent 消化）
 7. 合併輸出 `coverage.json`：
 
@@ -401,7 +399,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 ### 機械步驟
 
 1. 讀 `~/.claude/skills/cup-build-test/templates/test-cjs-template.cjs`
-2. **先 grep `~/.claude/skills/cup-build-test/helpers/` 目錄看有什麼可用** —— template 內已 require 7 個 helper 模組（env / step / modal / browser / bundle / report / types）。Helper API 速查見「速查表 > Helper API 速查」段。**新功能優先擴充 helper 而非 inline 寫進 cjs**：例如新發現的公告 modal selector 應加進 `helpers/modal.cjs` 的 `DEFAULT_ANNOUNCEMENT_SELECTORS`，而不是寫死在 cjs 內 evaluate。
+2. **先 grep `~/.claude/skills/cup-build-test/helpers/` 目錄看有什麼可用** —— template 內已 require 7 個 helper 模組（env / step / modal / confirmDialog / browser / bundle / report）。Helper API 速查見「速查表 > Helper API 速查」段。**新功能優先擴充 helper 而非 inline 寫進 cjs**：例如新發現的公告 modal selector 應加進 `helpers/modal.cjs` 的 `DEFAULT_ANNOUNCEMENT_SELECTORS`，而不是寫死在 cjs 內 evaluate。
 3. 替換 placeholder：
    - `{{ISSUE_KEY}}`
    - `{{FEATURE_TITLE}}`
@@ -448,7 +446,7 @@ LVB-7963（release-e2e 實戰範例）A3.2~A3.4 是反面教材：「必要選�
 - (c) **highlight + 標號**：用 `evaluate` 在 DOM 上加 outline / badge 標出比對的元素
 - (a/b/c) 任選一個必須伴隨 evidence overlay 注入
 
-**evidence helper**：`luna_web/e2e/release-tests/_helpers/evidence.cjs` 已封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，cup-build-test 產出 cjs 直接 require 使用（同樣存在於 `~/.claude/skills/cup-build-test/helpers/`，透過 `sync-helpers.sh` 同步維護）。若 helpers 尚未含 evidence.cjs，先從 `luna_web/e2e/release-tests/_helpers/evidence.cjs` 複製過來。
+**evidence helper**：`~/.claude/skills/cup-build-test/helpers/evidence.cjs` 封裝 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，產出 cjs 直接 require 使用（template 未預設 require，需自行加上）。cup-build-test/helpers 是 source of truth，由 `scripts/sync-helpers.sh` 同步到 jira-test-report 與 `luna_web/e2e/release-tests/_helpers/`，要改只改這裡。
 
 ```javascript
 const { injectEvidence, clearEvidence, expandSelectAsListbox } = require(path.join(HELPERS_DIR, 'evidence.cjs'));
@@ -476,7 +474,7 @@ await step(page, 'A4.1', '取消 Modal', '...', async (p) => {
 });
 ```
 
-**Cleanup 鐵則**：**同 step 內 `injectEvidence` 之後若還有任何 UI 互動（closeModal / .click / .fill / .selectOption 等），動作前必須 `await clearEvidence(p);`**。`#e2e-evidence-panel` 注入 viewport 右上角 fixed 定位，Modal 寬度大時會 intercept pointer events → Playwright click 60 次 retry 全被擋 → 30 秒 timeout（功能本身沒 bug，人工點得下去）。實戰案例：ERPD-11841 A8 step injectEvidence 後直接 closeModal → staging 100% 重現 timeout，補 clearEvidence 後 PASS。詳見 jira-test-report SKILL.md v2.4.5。
+**Cleanup 鐵則**：**同 step 內 `injectEvidence` 之後若還有任何 UI 互動（closeModal / .click / .fill / .selectOption 等），動作前必須 `await clearEvidence(p);`**。`#e2e-evidence-panel` 注入 viewport 右上角 fixed 定位，Modal 寬度大時會 intercept pointer events → Playwright click 60 次 retry 全被擋 → 30 秒 timeout（功能本身沒 bug，人工點得下去）。
 
 ```javascript
 await step(page, 'A8', '...', '...', async (p) => {
@@ -506,7 +504,7 @@ await step(page, 'A8', '...', '...', async (p) => {
 ### 4a. Dry-run（無瀏覽器）
 
 1. parse test-plan.md，列出所有 case 與類型
-2. **偵測 ENTRY_PATH 動態參數**（CUP-180 實戰新增）：
+2. **偵測 ENTRY_PATH 動態參數**：
    - 從 test-plan 環境資訊表抓 `Entry path` 欄位
    - regex `/{[^}]+}/` 找模板變數（例 `{caseId}`、`{orderId}`）
    - 若有，**列出必填 env vars 並中止**直到使用者提供：
@@ -517,7 +515,7 @@ await step(page, 'A8', '...', '...', async (p) => {
      請先提供 CASE_ID 後再進階段 4c
      ```
    - cjs 跑時用 `ENTRY_PATH.replace(/{(\w+)}/g, (_, k) => process.env[k.toUpperCase()] || '')`
-3. **偵測可選 case id env var**（CUP-180 實戰新增 — 避免大量假 SKIP）：
+3. **偵測可選 case id env var**（避免大量假 SKIP）：
    - grep cjs 找所有 `process.env.XXX_CASE_ID || ''` 或 `process.env.XXX || ''` 模式
    - 列出讓使用者**一併提供**（不是必填、跳過會 SKIP 對應 case）：
      ```
@@ -526,7 +524,7 @@ await step(page, 'A8', '...', '...', async (p) => {
        - DAYCARE_CASE_ID: 日照系統 case id（C2.2 居服日照同 flag）
      ```
    - 若使用者無法提供任一項，標註該 step 將 SKIP 並繼續，不擋整輪執行
-   - **目標：每次跑都帶滿所有可選 env var，最小化 SKIP 數量**（CUP-180 baseline 不帶這兩個會多出 2 SKIP）
+   - **目標：每次跑都帶滿所有可選 env var，最小化 SKIP 數量**
 4. 印計畫表：
 
 ```
@@ -548,10 +546,11 @@ A. 新增單次活動排程
    - **一次跑完**（test-plan 穩定、case 少 < 10、mutation 不互相污染）
    - **分輪跑**（按大功能 A→B→C，每輪結束 checkpoint，適合第一次跑）
    - **自訂 ONLY**（指定 prefix 例如 `A1`）
-4. **R15 baseline 自動排除 mutation**（CUP-180 實戰新增 — 正式環境跑 mutation 會污染資料）：
-   - `VARIANT=r15` + `BASE_URL=https://luna.compal-health.com` 模式跑時，自動把 `[mutation]` case 標 `🚫 N/A (R15-baseline)` 並排除
+4. **R15 baseline 不可跑 mutation**（正式環境跑 mutation 會污染資料）：
+   - ⚠️ **目前程式沒有強制排除**：`helpers/step.cjs` 的 `step()` 沒有 caseTag／VARIANT 判斷，不會自動略過 `[mutation]` case，template 的 `mutationStep` 也只是被註解掉的範例
+   - `VARIANT=r15` + `BASE_URL=https://luna.compal-health.com` 跑之前，**手動確認**要跑的 case 全是 `[read-only]`，有 `[mutation]` 就先排除（`ONLY` 或改 test-plan 標 `🚫 N/A (R15-baseline)`）
    - mutation case 移到 R18 staging / local 跑（VARIANT=r18）
-   - cjs 內 `step()` 包一層：`if (VARIANT === 'r15' && /mutation/i.test(caseTag)) return;`（test-plan 的 case 標記寫進 step 第三參數時觸發）
+   - 若日後要在 cjs 實作守門：`VARIANT === 'r15'` 遇到 mutation case 時 throw（fail-closed），不要靜默 return
 5. 等使用者確認
 6. **建立 progress.md**（cross-session resume 用）：把所有 case 列為 `[ ]` 未勾選狀態，寫到 `.claude/{ISSUE_KEY}-progress.md`，並寫入 `Variant` / `Started` 欄位。若帶 `--resume` 旗標跳過此步（檔案已存在，append 模式）。
 
@@ -571,7 +570,7 @@ local dev (localhost:3000) 與 CI / staging URL 都統一走 API 登入，**完�
    - 缺檔則提示使用者建立並列出範例內容，**但 skill 自己絕不索取密碼、不寫入密碼**
 2. **檢查 `.gitignore` 含 `.env.local`**，缺則 append 並提示
 3. **檢查 `.gitignore` 含 `.playwright-auth/`**（舊互動模式產物，向後相容）
-4. **不需要手動登入**：cjs 透過 `helpers/login.cjs::authStateFromApi` 直接呼叫 `/account/login` 取得 cookies，每次跑 cjs 都即時拿 storageState，**不再依賴 `.playwright-auth/auth.json`**
+4. **不需要手動登入**：cjs 呼叫 `launchBrowser({ login: env.login })`，內部走 `helpers/login.cjs::loginInContext` 在 BrowserContext 內呼叫 `/account/login`，cookies 直接進 context jar（含 host-only cookie），每次跑 cjs 都即時登入
 5. **跑 cjs 前先驗證等價**（首次或登入 API 變動時）：
    ```bash
    cd <frontend>
@@ -587,66 +586,46 @@ local dev (localhost:3000) 與 CI / staging URL 都統一走 API 登入，**完�
 
 ### 4c. 自動跑
 
-**用 `ctx_execute(language: "shell", intent: "...")` 包裝執行**，避免 cjs 一行一個 JSON 全部入 context（cjs 內每個 step 都呼叫 `console.log(JSON.stringify(...))`，幾十行就吃掉幾千 tokens）。範例：
+**用 Bash 執行，stdout 只留尾端與 jq 摘要**，避免 cjs 一行一個 JSON 全部入 context（cjs 內每個 step 都呼叫 `console.log(JSON.stringify(...))`，幾十行就吃掉幾千 tokens）。Bash 前景執行上限 10 分鐘，case 多、預估會超過時用 `run_in_background`。
 
-```
-ctx_execute({
-  language: "shell",
-  intent: "test failures, console errors and summary",
-  timeout: 1800000,  // 30 分鐘上限，依 case 數調
-  code: `
-    cd ~/Documents/Compal/luna_web/frontend
-    VARIANT=r15 BASE_URL=https://luna.compal-health.com \\
-      node .claude/{ISSUE_KEY}-test.cjs 2>&1 | tail -3
-    echo "=== SUMMARY ==="
-    jq '.summary' .claude/{ISSUE_KEY}-temp/r15/_results.json
-    echo "=== FAILS ==="
-    jq '[.results[] | select(.status=="FAIL") | {caseId, name, error}]' \\
-      .claude/{ISSUE_KEY}-temp/r15/_results.json
-  `
-})
-```
+helpers 預設把截圖與 `_results.json` 寫在 `.claude/{ISSUE_KEY}-temp/`（不分 variant）。R15 / R18 結果要並存，每次執行都帶 `SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/<variant>`；本文件其餘 `-temp/r15/`、`-temp/r18/` 路徑都以此為前提。範例：
 
-`intent` 設定後 ctx 會把大量輸出建索引，回主 context 的只有 summary 與 fail 細節。
+```bash
+cd ~/Documents/Compal/luna_web/frontend
+VARIANT=r15 BASE_URL=https://luna.compal-health.com \
+SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/r15 \
+  node .claude/{ISSUE_KEY}-test.cjs 2>&1 | tail -3
+echo "=== SUMMARY ==="
+jq '.summary' .claude/{ISSUE_KEY}-temp/r15/_results.json
+echo "=== FAILS ==="
+jq '[.results[] | select(.status=="FAIL") | {caseId, name, error}]' \
+  .claude/{ISSUE_KEY}-temp/r15/_results.json
+```
 
 ### 執行模式對應
 
-- **一次跑完**：上述 ctx_execute call
-- **分輪跑**：每輪一個 ctx_execute call（加 `ONLY=A` / `ONLY=B` / ...），每輪後問使用者「繼續/修正/中止」
+- **一次跑完**：上述命令
+- **分輪跑**：每輪跑一次上述命令（加 `ONLY=A` / `ONLY=B` / ...），每輪後問使用者「繼續/修正/中止」
 - **自訂 ONLY**：加 `ONLY={prefix}` 環境變數
 
 ### 每 case 寫入 progress.md（cross-session resume）
 
-cjs 內 `step()` wrapper 每跑完一個 case **立即寫檔**，不等整輪結束：
-
-```js
-// cjs 內，每個 case 結束後（pseudo-code）
-const fs = require('fs');
-const progressPath = `.claude/${ISSUE_KEY}-progress.md`;
-const status = result.status === 'PASS' ? 'PASS' : `FAIL: ${result.error}`;
-const screenshot = `.claude/${ISSUE_KEY}-temp/${VARIANT}/${caseId}.png`;
-// 用 regex 替換 progress.md 內對應 case 的 [ ] → [x] 並填欄位
-updateProgressMd(progressPath, caseId, {
-  status,
-  screenshot,
-  runAt: new Date().toISOString(),
-});
-```
+`createStepRunner` 收到 `progressPath`（template 已由 `parseEnv` 帶入）時，每個 step 結束**立即**呼叫 `updateProgressMd(progressPath, caseId, name, fields)` 寫檔，不等整輪結束；cjs 不需自己實作。
 
 寫檔頻率高但每次只動一段（< 200 bytes），相比 cache rebuild（重讀整個 SKILL.md + test-plan.md + cjs ≈ 30k+ tokens）便宜兩個數量級。
 
-**為何在 cjs 內寫而非主 context Edit**：cjs 在 ctx_execute sandbox 內跑，主 context 只看到 summary。若改由主 context 每 case Edit 一次，反而把 case-by-case 進度全部拉進主 context，違反 token 紀律。
+**為何在 cjs 內寫而非主 context Edit**：cjs 的逐 step 輸出不進主 context，主 context 只看到 summary。若改由主 context 每 case Edit 一次，反而把 case-by-case 進度全部拉進主 context，違反 token 紀律。
 
-**RESUME_FROM 處理**：cjs 開頭讀 `process.env.RESUME_FROM`，若有值則 step() wrapper 內判斷 `caseIdLessThanOrEqual(caseId, RESUME_FROM)` 直接 return。
+**RESUME_FROM 處理**：`parseEnv` 讀 `process.env.RESUME_FROM`，`createStepRunner` 內以 `caseIdCompare(caseId, resumeFrom) <= 0` 跳過已完成的 step；cjs 不需自己判斷。
 
 ### 結果處理（token 紀律）
 
 - 主 context 只保留：`summary`（pass / fail / total / consoleErrors 數量）+ fail 的 caseId、name、error 訊息
-- 完整 `_results.json` 留在磁碟，需要時再 `ctx_execute` 跑 `jq` 提特定欄位
+- 完整 `_results.json` 留在磁碟，需要時再用 `jq` 提特定欄位
 - **不要 `Read` 整個 _results.json**（>200 行常見）
 - 讀截圖用 subagent 隔離 token：spawn 一個 Explore agent 讀截圖檔，回報「畫面看到什麼、跟 test-plan 預期差在哪」（< 200 字 / fail），主 context 只保留結論
 
-### 4d. 不可在正式環境帶的 env var（safety guard，CUP-180 實戰新增）
+### 4d. 不可在正式環境帶的 env var（safety guard）
 
 ⚠️ cjs 若實作「臨時改 server state」的測試（toggle feature flag、建立測試資料、改使用者設定…），必須加 `ENABLE_*_TEST=true` 之類的 GUARD，且 **GUARD 預設 false（`!== 'true'` 才跑）**。正式環境執行時**絕對不可帶**這類 env var：
 
@@ -666,7 +645,7 @@ env var 用途分類：
 - 自動排除「local 限定」env var（即使使用者帶了也忽略 + 警告）
 - 對應 step 標 SKIP，reason 為「`ENABLE_TOGGLE_TEST=true` 不可在正式跑」
 
-### Console errors 分類（CUP-180 實戰新增）
+### Console errors 分類
 
 raw consoleErrors 數量直接看會誤判 — 同一個 React lifecycle warning 可能重複幾百次。改用 unique pattern：
 
@@ -689,7 +668,7 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 **輸入**：`_results.json` + fail case 截圖摘要
 **輸出**：更新後的 `.claude/{ISSUE_KEY}-test-plan.md`
 
-### baseline FAIL 第一反應決策樹（CUP-180 實戰新增）
+### baseline FAIL 第一反應決策樹
 
 進入五類分類前，**先用 error 訊息特徵快速排除最常見的 cjs 缺陷**：
 
@@ -705,12 +684,12 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 
 ### 機械步驟
 
-對每個 fail，判斷**五類原因之一**（CUP-180 實戰擴增第 4、5 類，純三類覆蓋不夠）：
+對每個 fail，判斷**五類原因之一**：
 
 1. **測試項目錯**（test-plan 描述不符正式環境）→ 改 test-plan 操作描述/預期結果
 2. **selector 錯**（test-plan 對但 cjs 寫錯）→ 階段 6 改 cjs，本階段不改 test-plan
 3. **真的是 R15 bug**（正式環境就有問題）→ test-plan 加註 `<!-- KNOWN-R15-BUG: ... -->`，**不改 test-plan 主體**，並回報使用者
-4. **環境前置不足**（進頁面後彈出公告 modal、引導 tooltip、權限 onboarding 攔截 pointer events，多 step 同時 fail 且 error 訊息類似 "click intercepted" / "element not visible"）→ 階段 6 改 cjs 補強 dismiss block（cjs template STEP 05.02 已是基礎），**不改 test-plan**。識別線索：≥3 step 同時 fail 且時序集中
+4. **環境前置不足**（進頁面後彈出公告 modal、引導 tooltip、權限 onboarding 攔截 pointer events，多 step 同時 fail 且 error 訊息類似 "click intercepted" / "element not visible"）→ 階段 6 改 cjs 補強 dismiss block（cjs template STEP 06.02 已是基礎），**不改 test-plan**。識別線索：≥3 step 同時 fail 且時序集中
 5. **assertion 太鬆假 PASS**（cjs 有寫 step 但 selector 太通用，沒抓到實際失敗。例：點刪除後 test-plan 預期「row 從 N 變 N-1」但 cjs 只 `await waitForSelector('.table')`，永遠 PASS）→ **改 test-plan**：操作步驟補「記下變化前 N → 操作後應 < N → 清空後應 = 0」這類前後比對，再進階段 6 重產 cjs 帶 assertion
 
 **選擇規則**：
@@ -772,7 +751,7 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
    - 「console.error / pageerror 收集邏輯」→ 改 `helpers/browser.cjs` 的 `attachConsoleCollector`
    - Helper 修完後不需動 cjs，重跑階段 4c 即可驗證
 7. 寫回 `.claude/{ISSUE_KEY}-test.cjs`，跑 `node --check` 驗證
-8. **重跑驗證**（CUP-180 實戰新增 — 不重跑會把 iter 1 的修錯帶進 iter 2 test-plan）：
+8. **重跑驗證**（不重跑會把前一輪的修錯帶進下一輪 test-plan）：
    - 對 R15 baseline 重跑修正版 cjs（同階段 4c 命令）
    - 比對前後：原 fail 是否變 PASS？有沒有新 fail？
 9. **依重跑結果決定是否回階段 5**：
@@ -785,7 +764,8 @@ jq -r '.consoleErrors[]' .claude/{ISSUE_KEY}-temp/r15/_results.json \
 
 ```
 本地（R18）：
-  node .claude/{ISSUE_KEY}-test.cjs
+  SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/r18 \
+    node .claude/{ISSUE_KEY}-test.cjs
 
 Staging（R18）：
   BASE_URL=https://staging.example.com \
@@ -793,6 +773,7 @@ Staging（R18）：
 
 R15 重跑驗證：
   VARIANT=r15 BASE_URL=https://luna.compal-health.com \
+  SCREENSHOT_DIR=.claude/{ISSUE_KEY}-temp/r15 \
     node .claude/{ISSUE_KEY}-test.cjs
 
 只跑某 prefix：
@@ -804,14 +785,14 @@ R15 重跑驗證：
 
 （playwright module 由 helpers/ user-level 安裝提供，target 專案 0 dep；首次 setup 見「Playwright runtime」段）
 
-### 步驟 11：產 verification report（CUP-179 實戰新增）
+### 步驟 11：產 verification report
 
 **輸入**：`.claude/{ISSUE_KEY}-temp/r15/_results.json`（必要）+ `.claude/{ISSUE_KEY}-temp/r18/_results.json`（若有）
 **輸出**：`.claude/{ISSUE_KEY}-verification-report.md`
 
 **觸發時機**：R15 baseline + R18 local 雙 variant 都跑完整套後（或使用者明確要求收尾）。**Staging 跑完後也應重產一次**併入 Staging 欄。
 
-**為何要做**：CUP-180 是手寫 verification report、CUP-179 是口頭產，沒檔留紀錄。skill 應該自動產 markdown 草稿給人工 sign-off 用，這是 PR review / 移交時的關鍵文件。
+**為何要做**：驗收結果要有檔案紀錄；自動產 markdown 草稿給人工 sign-off 用，這是 PR review / 移交時的關鍵文件。
 
 #### 機械步驟
 
@@ -871,7 +852,7 @@ R15 重跑驗證：
 - R15 baseline 沒跑完 → 不產（沒對照基準）
 - 使用者明確說「Staging 跑完再產」→ 跳過此步驟，留下提示
 
-### 步驟 12：publish 到 release-tests（選用，CUP-180 後新增）
+### 步驟 12：publish 到 release-tests（選用）
 
 階段 6 全部完成且 staging 驗收 PASS 後，**問使用者**：
 
@@ -917,7 +898,7 @@ R15 重跑驗證：
 |---|---|
 | Branch 名沒有 CUP-XX | 提示使用者 `--issue CUP-XX` 或切 branch |
 | 不在 luna frontend cwd | 中止，要求 `cd ~/Documents/Compal/luna_web/frontend` |
-| `git diff main...HEAD` 為空 | 中止，提示先 commit |
+| `git diff <default-branch>...HEAD` 為空 | 中止，提示先 commit |
 | `.env.local` 不存在 | 階段 4b 提示使用者建立並列出範例 |
 | 登入 API 回 4xx（密碼錯/account 鎖） | 印錯誤訊息，要求使用者驗證 `.env.local` 內容；不自動 retry |
 | 登入 API 回 5xx | retry 一次；仍失敗則中止 |
@@ -930,7 +911,7 @@ R15 重跑驗證：
 | 階段 4 跑到一半 rate limit | **不要閒置等待**（5 分鐘 prompt cache 會過期，恢復時瞬間燒幾萬 token 重建 cache）。建議：當前 case 跑完後 `/clear` 開新 session，下次用 `/cup-build-test CUP-XX --resume` 從 progress.md 接續 |
 | `--resume` 但 progress.md 不存在 | 提示使用者：尚未跑過階段 4，無進度可續，請去掉 `--resume` 旗標 |
 | 偵測到 progress.md 但 test-plan.md 缺 | 中止，提示「進度檔孤立，可能是 test-plan 被誤刪」，要求人工檢查 |
-| **單跑 PASS / 全跑 FAIL**（CUP-179 實戰）| 多為 case 順序污染：前面 case 留下 modal 殘留 + Redux state 不同步。修法：在 fail 的 mutation step 入口加 `await ensureCleanState(p)`（`helpers/modal.cjs` 提供）。symptom：等開 modal timeout、modal 開了讀不到 input value、selector 抓到 2 個 modal |
+| **單跑 PASS / 全跑 FAIL** | 多為 case 順序污染：前面 case 留下 modal 殘留 + Redux state 不同步。修法：在 fail 的 mutation step 入口加 `await ensureCleanState(p)`（`helpers/modal.cjs` 提供）。symptom：等開 modal timeout、modal 開了讀不到 input value、selector 抓到 2 個 modal |
 | 「改動此日期...」「確認要刪除嗎?」二次確認對話 | 用 `confirmYes(p)`（接受）/ `confirmNo(p, { scope })`（拒絕），不要 inline 寫 `button:has-text("是")` selector |
 
 ---
@@ -961,8 +942,6 @@ R15 重跑驗證：
 
 ### Common selectors（luna 前端）
 
-依 token SOP + CUP-80 + CUP-180 實戰經驗：
-
 - 行事曆：`.fc-toolbar`、`.fc-event`、`.fc-time-grid-event`
 - Bootstrap modal：`.modal.in`（R15）、`.modal.show`（R18）、`[role="dialog"]`（兩者皆吃）
 - 等動畫：`waitStable(page, 300-500)`
@@ -990,9 +969,9 @@ luna 正式環境登入後常跳「**兩種**」公告 modal，皆會攔截 poin
 
 ⚠️ **baseline 跑出 FAIL 不要急著判 R15 bug**：先看 error 訊息是否含 `intercepts pointer events`，若有 → 改 `helpers/modal.cjs` 的 `DEFAULT_ANNOUNCEMENT_SELECTORS` 加上漏處理的 selector 再重跑（CUP-180 實戰：A 群全 PASS、B 群 16/16 FAIL，根因是 FeatureTermsOfUseModal 在 B 群跳出而 helper 只覆蓋一種 modal）。**修 helper 一處，所有 CUP 測試共用該修正**。
 
-⚠️ **mutation step 入口必加 `await ensureCleanState(p)`**（CUP-179 實戰新增）：公告 modal 之外，前面 case 開過的「**編輯 / 確認 / 檢視 modal**」也可能殘留並破壞 React/Redux state 與 DOM 的同步（直接 DOM nuke 但 Redux state.modal 還是 true → 下次 dispatch show 沒重 render → modal 不顯示）。`ensureCleanState` 會：先點殘留 modal 的「取消/否」讓 Redux 同步、再 nuke DOM、清 body.modal-open。read-only step 不用加（不開 modal 無殘留問題）。
+⚠️ **mutation step 入口必加 `await ensureCleanState(p)`**：公告 modal 之外，前面 case 開過的「**編輯 / 確認 / 檢視 modal**」也可能殘留並破壞 React/Redux state 與 DOM 的同步（直接 DOM nuke 但 Redux state.modal 還是 true → 下次 dispatch show 沒重 render → modal 不顯示）。`ensureCleanState` 會：先點殘留 modal 的「取消/否」讓 Redux 同步、再 nuke DOM、清 body.modal-open。read-only step 不用加（不開 modal 無殘留問題）。
 
-### Token 節省鐵則（沿用 jira-test-report v2.0）
+### Token 節省鐵則
 
 - 截圖一律寫檔，不入 context（`page.screenshot({ path: ... })`）
 - console error 收集到陣列，最後寫進 `_results.json`，不 console.log 到主 stdout
@@ -1010,16 +989,17 @@ template 已 require 以下模組，**修改測試共用邏輯（modal / waitSta
 | `helpers/env.cjs` | `resolveEntryPath(template)` | 把 `/case/list/{caseId}` 換成 `/case/list/abc123`（camelCase → SNAKE_CASE env） |
 | `helpers/step.cjs` | `createStepRunner({ screenshotDir, progressPath?, only?, resumeFrom?, stopOnFail? })` | 工廠：回傳 `{ step, skipStep, waitStable, getResults }`，已含 ONLY/RESUME_FROM filter + 自動截圖 + progress.md 寫入 |
 | `helpers/step.cjs` | `caseIdCompare(a, b)` | caseId 大小比較（A1.1 < A1.2 < A2.1） |
-| `helpers/step.cjs` | `updateProgressMd(path, caseId, fields)` | 寫 progress.md 對應 case 區塊（失敗 silent） |
+| `helpers/step.cjs` | `updateProgressMd(path, caseId, name, fields)` | 寫 progress.md 對應 step 區塊（以 caseId + name 比對；`createStepRunner` 帶 `progressPath` 時自動呼叫；失敗 silent） |
 | `helpers/modal.cjs` | `DEFAULT_ANNOUNCEMENT_SELECTORS` | 已知 luna 公告 modal class 陣列。**發現新公告直接 push 進此陣列** |
 | `helpers/modal.cjs` | `DEFAULT_APP_MODAL_SEL` | 「真正的」編輯/確認/檢視 modal 預設 selector（排除公告 modal，R15 `.modal.in` + R18 `.modal.show` 皆覆蓋） |
 | `helpers/modal.cjs` | `waitAndDismissOnEntry(page, { timeout?, extraSelectors?, waitMs? })` | 進入頁面後完整 dismiss 流程（等 → click → nuke） |
 | `helpers/modal.cjs` | `dismissAnnouncement(page, extraSelectors?)` | navigate 後重複呼叫用的精簡版（純 DOM remove） |
-| `helpers/modal.cjs` | `ensureCleanState(page, { appModalSel?, extraAnnouncementSelectors?, waitMs? })` | **mutation step 入口必呼叫**：dismiss 公告 + 點取消殘留 modal 讓 Redux 同步 + nuke DOM。解決連跑時前 case modal 殘留導致新 modal 開不起來（CUP-179 實戰） |
+| `helpers/modal.cjs` | `ensureCleanState(page, { appModalSel?, extraAnnouncementSelectors?, waitMs? })` | **mutation step 入口必呼叫**：dismiss 公告 + 點取消殘留 modal 讓 Redux 同步 + nuke DOM。解決連跑時前 case modal 殘留導致新 modal 開不起來 |
 | `helpers/confirmDialog.cjs` | `confirmYes(page, { timeout?, scope?, extraButtonTexts?, strategy? })` | 點二次確認對話「是 / 確認 / 確定 / 刪除 / 同意」（接受）。預設 strategy=last 抓最新跳出的 modal |
 | `helpers/confirmDialog.cjs` | `confirmNo(page, { ... })` | 點二次確認對話「否 / 取消 / 關閉」（拒絕）。參數同 confirmYes |
 | `helpers/confirmDialog.cjs` | `DEFAULT_YES_BUTTON_TEXTS` / `DEFAULT_NO_BUTTON_TEXTS` | 預設按鈕文字清單，發現新文字直接 push |
-| `helpers/login.cjs` | `authStateFromApi({ baseUrl, account, password, type?, loginPath? })` | API 登入取 storageState（cookies）；失敗 throw |
+| `helpers/login.cjs` | `loginInContext(context, { baseUrl, account, password, type?, loginPath? })` | 主流程：在既有 BrowserContext 內 API 登入，cookies 直接進 jar（含 host-only）；`launchBrowser({ login })` 已包裝，cjs 通常不直接呼叫；失敗 throw |
+| `helpers/login.cjs` | `authStateFromApi(...)` | deprecated：storageState 序列化會漏 host-only cookie，僅向後相容 |
 | `helpers/login.cjs` | `loginParamsFromEnv()` | 從 `BASE_URL`/`E2E_ACCOUNT`/`E2E_PASSWORD`/`E2E_TYPE` env 組登入參數；缺必填 throw |
 | `helpers/browser.cjs` | `launchBrowser({ headless, login?, authPath?, viewport?, locale? })` | chromium.launch + newContext + newPage；`login` 為主流程（API 登入），`authPath` 為 deprecated 後備 |
 | `helpers/browser.cjs` | `attachConsoleCollector(page, errors)` | 註冊 console.error / pageerror handler，append 到傳入陣列 |
@@ -1049,77 +1029,4 @@ template 已 require 以下模組，**修改測試共用邏輯（modal / waitSta
 
 ## Changelog
 
-版本號採 [Semver](https://semver.org/lang/zh-TW/)。MAJOR=破壞既有 cjs / API 行為、MINOR=新增 helper 或階段步驟、PATCH=修 bug 或文件更新。
-
-### v1.3.0 — 2026-07-01（GitNexus 淘汰，改用 codebase-memory-mcp）
-
-**變更**：
-
-- `--with-gitnexus` 旗標更名為 `--with-graph`，階段 0/1 所有 `mcp__gitnexus__*` 工具呼叫改用對應的 `mcp__codebase-memory-mcp__*` 工具：
-  - `list_repos` → `list_projects`（project 名由 cwd 絕對路徑推導，見階段 0）
-  - `query(goal, query)` → `search_graph(query)`（BM25 全文搜尋）
-  - `context(name)` → `trace_path(function_name, direction=both)`（callers+callees 合看）
-  - `impact(target, direction)` → `trace_path(function_name, direction=inbound, risk_labels=true)`
-  - `cypher(query)` → `query_graph(query)`（Cypher 語法對應改變：`IMPORTS` 是直接 edge type，非 GitNexus 的 `CodeRelation {type: 'IMPORTS'}` 屬性寫法；File 節點路徑欄位是 `file_path`）
-- 移除 staleness 檢查（「N 天視為 stale」提醒）：codebase-memory-mcp 有 auto-sync，不像 GitNexus 需手動 `analyze` 才更新
-- 新增已知盲區警告：`trace_path` 對「方法當 callback 參照傳遞」（React method 綁定後當 prop 傳出）與 `dispatch(actionCreator(...))` 這類間接呼叫抓不到 caller，callers 空陣列不能當「無人呼叫」的結論，需搭配 grep 補查
-
-**淘汰原因**：2026-07-01 跟 codebase-memory-mcp 實測對照後決議淘汰 GitNexus——luna_web 索引落後 83 天/361 commit（手動索引無 auto-sync）、該次 session GitNexus MCP 連線失敗、且用真實案例（`startCsmsFetchingGuard` callback 參照傳遞）測試發現兩者對間接呼叫有共同盲區、能力打平不是誰更強。詳見 CLAUDE.md TOOL-USAGE:graph-first 與 POST-COMMIT-REVIEW STEP 5。
-
-### v1.2.0 — 2026-05-19（斷言截圖三合一規範，與 jira-test-report v2.4.0 對齊）
-
-**變更**：
-
-- 新增 **階段 3.5 斷言截圖三合一規範**（強制）：每個 step 必須同時具備
-  1. 程式邏輯斷言（throw new Error 含實測 vs 預期對比）
-  2. 真實頁面操作或視覺變更（DOM 至少一處可截圖識別的變化）
-  3. 斷言結論可視化（evidence overlay 注入右上角）
-- 純資料比對 step（截圖前後雷同）視為 anti-pattern，強制用 (a) 強制 native 元素展開（如 `<select>.size = N`）/ (b) 逐項真實 UI 互動 / (c) DOM highlight + 標號 之一補回頁面證據
-- 引入 `_helpers/evidence.cjs`（與 luna_web/e2e/release-tests/_helpers/ 同步）匯出 `injectEvidence` / `clearEvidence` / `expandSelectAsListbox`，cjs 直接 require 使用
-- 提供 5 點 self-check 清單
-
-**設計動機**：LVB-7963 release-e2e 實戰發現 A3.2~A3.4 三步截圖雷同（純對 JS 陣列做 includes / 順序比對），非工程 stakeholder 看 Jira inline comment 與 GitHub Actions artifact 無法判讀斷言依據。三合一規範強制每個斷言 step 都同時驗證程式邏輯與 UI 行為，截圖內可見斷言結論。與 jira-test-report skill v2.4.0 同步，兩條軌道對齊。
-
-### v1.1.0 — 2026-05-14（CUP-179 實戰新增）
-
-**新增**：
-
-- `helpers/modal.cjs` 新增 `ensureCleanState(page, options?)` — mutation step 入口防禦性 cleanup。解決連跑時前 case modal 殘留導致 React/Redux state 不同步，下次 dispatch show 不重 render 的問題（CUP-179 C2.1 / F3 連跑撞牆而抽出）
-- `helpers/modal.cjs` 新增 `DEFAULT_APP_MODAL_SEL` — 排除公告 modal 的 `.modal.in`/`.modal.show` 統一 selector
-- `helpers/confirmDialog.cjs`（新檔）提供 `confirmYes(page, opts?)` / `confirmNo(page, opts?)` 與 `DEFAULT_YES_BUTTON_TEXTS` / `DEFAULT_NO_BUTTON_TEXTS` — 統一處理「是/否」「確認/取消」二次確認對話 modal，預設 strategy=last 抓 DOM 後出現的最新 modal
-- 階段 6 步驟 11：自動產 verification report — 從 `_results.json` 比對 R15 baseline / R18 local / Staging，產出對照表 markdown 寫到 `.claude/CUP-XX-verification-report.md`
-- `templates/test-cjs-template.cjs` 加 mutation step 範例（含 `ensureCleanState` + `confirmYes` 用法）
-- `helpers/stubs.d.ts` 補 `Locator.last()` 型別定義
-- SKILL.md「失敗處理」表新增 2 條（單跑 PASS / 全跑 FAIL、二次確認對話）
-- 命名慣例表加 `.claude/CUP-*-verification-report.md`
-- 產物 git 政策段加 `.claude/CUP-*-verification-report.md`
-
-**helpers/ 版本**：0.1.0 → 0.2.0
-
-**實戰學到的坑**（驅動本版本演進）：
-
-- 連跑時 case 順序污染（前面 case 留下 modal 殘留導致新 modal 開不起來）
-- R18 點儲存後跳「改動此日期...」二次確認對話，cjs 原本沒處理
-- 刪除確認對話按鈕是「是/否」非「確認/確定」
-- F3 兩 row 生效日恰好相同無法驗 modal remount → 改用整 modal 簽名比對
-- R15 ExpandTable sub-tr 與主 row 交錯，`nth(1)` 抓到沒按鈕的 sub-tr
-
-### v1.0.0 — 2026-05-13（CUP-180 實戰固化）
-
-**初版抽出**：
-
-- 6 階段流程定型（commit 反推 → test-plan → cjs → R15 baseline → 修正 → 重產）
-- `helpers/` user-level Playwright 架構（取代失敗的 `npx -p playwright@latest` 動態取得）
-- `progress.md` cross-session resume 機制 + `--resume` 旗標
-- `helpers/modal.cjs` 公告 modal 集中管理（`DEFAULT_ANNOUNCEMENT_SELECTORS` / `dismissAnnouncement` / `waitAndDismissOnEntry`）
-- `helpers/step.cjs` 工廠模式（`createStepRunner` 含 ONLY/RESUME_FROM filter + 自動截圖 + progress.md 寫入）
-- `helpers/browser.cjs` 多層 Playwright module 解析 fallback
-- `helpers/bundle.cjs` R15/R18 bundle 偵測與 assertVariant
-- `helpers/report.cjs` _results.json 寫入 + summary 印出
-- env var safety guard（如 `ENABLE_TOGGLE_TEST` 不可在正式環境帶）
-- Console errors unique pattern 分析（去 React lifecycle warning noise）
-- subagent verbosity 限制（階段 1 反推節省 token）
-- CASE_ID dynamic ENTRY_PATH 機制
-- `mutationStep()` wrapper — VARIANT=r15 自動 SKIP
-
-**首發案例**：CUP-80（手工建檔），CUP-180 (機械化 + helper 抽出來源)
+版本歷史見 [./CHANGELOG.md](./CHANGELOG.md)。

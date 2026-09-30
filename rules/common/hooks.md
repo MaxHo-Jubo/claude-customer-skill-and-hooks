@@ -6,10 +6,10 @@ HOOK-TYPES:
   PreToolUse: before tool execution(validation/parameter modification)
   PostToolUse: after successful tool execution(auto-format/checks)
   PostToolUseFailure: after a tool call fails(error logging；讀 `error`/`is_interrupt`)
-  Stop: session ends(final verification)
+  Stop: 主 agent 每次回應結束時觸發（每個 turn；session 結束是 SessionEnd）
 
 HOOK-OUTPUT:
-  stdout: 一般情況下 hook 的 stdout 不注入 AI context，Claude 看不到
+  stdout: exit 0 時只有 UserPromptSubmit / UserPromptExpansion / SessionStart / PostModelSwitch 的 plain stdout 會注入 AI context；其餘事件只寫 debug log，Claude 看不到
   stdout-exception: **例外**——PostToolUse 印出 `{"decision":"block","reason":"..."}` 到 stdout 並 `exit 2` 時，reason 會以 blocking error 完整送達 Claude（2026-08-14 對 spec-section-validator 實測確認：故意寫入缺 section 的 spec 檔，reason 全文出現在 Claude 的 context）。不要因為「stdout 看不到」就假設阻擋理由沒送達
   PreToolUse-additionalContext: Claude 看得到（v2.1.9+），即時注入
   PostToolUse-systemMessage: Claude 下一個 turn 看得到；使用者也看得到
@@ -25,10 +25,6 @@ AUTO-ACCEPT:
   enable: trusted, well-defined plans
   disable: exploratory work
   banned: dangerously-skip-permissions flag
-  prefer: configure allowedTools in ~/.claude.json
-
-TODOWRITE:
-  use-for: track multi-step progress / verify understanding / enable real-time steering / show granular steps
-  reveals: out-of-order steps / missing items / extra items / wrong granularity / misinterpreted requirements
+  prefer: allowlist 設在 settings.json 的 permissions.allow（user / project / local 三層）
 
 </rules>

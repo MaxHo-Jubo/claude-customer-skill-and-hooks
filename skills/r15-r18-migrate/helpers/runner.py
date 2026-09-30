@@ -27,6 +27,7 @@ import datetime
 import fcntl
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -38,9 +39,10 @@ import sys
 import time
 import traceback
 
-# 同目錄的診斷模組（證據凍結、SUMMARY）、stream-json 解析模組、sessions/ 呼叫檔命名與掃描模組；
-# runner.py 以腳本執行時 sys.path[0] 就是 helpers/。依賴方向：runner → diagnostics → stream_events／session_index
+# 同目錄的診斷模組（證據凍結、SUMMARY）、事件紀錄輪替與跨檔讀取模組、stream-json 解析模組、sessions/ 呼叫檔命名與掃描模組；
+# runner.py 以腳本執行時 sys.path[0] 就是 helpers/。依賴方向：runner → diagnostics → event_log／stream_events／session_index
 import diagnostics
+import event_log
 import session_index
 import stream_events
 
@@ -259,6 +261,12 @@ PUSH_FAILED_SIGNATURE = "integration_push_failed"
 # 帶簽名走 enter_paused 既有的「同簽名連續第二次就鎖定」，unblock --runner 解除（帶簽名的暫停連原因一起清）。
 # pre-flight smoke 判出的 auth_expired 不帶簽名（CLI 之前停下、不燒模組預算）
 CLI_AUTH_EXPIRED_SIGNATURE = "cli_auth_expired"
+# CLI 跑完之後的暫停（不分原因與簽名）連續累計到這個次數就鎖定（1.1.2 第七批，user 拍板 3）：同簽名連續第二次鎖定只擋得住
+# 同一種失敗，推送失敗、切換整合分支失敗、ff-merge 環境類失敗、CLI 判 auth_expired、crash 輪流出現時，每次 launchd 重啟都
+# 再燒一次完整模組。比同簽名的 2 放寬一級，最壞多燒 3 次 CLI；有模組完成、unblock --runner 歸零
+POST_CLI_PAUSE_HOLD_THRESHOLD = 3
+# runner_state 裡「CLI 之後的暫停」計數欄位名（缺欄位＝0；格式錯時 CLI 後暫停直接以門檻計，見 next_post_cli_pause_count）
+POST_CLI_PAUSE_COUNT_FIELD = "post_cli_pause_count"
 # merge_to_integration 的 ff-merge 環境類失敗：entry 分支其實可以快轉（index.lock、未追蹤檔、I/O），或祖先檢查本身失敗而
 # 無法判定。同一個字串兼三種用途——merge 結果、暫停原因、enter_paused 的簽名：帶簽名才有「同簽名連續第二次就鎖定」的煞車
 # （CLI 跑完才暫停，重啟後同一個 entry 會再跑一次 CLI）；專屬原因才不會和前置作業的「遠端 tip 不符」（integration_diverged，
@@ -325,6 +333,10 @@ PR_LOOKUP_LIMIT = 10
 PR_LOOKUP_LOG_NAME = "gh-pr-list"
 # find_pr_by_head 第二次查（開 PR 失敗或拿不到連結之後）的子行程 log 名稱
 PR_RECHECK_LOG_NAME = "gh-pr-list-recheck"
+# find_pr_by_head 的 `gh pr list --state` 預設值：開 PR 前後的查詢與重啟對帳只沿用還開著的 PR（同分支上被關掉的舊 PR 不算）
+GH_PR_STATE_OPEN = "open"
+# `gh pr list --state` 查已合併的 PR：補查 merged 斷點的連結用（PR 合併後已不是 open，查 open 永遠查不到；05aeecf review）
+GH_PR_STATE_MERGED = "merged"
 # gh 的輸出放進 detail 時只取尾端這麼多字元（全文在子行程 log）；stderr 的部分 1.1.2 第六批起改用 stderr_excerpt（首行＋尾段），
 # 這個值同時當 stderr_excerpt 的上限；gh pr create 退出碼 0 卻沒有可用連結時的 stdout 尾段也用它
 GH_OUTPUT_TAIL_CHARS = 200
@@ -407,8 +419,17 @@ class CheckpointStatus(object):
 CHECKPOINT_OPENABLE_STATUSES = (CheckpointStatus.PENDING, CheckpointStatus.OPENING)
 # 人工閘門已經過了的斷點狀態：放行（release）或 cp 分支已合進基準分支
 CHECKPOINT_PASSED_STATUSES = (CheckpointStatus.RELEASED, CheckpointStatus.MERGED)
-# 斷點「PR 連結未知」旗標的欄位名（gh pr create 退出碼 0 卻沒印連結、再查也沒查到時為 true；見 docs/queue-schema.md）
+# 斷點「PR 連結未知」旗標的欄位名（gh pr create 退出碼 0 卻沒印連結，而且再查失敗而無法確認、或斷點不是 hard 時為 true；
+# hard 斷點再查確定沒有 open 的 PR 是開啟失敗、不寫這個旗標，05aeecf review；見 docs/queue-schema.md）
 CHECKPOINT_PR_UNVERIFIED_FIELD = "pr_unverified"
+# 補查連結未知的斷點 PR（refresh_unverified_checkpoint_prs）：要補查的斷點狀態 → `gh pr list --state` 的值。
+# 鍵是 opened 加上 CHECKPOINT_PASSED_STATUSES（released、merged）：連結未知不會因為放行或合併而自己補上（05aeecf review）。
+# merged 的 PR 已不是 open，查 merged；released 的 PR 放行時照理還開著（release 不關 PR），查 open
+CHECKPOINT_PR_VERIFY_GH_STATES = {
+    CheckpointStatus.OPENED: GH_PR_STATE_OPEN,
+    CheckpointStatus.RELEASED: GH_PR_STATE_OPEN,
+    CheckpointStatus.MERGED: GH_PR_STATE_MERGED,
+}
 # git 查無的退出碼：`rev-parse --verify --quiet` 的 ref 不存在是 1、`ls-remote --exit-code` 沒有符合的 ref 是 2；其他非零才是失敗
 GIT_REF_ABSENT_CODE = 1
 # `ls-remote --exit-code` 沒有符合的 ref 的退出碼（見上一行）
@@ -530,7 +551,9 @@ CHECKPOINT_FIELD_DEFAULTS = {
     "status": CheckpointStatus.PENDING,
     "branch": None,
     "pr_url": None,
-    # gh 退出碼 0 但沒印 PR 連結、再查也沒查到：已寫 opened，但 PR 有沒有真的開成不知道；runner 啟動時與每完成一個模組後補查
+    # gh 退出碼 0 但沒印 PR 連結、而且再查失敗（無法確認），或斷點是 soft／auto（再查確定沒有 open 的 PR 也算）：已寫 opened，
+    # 但 PR 有沒有真的開成不知道；hard 斷點再查確定沒有則是開啟失敗、不寫這個旗標。runner 啟動時與每完成一個模組後
+    # 對 opened／released／merged 補查（只補連結、清旗標，狀態不動）
     CHECKPOINT_PR_UNVERIFIED_FIELD: False,
     # 上一次開啟失敗的原因（hard 斷點保持 opening 時給暫停通知、status、進度檔用）；開成功時清掉
     "last_error": None,
@@ -772,9 +795,10 @@ def ensure_state_dir(config):
 
 
 def log_event(config, entry_id, event, **fields):
-    """把一筆事件追加到 runner.log.jsonl。
+    """把一筆事件追加到 runner.log.jsonl（current；1.1.2 第七批起由 run 輪替，見 rotate_runner_log）。
 
-    寫入失敗只印到 stderr，不讓紀錄失敗中斷主流程（但也不靜默）。
+    寫入失敗只印到 stderr，不讓紀錄失敗中斷主流程（但也不靜默）。每次寫都重新開檔：run 把 current 改名封存之後，
+    下一筆自然寫進新的 current；別的行程在改名前就開好的那一次寫入落在封存檔，跨檔讀取照樣讀得到。
 
     @return True 已寫進 runner.log.jsonl；False 寫檔失敗（已印 stderr）。既有呼叫端都不看回傳值，
         只有 ShutdownDeferral 丟棄訊號時要在 stderr 註明事件有沒有寫進去
@@ -796,12 +820,55 @@ def log_event(config, entry_id, event, **fields):
     line = json.dumps(record, ensure_ascii=False)
     print(line, flush=True)
     try:
-        with open(state_path(config, "runner.log.jsonl"), "a", encoding="utf-8") as handle:
+        with open(state_path(config, event_log.RUNNER_LOG_NAME), "a", encoding="utf-8") as handle:
             handle.write(line + "\n")
     except OSError as exc:
         print("警告：寫入 runner.log.jsonl 失敗: %s" % exc, file=sys.stderr)
         return False
     return True
+
+
+# 輪替成功時寫進新 current 的事件名（detail：archive 新封存檔名、removed 刪掉的舊封存檔、prune_error）
+LOG_ROTATED_EVENT = "log_rotated"
+# 輪替失敗時寫進（沒改名的）current 的事件名（detail：error）
+LOG_ROTATE_FAILED_EVENT = "log_rotate_failed"
+# config 裡記住上一次已記下的輪替錯誤的鍵（同一個行程同一個錯誤只記一次；輪替成功時清掉）
+LOG_ROTATE_LAST_ERROR_KEY = "log_rotate_last_error"
+
+
+def rotate_runner_log(config):
+    """current（runner.log.jsonl）達到門檻就改名封存、只留最新幾份（1.1.2 第七批）；只有 cmd_run 在持 runner.lock 時呼叫。
+
+    時點：取鎖後、第一筆事件之前一次，主迴圈每輪開頭一次。其他子命令（unblock、release、import-inventory、diagnose，
+    以及它們經 log_event／notify 寫的事件）只追加、不輪替——它們不持 runner.lock，也改名的話會與 run 競爭。
+    門檻、命名、保留份數與失敗的判定都在 event_log.rotate_if_needed。成功記 log_rotated（寫進新的 current）；
+    沒改名的失敗記 log_rotate_failed 並印 stderr，不中斷 run——current 照舊長大，下一個輪替點再試；同一個行程裡連續遇到
+    同一個錯誤只記、只印第一次（持續失敗時主迴圈每輪開頭都會再試，每次都記的話 run 連跑幾天，事件紀錄會被同一句錯誤灌滿），
+    輪替成功一次就重新起算。改名成功但刪最舊封存檔失敗，只是多留幾份，照樣記 log_rotated（detail 帶 prune_error）並印 stderr。
+
+    @param config runner 設定（用到 state_dir；上一次記下的輪替錯誤存在 LOG_ROTATE_LAST_ERROR_KEY）
+    @return event_log.RotationResult
+    """
+    # STEP 01: 輪替
+    result = event_log.rotate_if_needed(config["state_dir"])
+    # STEP 02: 沒改名：沒達門檻就安靜回傳；失敗且與上一次記下的不同才記事件與 stderr
+    if not result.rotated:
+        if result.error is not None and config.get(LOG_ROTATE_LAST_ERROR_KEY) != result.error:
+            config[LOG_ROTATE_LAST_ERROR_KEY] = result.error
+            print("警告：輪替 %s 失敗: %s" % (event_log.RUNNER_LOG_NAME, result.error), file=sys.stderr)
+            log_event(config, None, LOG_ROTATE_FAILED_EVENT, detail={"error": result.error})
+        return result
+    # STEP 03: 改名成功：之後再失敗要重新記；刪舊檔失敗另印 stderr
+    config.pop(LOG_ROTATE_LAST_ERROR_KEY, None)
+    if result.prune_error is not None:
+        print("警告：刪除最舊的事件紀錄封存檔失敗: %s" % result.prune_error, file=sys.stderr)
+    log_event(
+        config,
+        None,
+        LOG_ROTATED_EVENT,
+        detail={"archive": result.archive, "removed": result.removed, "prune_error": result.prune_error},
+    )
+    return result
 
 
 def notify(config, event, title, body):
@@ -1434,6 +1501,23 @@ def git_out_or_raise(config, *args):
     return out.strip()
 
 
+def git_read(config, *args):
+    """嚴格讀一個 git 值（1.1.2 第七批）：回 (去空白的 stdout, None) 或 (None, 錯誤說明)，不拋例外。
+
+    給「讀不到必須當成不符」的比對用（合併記錄的收拾）：寬容版 git_out 把失敗變成空字串，跟真的空結果分不出來；
+    git_out_or_raise 會拋例外，比對要的是把失敗寫進不符清單、照樣暫停。
+
+    @param config runner 設定
+    @param args git 子命令與參數
+    @return (value, error)：成功時 error 是 None；git 回非零退出碼時 value 是 None、error 是含 stderr 摘要的說明
+    """
+    # STEP 01: 非零退出碼一律是失敗
+    code, out, err = git(config, *args)
+    if code != 0:
+        return None, "git %s 失敗: %s" % (" ".join(args), stderr_excerpt(err))
+    return out.strip(), None
+
+
 def working_tree_clean(config):
     """判斷工作樹是否乾淨（porcelain 無輸出）。"""
     code, out, _err = git(config, "status", "--porcelain")
@@ -1443,7 +1527,14 @@ def working_tree_clean(config):
 
 
 def merge_in_progress(config):
-    """判斷是否有殘留的 MERGE_HEAD（上一次 merge 沒收乾淨）。"""
+    """判斷是否有殘留的 MERGE_HEAD（上一次 merge 沒收乾淨）。
+
+    寬容版：讀不到 git 目錄時回 False。只用在「看到了就暫停」的守衛（module_preflight、重啟對帳）；要把「沒有」當成
+    可以刪合併記錄、或附註「合併未開始」的地方用 merge_head_state（三態，讀取失敗不等於沒有）。
+
+    @param config runner 設定（用到 repo_dir）
+    @return MERGE_HEAD 檔存在時為 True；不存在或讀不到 git 目錄是 False
+    """
     # STEP 01: 找 .git 目錄（相對路徑以 repo 目錄為基準）
     git_dir = git_out(config, "rev-parse", "--git-dir")
     if not git_dir:
@@ -1452,6 +1543,168 @@ def merge_in_progress(config):
         git_dir = os.path.join(config["repo_dir"], git_dir)
     # STEP 02: 看 MERGE_HEAD 在不在
     return os.path.exists(os.path.join(git_dir, "MERGE_HEAD"))
+
+
+# ================================================================ 合併記錄（1.1.2 第七批：合併途中被打斷的自動收拾）
+
+# 合併記錄的檔名（狀態目錄底下）：run_recorded_merge 在每次可能留下 MERGE_HEAD 的非快轉合併之前寫，合併結束而且 MERGE_HEAD
+# 確定不在時刪；重啟時 recover_interrupted_merge 讀它判斷殘留的 MERGE_HEAD 是不是 runner 自己的。不放 queue.json：每次合併
+# 要寫兩次、不值得取 queue 鎖；它是 git 操作的暫時日誌，queue 損毀也不該影響收拾；只有持 runner.lock 的 run 會寫
+MERGE_INTENT_NAME = "merge-intent.json"
+# 合併記錄的格式版本（讀到其他版本一律當讀不懂）
+MERGE_INTENT_VERSION = 1
+# 合併記錄的 kind：前置作業合併基準分支
+MERGE_KIND_BASE = "base"
+# 合併記錄的 kind：前置作業回流斷點分支
+MERGE_KIND_CHECKPOINT = "checkpoint"
+# 合併記錄的 kind：準備分支把整合分支合進既有 entry 分支
+MERGE_KIND_CATCH_UP = "catch_up"
+# 認得的 kind（讀記錄時驗格式用）
+MERGE_KINDS = (MERGE_KIND_BASE, MERGE_KIND_CHECKPOINT, MERGE_KIND_CATCH_UP)
+# 自動收拾的年齡上限（秒；user 拍板）：記錄寫下之後超過這麼久才重啟，就不自動 abort，退回暫停＋通知。取 launchd
+# ThrottleInterval（templates/launchd.plist.template 的 300 秒）的 3 倍：被打斷的 runner 正常一兩個重啟間隔內就會回來收拾，
+# 拖得更久代表中間可能有人接手在手動處理這個合併（解衝突到一半），自動 abort 會丟掉人的工作
+MERGE_RECOVERY_MAX_AGE_SECONDS = 900
+# 比對檔案時間的容差（秒）：檔案系統時間戳與 time.time() 的精度差、同一次合併裡先後寫檔的微小間隔
+MERGE_MTIME_TOLERANCE_SECONDS = 2
+# merge_head_state 的三態之一：MERGE_HEAD 確定不在
+MERGE_HEAD_ABSENT = "absent"
+# merge_head_state 的三態之一：MERGE_HEAD 在（值是 sha）
+MERGE_HEAD_PRESENT = "present"
+# merge_head_state 的三態之一：讀取失敗，不知道在不在（不可當成不在）
+MERGE_HEAD_ERROR = "error"
+# 記錄裡 HEAD 身分的兩個欄位與讀法（寫記錄、收拾前比對、收拾後驗證共用同一種讀法）：HEAD 指向的分支 ref、HEAD 的 sha
+MERGE_INTENT_HEAD_READS = (
+    ("branch_ref", ("symbolic-ref", "-q", "HEAD")),
+    ("head_before", ("rev-parse", "--verify", "HEAD")),
+)
+# 刪合併記錄失敗時的事件名（detail：error）；下次啟動看到 MERGE_HEAD 不在會再刪
+MERGE_INTENT_CLEAR_FAILED_EVENT = "merge_intent_clear_failed"
+
+
+def merge_head_state(config):
+    """嚴格讀 MERGE_HEAD（1.1.2 第七批）：三態，讀取失敗不可與「沒有」混淆。
+
+    `git rev-parse -q --verify MERGE_HEAD`：退出碼 0＝在（stdout 是 sha）、1＝不在，其餘（repo 不在、不是 git 目錄、權限）
+    ＝讀取失敗。merge_in_progress 讀不到 git 目錄時回 False，拿它判斷「可以刪合併記錄」或「合併未開始」會把讀取失敗
+    當成沒有合併：記錄被刪，重啟就認不出殘留的合併是 runner 自己的。
+
+    @param config runner 設定（用到 repo_dir）
+    @return (state, value)：state 是 MERGE_HEAD_ABSENT／PRESENT／ERROR；value 在 PRESENT 時是 sha、ERROR 時是錯誤摘要、
+        ABSENT 時是空字串
+    """
+    # STEP 01: 依退出碼分三態
+    code, out, err = git(config, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+    if code == 0:
+        return MERGE_HEAD_PRESENT, out.strip()
+    if code == GIT_REF_ABSENT_CODE:
+        return MERGE_HEAD_ABSENT, ""
+    return MERGE_HEAD_ERROR, "退出碼 %s: %s" % (code, stderr_excerpt(err))
+
+
+def build_merge_intent(config, kind, target_ref):
+    """組合併記錄：嚴格讀合併前的 repo 狀態（git 指令非零一律失敗，不用寬容版 git_out）。
+
+    欄位：version、pid、kind、entry／attempt（目前佔的呼叫序號，沒有是 null）、repo_real（repo_dir 的 realpath）、
+    git_dir（--absolute-git-dir）、branch_ref（symbolic-ref）、head_before（合併前 HEAD）、target_ref、target_sha
+    （合併對象解析成的 commit）、written_epoch／written_iso（寫下的時間，最後取、最接近合併開始）。
+
+    @param config runner 設定
+    @param kind 合併種類（MERGE_KIND_*）
+    @param target_ref 合併對象的 ref 名稱
+    @return 記錄 dict
+    @raises RuntimeError 任一個讀取失敗（git_out_or_raise）
+    """
+    # STEP 01: repo 身分與合併對象
+    record = {
+        "version": MERGE_INTENT_VERSION,
+        "pid": os.getpid(),
+        "kind": kind,
+        "entry": config.get("current_entry"),
+        "attempt": config.get("current_attempt"),
+        "repo_real": os.path.realpath(config["repo_dir"]),
+        "git_dir": git_out_or_raise(config, "rev-parse", "--absolute-git-dir"),
+        "target_ref": target_ref,
+        "target_sha": git_out_or_raise(config, "rev-parse", "--verify", "%s^{commit}" % target_ref),
+    }
+    # STEP 02: 合併前的 HEAD 身分（與收拾時的比對同一種讀法）
+    for field, args in MERGE_INTENT_HEAD_READS:
+        record[field] = git_out_or_raise(config, *args)
+    # STEP 03: 寫下的時間：比對用 written_epoch（秒，浮點）；written_iso 給人看，與其他事件同一個格式（now_iso，秒精度）
+    record["written_epoch"] = time.time()
+    record["written_iso"] = now_iso()
+    return record
+
+
+def run_recorded_merge(config, kind, target_ref, merge_args, log_path):
+    """先寫合併記錄再 git merge（1.1.2 第七批）；合併成功就收尾記錄，失敗留給呼叫端的 abort_failed_merge 收尾。
+
+    三個會留下 MERGE_HEAD 的非快轉合併（前置作業合併基準分支、斷點分支回流、準備分支把整合分支合進既有 entry 分支）都經過
+    這裡；ff-only 的合併不會留 MERGE_HEAD，不經過。合併途中被打斷（SIGKILL、斷電、訊號剛好落在 git 退出之後、abort 之前）
+    時，記錄讓下次啟動的 recover_interrupted_merge 認得出殘留的 MERGE_HEAD 是 runner 自己的，逐項吻合才自動 abort。
+
+    記錄寫不進去（讀合併前狀態失敗、寫檔失敗）就不合併，回一個失敗的結果（說明同時寫進 log_path）：呼叫端照既有的合併失敗
+    路徑走（都在 CLI 之前；abort_failed_merge 看到沒有 MERGE_HEAD 會附註「合併未開始」）。不記就合的話，這次被打斷就只剩人工收拾。
+    合併本身不包停止訊號延後區間：merge 最長可跑 GIT_TIMEOUT_SECONDS（600 秒），超過 launchd 的 ExitTimeOut（120 秒），延後也
+    擋不住 SIGKILL；被打斷的交給重啟收拾。
+
+    @param config runner 設定
+    @param kind 合併種類（MERGE_KIND_*）
+    @param target_ref 合併對象的 ref 名稱（寫進記錄；也是 merge_args 裡的合併對象）
+    @param merge_args `git merge` 後面的參數（原樣傳給 git，與改前相同）
+    @param log_path 合併全文的落檔路徑
+    @return (returncode, stdout, stderr)：合併的結果；記錄寫不進去時是 (COMMAND_UNRUNNABLE_CODE, "", 說明)
+    """
+    # STEP 01: 組記錄並原子寫入；任一步失敗就不合併
+    try:
+        atomic_write_json(state_path(config, MERGE_INTENT_NAME), build_merge_intent(config, kind, target_ref))
+    except (RuntimeError, OSError) as exc:
+        # 記錄寫不進去的說明（當成合併的 stderr 交給呼叫端）
+        message = "寫合併記錄失敗，未執行合併: %s" % exc
+        write_command_log(log_path, ["git", "merge"] + list(merge_args), config["repo_dir"], COMMAND_UNRUNNABLE_CODE, "", message)
+        return COMMAND_UNRUNNABLE_CODE, "", message
+    # STEP 02: 合併（參數與訊息不變）
+    code, out, err = git(config, "merge", *merge_args, log_path=log_path)
+    # STEP 03: 成功就收尾記錄（失敗由呼叫端的 abort_failed_merge 在 abort 之後收尾）
+    if code == 0:
+        finish_recorded_merge(config)
+    return code, out, err
+
+
+def finish_recorded_merge(config):
+    """合併結束（成功，或失敗後 abort 過）時收尾合併記錄：MERGE_HEAD 確定不在才刪（1.1.2 第七批）。
+
+    看結構事實、不看「剛才 abort 過」：在（abort 失敗、repo 停在合併中）與讀不到都保留記錄，下次啟動 recover_interrupted_merge
+    才有依據判斷那個 MERGE_HEAD 是不是 runner 留下的。刪檔失敗只記事件與 stderr（不打斷呼叫端的失敗路徑；下次啟動看到
+    MERGE_HEAD 不在會再刪）。
+
+    @param config runner 設定
+    @return merge_head_state 的 state（呼叫端目前不看）
+    """
+    # STEP 01: 嚴格讀 MERGE_HEAD，確定不在才刪
+    state, _value = merge_head_state(config)
+    if state == MERGE_HEAD_ABSENT:
+        remove_merge_intent(config)
+    return state
+
+
+def remove_merge_intent(config):
+    """刪合併記錄；本來就不在算成功。失敗記 merge_intent_clear_failed 事件並印 stderr，不拋。
+
+    @param config runner 設定
+    @return 成功（含本來就不在）回 None；失敗回錯誤說明
+    """
+    # STEP 01: 刪
+    try:
+        os.remove(state_path(config, MERGE_INTENT_NAME))
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        # STEP 01.01: 刪不掉：留紀錄，下次啟動再刪
+        print("警告：刪除合併記錄 %s 失敗: %s" % (MERGE_INTENT_NAME, exc), file=sys.stderr)
+        log_event(config, None, MERGE_INTENT_CLEAR_FAILED_EVENT, detail={"error": str(exc)})
+        return str(exc)
+    return None
 
 
 def disk_free_gb(path):
@@ -2474,12 +2727,14 @@ def is_valid_pr_list_record(record):
     )
 
 
-def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_head=None):
-    """查某支分支開往 base 的 open PR（1.1.2 第五批階段二）：上一輪 `gh pr create` 成功了、連結卻沒落盤時靠它沿用。
+def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_head=None, state=GH_PR_STATE_OPEN):
+    """查某支分支開往 base、狀態是 state（預設 open）的 PR（1.1.2 第五批階段二）：上一輪 `gh pr create` 成功了、連結卻沒落盤時靠它沿用。
 
     三態回傳，「查不到」與「確定沒有」必須分得開（寬容版 git_out 的教訓）：gh 非零退出、輸出不是 JSON、JSON 形狀不對、
     連結不是 PR_URL_RE 的形狀，一律是錯誤，不可以當成「沒有 PR」——當成沒有的話呼叫端就會去 create，PR 其實已存在，
-    create 失敗、真的存在的 PR 被記成 pr_failed。已關閉的 PR 不算（`--state open`）：同分支上被關掉的舊 PR 不沿用。
+    create 失敗、真的存在的 PR 被記成 pr_failed。預設 state＝open 時已關閉的 PR 不算（`--state open`）：同分支上被關掉的舊 PR
+    不沿用；開 PR 前後的查詢與重啟對帳都用預設值。只有補查 merged 斷點的連結（refresh_unverified_checkpoint_prs）傳
+    GH_PR_STATE_MERGED——合併後的 PR 已不是 open（05aeecf review）。
     不 raise：呼叫端都在 CLI 跑完之後，raise 會走 crash 流程、重燒一輪 CLI；錯誤交給呼叫端轉成 pr_error。
     頁面 PR 與重啟對帳現在用它，斷點分支（階段三）也可以直接用：只看分支與 base，不看 entry。
 
@@ -2496,13 +2751,14 @@ def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_
     @param base PR 的 base 分支
     @param log_name 子行程 log 名稱（session_log_path 的 name，須合 LOG_NAME_PATTERN）；同一輪查兩次時分開命名
     @param expected_head 要求的 headRefOid（完整 sha）；None 表示不比對
-    @return (url, error)：查到是 (url, None)；確定沒有 open PR 是 (None, None)；查詢失敗或 head 不符是 (None, 錯誤說明)
+    @param state `gh pr list --state` 的值；預設 GH_PR_STATE_OPEN
+    @return (url, error)：查到是 (url, None)；確定沒有該狀態的 PR 是 (None, None)；查詢失敗或 head 不符是 (None, 錯誤說明)
     """
     # STEP 01: 查詢（全文落檔、短逾時）
     log_path = session_log_path(config, log_name)
     code, out, err = run_command(
         [
-            config["gh_bin"], "pr", "list", "--head", branch, "--base", base, "--state", "open",
+            config["gh_bin"], "pr", "list", "--head", branch, "--base", base, "--state", state,
             "--json", "url,isCrossRepository,headRefOid", "--limit", str(PR_LOOKUP_LIMIT),
         ],
         cwd=config["repo_dir"],
@@ -2525,7 +2781,7 @@ def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_
     # STEP 03: 濾掉 fork 同名分支的 PR；同 repo 的要剛好零或一筆
     own = [record for record in records if not record["isCrossRepository"]]
     if len(own) > 1:
-        return None, "%s: 同 repo 有 %d 筆 open PR，無法判定要沿用哪一筆: %s" % (prefix, len(own), tail)
+        return None, "%s: 同 repo 有 %d 筆 %s PR，無法判定要沿用哪一筆: %s" % (prefix, len(own), state, tail)
     if not own:
         if len(records) == PR_LOOKUP_LIMIT:
             return None, "%s: 前 %d 筆都是 fork 同名分支的 PR，自家的可能在截斷線之外: %s" % (prefix, PR_LOOKUP_LIMIT, tail)
@@ -2814,9 +3070,11 @@ def open_checkpoint(config, checkpoint_id, auto_title=None):
 
     失敗的處理分兩種（checkpoint_open_failed）：hard 斷點保持 opening、記下原因，由呼叫端以 CHECKPOINT_OPEN_FAILED_REASON 暫停
     （人工閘門不消失；1.1.1 起 push／gh 失敗一律標 failed、回 False，hard 閘門就此消失）；soft／auto 斷點照舊標 failed。
-    gh 退出碼 0 但沒印連結、再查也沒查到（c1）不算失敗：照樣寫 opened、蓋章，另加 pr_unverified，之後由
-    refresh_unverified_checkpoint_prs 補查——兩個呼叫端都靠 opened／蓋章運作（hard 只有 True 才等人放行；auto 沒蓋章的話
-    每完成一個模組就再開一支，1.1.1 第六輪 review 實跑重現），所以不能當失敗。
+    gh 退出碼 0 但沒印連結，而且再查失敗而無法確認 PR 有沒有開成、或斷點不是 hard（c1），不算失敗：照樣寫 opened、蓋章，
+    另加 pr_unverified，之後由 refresh_unverified_checkpoint_prs 補查——auto 沒蓋章的話每完成一個模組就再開一支（1.1.1 第六輪
+    review 實跑重現 K1；gh 其實建了 PR 只是查不到時，就是每個模組一支真的 draft PR），所以 soft／auto 連「再查確定沒有」也不當失敗。
+    hard 斷點再查**確定**沒有 open 的 PR 則是開啟失敗、走上面的 checkpoint_open_failed（05aeecf review CRITICAL：原本也算開成，
+    人工閘門等人放行一個不存在的 PR）：斷點仍是 opening，由呼叫端暫停，閘門不消失。
 
     停止訊號延後分兩段、互不相連（見 ShutdownDeferral 第 (7) 類）：push 一段；查 PR→create→再查→opened 落盤一段。兩段之間被打斷
     只會留下 opening，重啟補完，不會「做了沒記」。失敗的落盤與通知都在區間外：被打斷時斷點停在 opening，重啟會重試。
@@ -2951,6 +3209,10 @@ def stamp_covered_entries(queue_data, target):
     涵蓋集合是 write-ahead 時記下的 covered_entries（凍結當下已 done、還沒蓋章的 entry id）：跟 frozen_sha 同一次寫入，
     以結構判定、不需要 git。不能用「現在還沒蓋章的 done entry」——重試前可能又有模組做完（auto 斷點在模組完成後沿用 opening），
     它不在凍結的 commit 裡。沒有 covered_entries 的舊記錄（None）沿用舊行為：所有還沒蓋章的 done entry。
+
+    只可在 mutate_queue 的 mutator 內呼叫（目前是 mark_opening_checkpoint_merged 與 persist_checkpoint_opened）：它就地修改的
+    queue_data 是 mutate_queue 在鎖內重讀的私有副本，屬於 IMMUTABILITY 規則的刻意例外，理由見 mutate_queue 的 docstring
+    （05aeecf review IMPORTANT，不改碼）。在 mutator 外拿別人持有的 queue 快照呼叫，修改會外洩給其他持有者、也不會落盤。
 
     @param queue_data 整份 queue（mutator 內）
     @param target 斷點記錄
@@ -3092,14 +3354,14 @@ def find_or_create_checkpoint_pr(config, checkpoint, branch, tip, body):
     （與頁面 PR 的 push_branch_and_open_pr 同一個判準）。
 
     @param config runner 設定
-    @param checkpoint 斷點記錄（用到 pr_base、title、id）
+    @param checkpoint 斷點記錄（用到 pr_base、title、id、mode）
     @param branch 斷點分支名稱
     @param tip 剛推上去的斷點分支 tip（find_pr_by_head 的 expected_head）
     @param body PR 內文
     @return (pr_url, error, unverified_note)：
         沿用或新開成功是 (url, None, None)；
-        gh 退出碼 0 但沒印連結、再查也沒查到（c1）是 ("", None, 說明)——照樣算開成；
-        失敗是 (None, 錯誤說明, None)
+        gh 退出碼 0 但沒印連結，而且再查失敗而無法確認、或斷點不是 hard（c1）是 ("", None, 說明)——照樣算開成；
+        失敗是 (None, 錯誤說明, None)，含 hard 斷點 gh 退出碼 0 但沒印連結、再查確定沒有 open 的 PR（05aeecf review CRITICAL）
     """
     base = checkpoint.get("pr_base") or config["base_branch"]
     # STEP 01: 先查
@@ -3139,8 +3401,17 @@ def find_or_create_checkpoint_pr(config, checkpoint, branch, tip, body):
     # 再查的結果（給人看）：失敗就附錯誤，沒有就說沒有
     recheck_note = recheck_error or "再查也沒有 open 的 PR"
     if code == 0:
-        # STEP 03.01: (c1) gh 說成功、只是沒印連結：算開成、旗標記下來
-        return "", None, "gh 退出碼 0 但未回傳連結（輸出: %s）；%s" % ((out or "").strip()[-GH_OUTPUT_TAIL_CHARS:], recheck_note)
+        # gh 說成功、只是沒印連結的說明：退出碼 0 時 stderr 多半是空的，取 stdout 尾段（stdout 空才退到 stderr；全文在子行程 log）
+        no_link_note = "gh 退出碼 0 但未回傳連結（輸出: %s）；%s" % ((out or err or "").strip()[-GH_OUTPUT_TAIL_CHARS:], recheck_note)
+        if recheck_error is not None or checkpoint.get("mode") != "hard":
+            # STEP 03.01: (c1) 再查失敗、無法確認 PR 有沒有開成，或斷點不是 hard：算開成、旗標記下來（之後由
+            # refresh_unverified_checkpoint_prs 補查）。soft／auto 沒有閘門，「確定沒有」也不能改成失敗：失敗的話 entry 沒蓋章，
+            # auto 每完成一個模組就再開一次；萬一 gh 其實建了 PR 只是查不到，就是每個模組一支真的 draft PR（1.1.1 第六批 K1）
+            return "", None, no_link_note
+        # STEP 03.02: hard 斷點、再查確定沒有 open 的 PR：沒開成，走開啟失敗（呼叫端保持 opening 並暫停）。只有 hard 有閘門，
+        # 閘門等的是 PR 本身，不能拿一個確定不存在的 PR 當已開、讓人等它放行（05aeecf review CRITICAL：原本也算開成）。
+        # cp 分支已推上 origin，訊息帶分支名與全文指路
+        return None, "開 cp PR 失敗（分支 %s 已推上 origin）: %s%s" % (branch, no_link_note, log_ref(config, log_path)), None
     # cp 分支已經推上 origin，訊息帶分支名，人工接手時才知道要對哪支分支開 PR
     return None, "開 cp PR 失敗（分支 %s 已推上 origin）: %s%s；%s" % (
         branch,
@@ -3591,10 +3862,13 @@ def module_preflight(config, queue):
     if code != 0:
         return False, "integration_diverged", "整合分支無法 fast-forward: %s" % stderr_excerpt(err)
 
-    # STEP 06: 與基準分支同步；失敗就走共用收尾（先讀衝突檔清單、再 abort，見 abort_failed_merge）。
-    # 清單讀取失敗與 abort 失敗寫進 detail，暫停原因維持 master_conflict（1.1.1 以前這兩種失敗被安靜忽略）
+    # STEP 06: 與基準分支同步（合併前先寫合併記錄，見 run_recorded_merge；1.1.2 第七批）；失敗就走共用收尾（先讀衝突檔清單、
+    # 再 abort，見 abort_failed_merge）。清單讀取失敗與 abort 失敗寫進 detail，暫停原因維持 master_conflict（1.1.1 以前這兩種
+    # 失敗被安靜忽略）
     log_path = session_log_path(config, "git-merge-base")
-    code, _out, err = git(config, "merge", "origin/%s" % config["base_branch"], log_path=log_path)
+    # 基準分支的遠端追蹤 ref（合併對象）
+    base_ref = "origin/%s" % config["base_branch"]
+    code, _out, err = run_recorded_merge(config, MERGE_KIND_BASE, base_ref, [base_ref], log_path)
     if code != 0:
         conflicted, list_error, abort_note = abort_failed_merge(config)
         detail = "與基準分支%s: %s%s%s" % (
@@ -3605,13 +3879,13 @@ def module_preflight(config, queue):
         )
         return False, "master_conflict", detail
 
-    # STEP 07: 回流所有還開著的斷點分支
+    # STEP 07: 回流所有還開著的斷點分支（同樣先寫合併記錄）
     sync_merged_checkpoints(config, queue)
     for checkpoint in queue.get("checkpoints", []):
         if checkpoint.get("status") != CheckpointStatus.OPENED or not checkpoint.get("branch"):
             continue
         log_path = session_log_path(config, CHECKPOINT_MERGE_LOG_PREFIX + str(checkpoint["id"]))
-        code, _out, err = git(config, "merge", checkpoint["branch"], log_path=log_path)
+        code, _out, err = run_recorded_merge(config, MERGE_KIND_CHECKPOINT, checkpoint["branch"], [checkpoint["branch"]], log_path)
         if code != 0:
             # STEP 07.01: 共用收尾；清單讀取失敗與 abort 失敗寫進 detail，暫停原因同 STEP 06
             conflicted, list_error, abort_note = abort_failed_merge(config)
@@ -3706,37 +3980,52 @@ def install_deps_if_lockfile_changed(config, previous_hash):
 
 
 def abort_failed_merge(config):
-    """合併失敗的共用收尾：abort 之前讀衝突檔清單，再 merge --abort。只收尾、不分類，暫停或 blocked 由呼叫端決定。
+    """合併失敗的共用收尾：abort 之前讀衝突檔清單，再 merge --abort，最後收尾合併記錄。只收尾、不分類，暫停或 blocked 由呼叫端決定。
 
     三個呼叫點：module_preflight 的基準分支合併與斷點分支回流（一律暫停 master_conflict）、prepare_branch 的整合分支
     合併（_abort_branch_catch_up 分 entry 級 blocked 與 runner 級暫停）。git merge 的衝突檔名印在 stdout（不是 stderr），
     只截 stderr 常常拿到空字串，所以 abort 之前先問一次「目前哪些檔案還沒解決」（abort 後就查不到了）。
-    合併在開始之前就失敗（未追蹤檔會被覆寫、index.lock 被占用）時沒有 MERGE_HEAD：這次合併不可能留下衝突，也沒有東西
-    可以 abort——不讀清單、不呼叫 abort，附註如實寫「合併未開始」。1.1.2 第二批照樣呼叫 abort，必然失敗，附註卻寫「repo
-    可能停在合併中」，把人引去收拾一個不存在的合併。判斷用 merge_in_progress（讀不到 git 目錄時它回 False，見該函式）。
+    合併在開始之前就失敗（未追蹤檔會被覆寫、index.lock 被占用、1.1.2 第七批起還有合併記錄寫不進去）時沒有 MERGE_HEAD：這次
+    合併不可能留下衝突，也沒有東西可以 abort——不讀清單、不呼叫 abort，附註如實寫「合併未開始」。1.1.2 第二批照樣呼叫 abort，
+    必然失敗，附註卻寫「repo 可能停在合併中」，把人引去收拾一個不存在的合併。
+    判斷用嚴格的 merge_head_state（1.1.2 第七批；以前用 merge_in_progress，讀不到 git 目錄時回 False，讀取失敗會被寫成
+    「合併未開始」）：讀不到時不知道有沒有停在合併中——一樣不讀清單、不 abort，但 conflicted 是 None、list_error 寫「無法判斷」，
+    呼叫端不會把它當成「衝突已 abort 乾淨」，也不會宣稱非衝突。
+    最後一律交給 finish_recorded_merge：MERGE_HEAD 確定不在才刪合併記錄；abort 失敗或讀不到時保留，下次啟動由
+    recover_interrupted_merge 判斷能不能自動收拾。
 
     @param config runner 設定
     @return (conflicted, list_error, abort_note)：
-        conflicted 衝突檔清單（逗號分隔）；沒有衝突檔、或合併未開始是空字串；清單讀取失敗是 None——「不知道」不可與「沒有」混淆
-        list_error 清單讀取失敗的說明（含 stderr 摘要）；讀取成功或合併未開始是空字串
-        abort_note abort 這一步的附註：merge --abort 失敗的說明（含 stderr 摘要），或合併未開始、沒有執行 abort 的說明；
+        conflicted 衝突檔清單（逗號分隔）；沒有衝突檔、或合併未開始是空字串；清單讀取失敗、或讀不到 MERGE_HEAD 是 None——
+            「不知道」不可與「沒有」混淆
+        list_error 清單讀取失敗、或讀不到 MERGE_HEAD（無法判斷）的說明（含 stderr 摘要）；讀取成功或合併未開始是空字串
+        abort_note abort 這一步的附註：merge --abort 失敗的說明（含 stderr 摘要），或合併未開始／無法判斷、沒有執行 abort 的說明；
             abort 成功是空字串。非空就不是「衝突已 abort 乾淨」（合併未開始時 conflicted 必為空字串，不會被當成衝突）
     """
-    # STEP 01: 沒有進行中的合併就不讀清單、不 abort
-    if not merge_in_progress(config):
+    # STEP 01: 嚴格讀 MERGE_HEAD：沒有進行中的合併、或讀不到，都不讀清單、不 abort
+    state, value = merge_head_state(config)
+    if state == MERGE_HEAD_ABSENT:
         # STEP 01.01: 合併未開始（沒有 MERGE_HEAD）
-        return "", "", "合併未開始（沒有 MERGE_HEAD），未執行 merge --abort"
-    # STEP 02: abort 之前先問衝突檔
-    code, out, err = git(config, "diff", "--name-only", "--diff-filter=U")
-    # 衝突檔清單（逗號分隔）；讀取失敗記成 None
-    conflicted = out.strip().replace("\n", ", ") if code == 0 else None
-    # 清單讀取失敗的說明；成功是空字串
-    list_error = "" if code == 0 else "衝突檔清單讀取失敗: %s" % stderr_excerpt(err)
-    # STEP 03: abort
-    code, _out, err = git(config, "merge", "--abort")
-    # abort 失敗的說明；成功是空字串
-    abort_note = "" if code == 0 else "merge --abort 也失敗（repo 可能停在合併中）: %s" % stderr_excerpt(err)
-    return conflicted, list_error, abort_note
+        # 回傳的 (conflicted, list_error, abort_note)；三個分支各自組好，STEP 02 收尾記錄之後回傳
+        outcome = ("", "", "合併未開始（沒有 MERGE_HEAD），未執行 merge --abort")
+    elif state == MERGE_HEAD_ERROR:
+        # STEP 01.02: 讀不到：不知道有沒有停在合併中（不可寫成「合併未開始」）
+        outcome = (None, "無法判斷是否停在合併中（讀 MERGE_HEAD 失敗: %s）" % value, "未讀衝突檔清單、未執行 merge --abort")
+    else:
+        # STEP 01.03: 停在合併中：abort 之前先問衝突檔
+        code, out, err = git(config, "diff", "--name-only", "--diff-filter=U")
+        # 衝突檔清單（逗號分隔）；讀取失敗記成 None
+        conflicted = out.strip().replace("\n", ", ") if code == 0 else None
+        # 清單讀取失敗的說明；成功是空字串
+        list_error = "" if code == 0 else "衝突檔清單讀取失敗: %s" % stderr_excerpt(err)
+        # STEP 01.04: abort
+        code, _out, err = git(config, "merge", "--abort")
+        # abort 失敗的說明；成功是空字串
+        abort_note = "" if code == 0 else "merge --abort 也失敗（repo 可能停在合併中）: %s" % stderr_excerpt(err)
+        outcome = (conflicted, list_error, abort_note)
+    # STEP 02: 合併記錄以這時的 MERGE_HEAD 實況收尾（確定不在才刪）
+    finish_recorded_merge(config)
+    return outcome
 
 
 def merge_failure_phrase(conflicted, verb):
@@ -3772,6 +4061,7 @@ def prepare_branch(config, entry):
     既有分支是上一輪留下的（逾時重試、blocked 後 unblock），期間別的 entry 可能已經合併、整合分支前進。1.1.1 以前
     只 checkout：CLI 在舊基礎上重跑、發佈段 ff-merge 必敗、一般暫停、launchd 重啟再燒一次，無限迴圈（1.1.2 D1）。
     合併用 --ff（entry 分支沒有自己的 commit 時直接快轉，不產生 merge commit）。失敗的分類見 _abort_branch_catch_up。
+    合併前先寫合併記錄（run_recorded_merge，1.1.2 第七批）：合併途中被打斷時，重啟由 recover_interrupted_merge 判斷能不能自動收拾。
 
     @param config runner 設定
     @param entry queue 裡的 entry（用到 id、branch）
@@ -3794,13 +4084,13 @@ def prepare_branch(config, entry):
         if code != 0:
             return PREPARE_PAUSE, "建立分支失敗: %s" % stderr_excerpt(err)
         return PREPARE_READY, "建立新分支"
-    # STEP 02: 既有分支：切過去、把整合分支合進來（全文落檔）
+    # STEP 02: 既有分支：切過去、把整合分支合進來（全文落檔；合併前先寫合併記錄，見 run_recorded_merge）
     code, _out, err = git(config, "checkout", branch)
     if code != 0:
         return PREPARE_PAUSE, "切換既有分支失敗: %s" % stderr_excerpt(err)
     # 合併全文的落檔路徑
     log_path = session_log_path(config, "git-merge-integration")
-    code, _out, err = git(config, "merge", "--ff", "--no-edit", integration, log_path=log_path)
+    code, _out, err = run_recorded_merge(config, MERGE_KIND_CATCH_UP, integration, ["--ff", "--no-edit", integration], log_path)
     if code != 0:
         # STEP 02.01: 合併失敗交給共用出口分類（entry 級 blocked 或 runner 級暫停）
         return _abort_branch_catch_up(config, entry, err, log_path)
@@ -3821,7 +4111,8 @@ def _abort_branch_catch_up(config, entry, merge_err, log_path):
       寫之前先記一筆 entry 級事件 prepare_result（1.1.2 第六批）。
     * 其餘：多半是環境問題，每個 entry 都會遇到——標 blocked 會把整條佇列逐一清成 blocked；回暫停，CLI 之前停下、
       不燒預算。abort 失敗時 repo 可能停在合併中，下一個 entry 的前置作業也過不去，一樣暫停。detail 依已知的狀況
-      寫明是哪一種，不知道的不宣稱「非衝突」：`無法判定是否衝突`（清單讀不到）／`有衝突但 abort 失敗`／`非衝突`
+      寫明是哪一種，不知道的不宣稱「非衝突」：`無法判定是否衝突`（清單讀不到，或讀不到 MERGE_HEAD、不知道有沒有停在合併中）／
+      `有衝突但 abort 失敗`／`非衝突`
       （清單讀到了、確實沒有衝突檔：hook 拒絕；或合併根本沒開始：未追蹤檔會被覆寫、index.lock——這時 abort_failed_merge
       不讀清單、不 abort，附註寫「合併未開始」，衝突檔清單是空的，所以落在 `非衝突`，不會被當成「有衝突但 abort 失敗」）。
 
@@ -3874,57 +4165,49 @@ def _abort_branch_catch_up(config, entry, merge_err, log_path):
 
 
 def log_records_newest_first(config):
-    """逐行讀 runner.log.jsonl，由新到舊逐筆產出事件（generator）；讀取與解析永不拋例外（去重與診斷包沿用都在暫停路徑上，
-    拋出去就變成 crash，queue 損毀時還會從 handle_runner_crash 逃出 cmd_run）。
+    """跨 current（runner.log.jsonl）與封存檔（runner.log.<序號>.jsonl，1.1.2 第七批輪替）由新到舊逐筆產出事件（generator）；
+    讀取與解析永不拋例外（去重與診斷包沿用都在暫停路徑上，拋出去就變成 crash，queue 損毀時還會從 handle_runner_crash 逃出 cmd_run）。
 
     log 是 append-only：磁碟滿時寫到一半的多位元組字元、手動塞進去的一行 `123`、深度巢狀到讓 json 拋 RecursionError 的一行，
     都會永久留著。所以用 errors="replace" 解碼（壞位元組變成替代字元，那一行 JSON 解析會失敗）；解析失敗或解析出來不是
-    物件（dict）的行產出 None，保留位置，由呼叫端決定略過還是停下。空行略過。檔案不存在或讀不到（OSError）什麼都不產出。
-    惰性解析：呼叫端找到就停，比它舊的行根本不解析——壞行放在 log 的哪裡都只影響「要讀到它」的那次查詢。
+    物件（dict）的行產出 None，保留位置，由呼叫端決定略過還是停下。空行略過。
+    檔案層：current 不存在是合法的空；封存檔列出之後才被刪掉的略過；current 或封存檔讀不到、封存檔列不出來，在讀取序列的
+    那個位置產出一個 None——與壞行同一個哨兵，交給呼叫端既有的壞行策略（去重停下、診斷包沿用與對帳略過），不當成沒有事件。
+    惰性：一檔一檔讀，呼叫端找到就停，更舊的檔不開、比它舊的行不解析——壞行放在 log 的哪裡都只影響「要讀到它」的那次查詢。
+    先讀完 current 才列封存檔；實作與順序的理由在 event_log.iter_newest_first（diagnostics 共用同一份）。
 
     @param config runner 設定
-    @return generator，逐筆產出事件 dict，或壞掉那一行的 None；最新的先產出
+    @return generator，逐筆產出事件 dict，或壞行／讀不到的檔的 None；最新的先產出
     """
-    # STEP 01: 讀檔（解碼錯誤不會拋出）
-    try:
-        with open(state_path(config, "runner.log.jsonl"), "r", encoding="utf-8", errors="replace") as handle:
-            lines = handle.readlines()
-    except OSError:
-        return
-    # STEP 02: 由新到舊逐行解析，呼叫端要下一筆才解析下一行
-    for line in reversed(lines):
-        # 去掉頭尾空白的這一行
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            # 這一行解析後的值
-            record = json.loads(text)
-        except Exception:  # pylint: disable=broad-except
-            # 讀取既有證據的防禦邊界：這一行是過去寫進來的資料，壞成什麼樣都可能（ValueError、深度巢狀的 RecursionError、
-            # 其他解析器內部錯誤），對呼叫端都只是「這一行讀不懂」，一律當 None；往外拋只會把一次暫停變成 crash
-            record = None
-        yield record if isinstance(record, dict) else None
+    # STEP 01: 委派（event_log 保證永不拋例外）
+    yield from event_log.iter_newest_first(config["state_dir"])
 
 
 def last_paused_reason_from_log(config):
-    """讀 runner.log.jsonl 最後一筆「實質」事件，若是 paused 就回傳它的 reason。
+    """讀事件紀錄（current＋封存檔）最後一筆「實質」事件，若是 paused 就回傳它的 reason。
 
     queue.json 損毀（queue_corrupt）時 enter_paused 讀不到 runner_state，
     去重就不能靠 queue 內容，改看 log 檔（log 檔不受 queue 損毀影響）。
     log_event("paused", ...) 之後通常緊接著 notify() 自己再記一筆 notify/notify_failed/
     notify_skipped，那些只是通知投遞的紀錄、不是新的狀態事件，往前跳過去找真正的最後一筆事件；
-    那筆不是 paused，或檔案不存在／讀不出來，都回傳 None。遇到壞掉的一行（不合法的 UTF-8、不是 JSON、不是物件）
+    run 取鎖後第一筆可能是輪替自己記的 log_rotated／log_rotate_failed（1.1.2 第七批），同樣不是狀態事件、一併跳過——
+    不跳的話每次啟動輪替後上一次的 paused 都在它後面（多半在剛輪替出去的封存檔），queue 損毀期間每次重啟都重複通知。
+    合併收拾停下時 halt_merge_recovery 在 enter_paused 之前先記的 merge_recovery_halted 也一樣（1.1.2 第七批 review）：
+    這次 enter_paused 讀 log 時最後一筆就是它，不跳的話永遠判成不重複。
+    那筆不是 paused，或檔案不存在，都回傳 None。遇到壞掉的一行（不合法的 UTF-8、不是 JSON、不是物件）或讀不到的檔
     就停下回 None——判不出最後一筆是什麼，就不宣稱是重複（寧可多通知一次）；讀取一律經 log_records_newest_first，
     絕不拋例外。
     """
-    # STEP 01: 由新到舊找，跳過 notify 系列的投遞紀錄，取第一筆真正的狀態事件
-    notify_wrapper_events = ("notify", "notify_failed", "notify_skipped")
+    # STEP 01: 由新到舊找，跳過通知投遞、輪替與暫停前註記的紀錄，取第一筆真正的狀態事件
+    # 不是狀態事件、往前跳過的事件名：notify 系列的投遞紀錄、事件紀錄輪替、合併收拾停下時暫停前先記的事件
+    non_state_events = (
+        "notify", "notify_failed", "notify_skipped", LOG_ROTATED_EVENT, LOG_ROTATE_FAILED_EVENT, MERGE_RECOVERY_HALTED_EVENT,
+    )
     for record in log_records_newest_first(config):
         if record is None:
-            # STEP 01.01: 壞掉的一行，判不出來
+            # STEP 01.01: 壞掉的一行或讀不到的檔，判不出來
             return None
-        if record.get("event") in notify_wrapper_events:
+        if record.get("event") in non_state_events:
             continue
         if record.get("event") != "paused":
             return None
@@ -3935,10 +4218,10 @@ def last_paused_reason_from_log(config):
 
 
 def previous_pause_bundle(config, reason, signature):
-    """runner.log.jsonl 裡最近一筆 (原因, 簽名) 相同的 paused 事件所引用、而且目錄還在的 runner 級診斷包；找不到回 None。
+    """事件紀錄（current＋封存檔）裡最近一筆 (原因, 簽名) 相同的 paused 事件所引用、而且目錄還在的 runner 級診斷包；找不到回 None。
 
     runner_state 不記診斷包路徑，事件紀錄有（paused 事件的 detail.diagnostics）。讀 log 而不讀 queue，queue 損毀
-    （去重第三層）時一樣可用。壞掉的行（不合法的 UTF-8、不是 JSON、不是物件）略過；檔案讀不到、找不到符合的事件、
+    （去重第三層）時一樣可用。壞掉的行（不合法的 UTF-8、不是 JSON、不是物件）與讀不到的封存檔略過；找不到符合的事件、
     路徑形狀不對（見 is_bundle_relpath）、或那個目錄已經不在，都回 None，呼叫端凍結新包——寧可多一包，也不要讓暫停沒有證據。
 
     @param config runner 設定
@@ -4109,6 +4392,54 @@ def invalid_checkpoint_ids_detail(queue):
     )
 
 
+def next_post_cli_pause_count(runner_state, cli_spent):
+    """算這次暫停之後 runner_state 的 CLI 後暫停計數（1.1.2 第七批，跨簽名煞車）。
+
+    缺欄位＝0。欄位存在但不是 int（bool 雖是 int 的子類也不算、null 也不算）或是負數＝格式錯：讀不懂不等於 0，
+    CLI 後暫停直接以門檻計（fail-closed，鎖定並在通知寫明）。不是 CLI 後的暫停回舊值原樣（呼叫端不寫回）。
+
+    @param runner_state queue.runner_state（dict）
+    @param cli_spent 這次暫停是否發生在這一輪 CLI 呼叫之後
+    @return (count, malformed, raw)：count 是 CLI 後暫停時要寫回的新值、否則是舊值原樣；malformed 表示欄位格式錯；
+        raw 是欄位原值（通知寫明格式錯用）
+    """
+    # STEP 01: 讀原值並判斷格式（短路順序：先擋 bool 與非 int，才比大小）
+    # 計數欄位原值（缺欄位＝0）
+    raw = runner_state.get(POST_CLI_PAUSE_COUNT_FIELD, 0)
+    # 欄位格式錯（bool、非 int、負數）
+    malformed = isinstance(raw, bool) or not isinstance(raw, int) or raw < 0
+    if not cli_spent:
+        # STEP 01.01: 不是 CLI 後的暫停，計數不動
+        return raw, malformed, raw
+    # STEP 02: CLI 後的暫停：格式錯直接到門檻，否則 +1
+    if malformed:
+        return POST_CLI_PAUSE_HOLD_THRESHOLD, True, raw
+    return raw + 1, False, raw
+
+
+def pause_hold_cause(force_hold, same_signature, signature, post_cli_count, count_malformed, raw_count):
+    """新鎖定通知的前綴（說明為什麼鎖）：優先序 force_hold ＞ 同簽名連續 ＞ CLI 後暫停計數。
+
+    前綴盡量短（通知 300 字要省給細節與解除指令）；第一次就鎖定的那種仍要說明為什麼鎖，殘留行程那條的細節只有例外名。
+
+    @param force_hold 這次是否第一次就鎖定
+    @param same_signature 是否同簽名連續發生
+    @param signature 這次的簽名
+    @param post_cli_count 這次暫停之後的 CLI 後暫停計數
+    @param count_malformed 計數欄位格式錯
+    @param raw_count 計數欄位原值
+    @return 前綴文字（以全形逗號結尾，後面接「runner 已鎖定」）
+    """
+    # STEP 01: 依優先序選一種
+    if force_hold:
+        return "必須人工確認後才能繼續，"
+    if same_signature:
+        return "同一原因連續發生（%s），" % signature
+    if count_malformed:
+        return "CLI 後暫停計數 %s 格式錯（%r），以門檻 %d 次計，" % (POST_CLI_PAUSE_COUNT_FIELD, raw_count, POST_CLI_PAUSE_HOLD_THRESHOLD)
+    return "CLI 跑完後連續暫停 %d 次（中間沒有模組完成），" % post_cli_count
+
+
 def enter_paused(config, reason, detail, signature=None, trace_text=None, notify_event="paused", force_hold=False):
     """進入 runner 級暫停：凍結證據、記錄、必要時通知，然後回傳退出碼（整段是停止訊號的延後區間）。
 
@@ -4147,6 +4478,11 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
     給定時去重條件加上「同簽名」，且同簽名連續第二次出現會設 runner_state.hold——之後每次啟動在
     pre-flight 之前就靜默退出，直到 `unblock --runner`（否則 crash 若落在模組執行之後、或整合分支
     持續推不上去，每次 launchd 重啟都白燒一個模組預算）。hold 是新狀態，即使算重複也要通知一次。
+    CLI 後暫停計數（1.1.2 第七批，跨簽名煞車）：這次暫停發生在這一輪 CLI 呼叫之後（config["cli_spent"] 等於目前的
+    (current_entry, current_attempt)，process_one_entry 在呼叫 CLI 之前設、clear_entry_context 清）時，
+    runner_state.post_cli_pause_count +1，累計到 POST_CLI_PAUSE_HOLD_THRESHOLD 就鎖定——不看原因與簽名。計數與 paused、hold
+    同一次 set_runner_state 落盤；queue 讀不到時計數不動不寫；欄位格式錯直接以門檻計。有模組完成（finish_done_entry）、
+    unblock --runner 歸零。CLI 之前的暫停（git 前置、準備分支、pre-flight、斷點）不計也不寫。
     trace_text：例外 traceback 全文，進 runner 級診斷包。
     notify_event：通知事件代號（crash 用 runner_crashed，其餘 paused）。
 
@@ -4166,8 +4502,8 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
          runner_state 還沒被改成 running」的暫停原因用（例如 preflight() 內就判定的
          auth_expired/disk_low，見 R8）：這種情況下 queue 裡留的就是上一輪結束時的
          paused 狀態，不需要、也還沒有 startup_paused_reason 可用。
-      3. runner.log.jsonl 尾端（R4）——查 1、2 都失敗（queue 讀不到，例如 queue_corrupt）
-         時的最後手段，log 檔不受 queue 損毀影響。限制：這一層只比原因、不比簽名（沿用既有行為），
+      3. runner.log.jsonl 尾端（R4；1.1.2 第七批起跨 current 與封存檔，見 last_paused_reason_from_log）——查 1、2 都失敗
+         （queue 讀不到，例如 queue_corrupt）時的最後手段，log 檔不受 queue 損毀影響。限制：這一層只比原因、不比簽名（沿用既有行為），
          queue 損毀期間同原因但簽名不同的暫停仍會被當成重複；queue 損毀本身是 queue_corrupt 暫停、會先通知。
     """
     # STEP 01: 判斷是不是「重複暫停」：(原因, 簽名) 完全相等，見上方 docstring 的三層說明
@@ -4177,10 +4513,18 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
         and normalized_signature(config.get("startup_crash_signature")) == signature
     )
     previous_hold = False
+    # 這次暫停是否發生在這一輪 CLI 呼叫之後：標記要與目前佔號的 (entry, 呼叫序號) 完全相同（跨輪次判斷帶「這一輪」鍵）
+    current_entry = config.get("current_entry")
+    cli_spent = current_entry is not None and config.get("cli_spent") == (current_entry, config.get("current_attempt"))
+    # 這次暫停之後的 CLI 後暫停計數；queue 讀不到時是 None（計數不動不寫）
+    post_cli_count = None
+    # 計數欄位格式錯、以及它的原值（通知寫明用）
+    count_malformed, raw_count = False, None
     try:
         queue = load_queue(config)
         runner_state = queue.get("runner_state", {})
         previous_hold = bool(runner_state.get("hold"))
+        post_cli_count, count_malformed, raw_count = next_post_cli_pause_count(runner_state, cli_spent)
         if runner_paused_for(runner_state, (reason,)):
             if normalized_signature(runner_state.get("crash_signature")) == signature:
                 repeated = True
@@ -4188,7 +4532,11 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
         # queue 本身壞掉（queue_corrupt）時讀不到 runner_state，改看 log 尾端（R4）
         if last_paused_reason_from_log(config) == reason:
             repeated = True
-    hold = previous_hold or force_hold or bool(signature is not None and repeated)
+    # 計數要寫回（CLI 後的暫停、而且讀得到舊值）
+    count_written = cli_spent and post_cli_count is not None
+    # CLI 後暫停累計到門檻（格式錯已直接算成門檻）
+    count_hold = count_written and post_cli_count >= POST_CLI_PAUSE_HOLD_THRESHOLD
+    hold = previous_hold or force_hold or bool(signature is not None and repeated) or count_hold
 
     # STEP 02: 凍結 runner 級證據（不依賴 queue 可讀；queue_corrupt 時原檔照樣複製進包）。判定為重複、又不是這次才鎖定的，
     # 沿用上一包：沒解除的暫停 launchd 每 300 秒重啟一次，每次都凍結的話一個週末數百個目錄，而診斷包不受保留期清理。
@@ -4207,8 +4555,12 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
     # STEP 03: 寫狀態與紀錄。落盤失敗不中斷（還是要通知、要回退出碼），但要記下來——
     # 下面的通知內容取決於 hold 到底有沒有寫進去
     persist_error = None
+    # 與 paused 同一次寫入的補充欄位；計數只在要寫回時帶（不帶的欄位 set_runner_state 維持原值）
+    extra = {"crash_signature": signature, "hold": hold}
+    if count_written:
+        extra[POST_CLI_PAUSE_COUNT_FIELD] = post_cli_count
     try:
-        set_runner_state(config, "paused", reason, extra={"crash_signature": signature, "hold": hold})
+        set_runner_state(config, "paused", reason, extra=extra)
     except (OSError, ValueError) as exc:
         persist_error = exc
         print("警告：寫入 paused 狀態失敗: %s" % exc, file=sys.stderr)
@@ -4223,6 +4575,9 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
             "signature": signature,
             "hold": hold,
             "hold_persisted": persist_error is None,
+            "cli_spent": cli_spent,
+            POST_CLI_PAUSE_COUNT_FIELD: post_cli_count,
+            "post_cli_count_malformed": count_malformed,
             "diagnostics": bundle,
             "diagnostics_reused": bundle_reused,
         },
@@ -4232,8 +4587,10 @@ def _enter_paused_uninterrupted(config, reason, detail, signature, trace_text, n
     hold_transition = hold and not previous_hold
     if not repeated or hold_transition:
         if hold_transition:
-            # 前綴盡量短（通知 300 字要省給細節）；第一次就鎖定的那種仍要說明為什麼鎖，殘留行程那條的細節只有例外名
-            hold_cause = "必須人工確認後才能繼續，" if force_hold else "同一原因連續發生（%s），" % signature
+            # 為什麼鎖：force_hold ＞ 同簽名連續 ＞ CLI 後暫停計數（見 pause_hold_cause）
+            hold_cause = pause_hold_cause(
+                force_hold, signature is not None and repeated, signature, post_cli_count, count_malformed, raw_count
+            )
             if persist_error is None:
                 body = "%srunner 已鎖定（hold）；處理後執行 `runner.py unblock --runner` 解除\n細節: %s" % (
                     hold_cause,
@@ -4588,7 +4945,8 @@ def finish_done_entry(config, entry, outcome, pr_error, closing, deferral=None):
         target = find_entry(queue, entry["id"])
         if target is None:
             return None
-        # STEP 02: entry 標 done、寫回執行結果；熔斷計數歸零
+        # STEP 02: entry 標 done、寫回執行結果；熔斷計數與 CLI 後暫停計數歸零（有模組完成＝連續中斷了；與 done 同一次寫入，
+        # 重啟對帳補 done 也走這裡）
         target["status"] = "done"
         target["blocked_reason"] = None
         target["last_commit"] = commit
@@ -4598,7 +4956,10 @@ def finish_done_entry(config, entry, outcome, pr_error, closing, deferral=None):
         target["finished_at"] = now_iso()
         target["last_error"] = None
         add_cost(target, outcome)
-        queue.setdefault("runner_state", {})["consecutive_failures"] = 0
+        # 要歸零的 runner_state
+        runner_state = queue.setdefault("runner_state", {})
+        runner_state["consecutive_failures"] = 0
+        runner_state[POST_CLI_PAUSE_COUNT_FIELD] = 0
         return target
 
     # STEP 02: 一次寫回（tip + done）。回 None 代表 entry 在合併推送的那幾秒內被人從 queue 移除：
@@ -4859,17 +5220,30 @@ def refresh_unverified_checkpoint_prs(config):
     啟動時與每完成一個模組後各叫一次；hard 斷點等待放行時 wait_for_release 每次輪詢也叫（1.1.2 第五批收尾 MINOR 3）。不看 headRefOid（開啟之後人可能在 cp 分支上推修正，head 本來就會動）。
     查詢失敗或查不到只記事件，不改狀態、不 raise——這裡在模組完成之後，raise 會走 crash 流程。
 
+    補查的斷點不只 opened，也包括閘門已過的 released／merged（05aeecf review IMPORTANT：原本只看 opened，斷點在補查前先被
+    release、或被 sync_merged_checkpoints 判成 merged，pr_url 永遠是空的、旗標也不會清）。要看哪些狀態、各用哪個
+    `gh pr list --state` 查，見 CHECKPOINT_PR_VERIFY_GH_STATES：merged 查 merged（合併後的 PR 已不是 open），opened／released 查 open。
+    只補 pr_url、清旗標，狀態一律不動。已知限制：released 之後 PR 才被合併的查不到——查 open 已經沒有，而 released 不會被
+    sync_merged_checkpoints 改成 merged（它只看 opened），這種斷點的旗標會一直留著、每次都會再查一次（事件
+    checkpoint_pr_still_unverified 照下面的去重，同一個行程只記第一次）。
+
     @param config runner 設定
     @return 這次補上連結的斷點 id 清單
     """
     filled = []
-    # STEP 01: 逐一查
+    # STEP 01: 逐一查（只看要補查的狀態、仍是連結未知、有分支的）
     for checkpoint in load_queue(config).get("checkpoints", []):
-        if checkpoint.get("status") != CheckpointStatus.OPENED or not checkpoint.get(CHECKPOINT_PR_UNVERIFIED_FIELD) or not checkpoint.get("branch"):
+        # 這個斷點要用的 `gh pr list --state`；None＝這個狀態不補查
+        gh_state = CHECKPOINT_PR_VERIFY_GH_STATES.get(checkpoint.get("status"))
+        if gh_state is None or not checkpoint.get(CHECKPOINT_PR_UNVERIFIED_FIELD) or not checkpoint.get("branch"):
             continue
         checkpoint_id = checkpoint["id"]
         url, error = find_pr_by_head(
-            config, checkpoint["branch"], checkpoint.get("pr_base") or config["base_branch"], log_name=CHECKPOINT_PR_VERIFY_LOG_NAME
+            config,
+            checkpoint["branch"],
+            checkpoint.get("pr_base") or config["base_branch"],
+            log_name=CHECKPOINT_PR_VERIFY_LOG_NAME,
+            state=gh_state,
         )
         if error or not url:
             # STEP 01.01: 查詢失敗與查不到分開記，狀態不動；同一個斷點只在第一次與結果種類改變時記（review 112i：hard 斷點等待期間
@@ -5145,6 +5519,9 @@ def process_one_entry(config, entry):
     resume = bool(entry.get("last_session_id")) or os.path.exists(
         state_path(config, "%s-progress.md" % entry_id)
     )
+    # 從這裡起的暫停算「CLI 之後」（跨簽名煞車，見 _enter_paused_uninterrupted）。設在呼叫之前：沒有「跑了沒標」的窗；
+    # 啟動 CLI 本身失敗（crash）也會多算一次，保守。綁 (entry, 呼叫序號)，clear_entry_context 清
+    config["cli_spent"] = (entry_id, attempt)
     call_result = call_claude(config, entry, attempt, resume)
     save_session_output(config, entry, attempt, call_result)
     outcome = judge_outcome(config, call_result)
@@ -5364,21 +5741,34 @@ def find_published_entry(config, queue):
 
 
 def last_cli_outcome(config, entry):
-    """被中斷那一輪 CLI 的 session id 與花費：runner.log.jsonl 裡這個 entry 最新一筆 cli_outcome 事件的兩個值。
+    """被中斷那一輪 CLI 的 session id 與花費：事件紀錄（current＋封存檔）裡這個 entry、這一輪的 cli_outcome 事件的兩個值。
 
     process_one_entry 在發佈段之前就寫了這筆事件；queue 的 last_session_id 只在 done 時寫，被中斷的那一輪不會有。
     花費也是：done 那一輪的花費只在 finish_done_entry 那一次 mutate 累加（與 tip 同一次寫入），tip 沒記就代表花費也沒記，
     從同一筆事件補記不會重複。
+    「這一輪」以 entry.started_at 界定（1.1.2 第七批）：只收 ts 不早於它的（兩者都是 now_iso 的 UTC 秒精度字串，直接比字串）。
+    started_at 在每輪佔號後標 running 時寫、在 cli_outcome 之前，重啟對帳發生在重新佔號之前，所以此刻它就是被中斷那一輪的。
+    理由：run 啟動就輪替，被中斷那一輪的 cli_outcome 幾乎必在封存檔，所以要跨檔找；跨檔之後更早幾輪的 cli_outcome 也找得到，
+    而那幾輪的花費已經記過（done 或失敗收尾時累加），不界定的話這一輪的缺席（例如在讀不到的封存檔裡）會把更早那一輪的
+    花費再記一次。entry 沒有 started_at 或不是字串（界定不了是哪一輪）時兩個值都不取，與找不到走同一個出口：兩個值必須來自同一筆，
+    寧可少記一次花費也不重記。讀不到的封存檔是 None、略過（交給 started_at 界定擋住更舊的）。
 
     @param config runner 設定
-    @param entry queue 裡的 entry
-    @return (session_id, cost)：session_id 在那筆事件沒有值或找不到時回 entry 現有的 last_session_id（可能是 None）；
-        cost 找不到時是 None（不記）
+    @param entry queue 裡的 entry（用到 id、started_at、last_session_id）
+    @return (session_id, cost)：session_id 在那筆事件沒有值、找不到、或沒有 started_at 時回 entry 現有的 last_session_id
+        （可能是 None）；cost 在找不到或沒有 started_at 時是 None（不記）
     """
-    # STEP 01: 由新到舊找這個 entry 的第一筆 cli_outcome（壞行略過），兩個值取自同一筆
+    # STEP 01: 界定不了是哪一輪（沒有、或不是字串）就兩個都不取
+    # 這一輪開始的時間
+    started_at = entry.get("started_at")
+    if not started_at or not isinstance(started_at, str):
+        return entry.get("last_session_id"), None
+    # STEP 02: 由新到舊找這個 entry 的第一筆 cli_outcome（壞行、讀不到的檔略過），兩個值取自同一筆；它早於這一輪就代表這一輪的缺席
     for record in log_records_newest_first(config):
         if record is None or record.get("entry") != entry["id"] or record.get("event") != "cli_outcome":
             continue
+        if str(record.get("ts") or "") < started_at:
+            break
         return record.get("session_id") or entry.get("last_session_id"), record.get("cost_usd")
     return entry.get("last_session_id"), None
 
@@ -5512,6 +5902,443 @@ def reconcile_published_entries(config):
     return entry["id"]
 
 
+# read_merge_intent 的結果之一：沒有記錄
+MERGE_INTENT_MISSING = "missing"
+# read_merge_intent 的結果之一：讀得懂
+MERGE_INTENT_OK = "ok"
+# read_merge_intent 的結果之一：讀不懂（讀取失敗、不是 JSON、欄位不合；不等於沒有記錄）
+MERGE_INTENT_UNREADABLE = "unreadable"
+# 合併記錄裡必須是非空字串的欄位
+MERGE_INTENT_TEXT_FIELDS = ("repo_real", "git_dir", "branch_ref", "head_before", "target_ref", "target_sha", "written_iso")
+# 讀不懂的記錄寫進事件時，原始內容截的長度（字元）
+MERGE_INTENT_RAW_EXCERPT_CHARS = 500
+# git status --porcelain=v1 每一項開頭的狀態碼長度（XY 兩個字元）
+PORCELAIN_STATUS_CHARS = 2
+# git status --porcelain=v1 每一項路徑開始的位置（XY 再加一個空白）
+PORCELAIN_PATH_OFFSET = 3
+# worktree_status_paths 給改名／複製項目「原路徑」那一段的狀態碼（porcelain 對原路徑不給狀態碼）
+PORCELAIN_ORIGIN_STATUS = "origin"
+# 合併本身會讓檔案不存在的狀態碼：合併刪掉的（index 已記刪除）、兩邊都刪的衝突、改名的原路徑。其餘狀態碼的檔不存在＝有人刪的
+# ——衝突檔被刪時 porcelain 仍顯示 `AA`／`UU`，狀態碼本身看不出來，要配合「檔案在不在」判斷（git 2.50 實測）
+MERGE_ABSENT_STATUSES = ("D ", "DD", PORCELAIN_ORIGIN_STATUS)
+# 記錄在、MERGE_HEAD 不在而清掉記錄的事件名（detail：reason 是 no_merge_head 或 unreadable，另帶 record 或 raw／problem）
+MERGE_INTENT_CLEARED_EVENT = "merge_intent_cleared"
+# 自動收拾成功的事件名（detail：record）；不通知
+MERGE_RECOVERED_EVENT = "merge_recovered"
+# 不收拾（或收拾不完）而暫停之前記的事件名（detail：stage、detail，另帶 record 或 raw、mismatches／error／problems）；
+# 診斷包不收 merge-intent.json，記錄全文靠這筆事件
+MERGE_RECOVERY_HALTED_EVENT = "merge_recovery_halted"
+# 收拾時 git merge --abort 的子行程 log 名稱（不在 entry 脈絡：sessions/runner-<時間>-git-merge-abort-recover.log）
+MERGE_ABORT_RECOVER_LOG_NAME = "git-merge-abort-recover"
+# 暫停細節開頭給人的處理步驟（放最前面：通知在 300 字截斷）
+MERGE_MANUAL_STEPS = "確認沒有人在手動處理後，在 repo 執行 git merge --abort（或把合併做完），runner 下次重啟會清掉記錄"
+
+
+def is_finite_number(value):
+    """int 或 float（排除 bool）而且能當有限浮點數運算。
+
+    json.loads 會把 NaN／Infinity／1e400 解析成非有限 float，位數極多的整數轉 float 會 OverflowError——都不能拿來算時間；
+    只看型別的話會一路放行到時間比對，在減法或 `%d` 格式化拋例外，變成 runner crash 而不是「記錄讀不懂」。
+
+    @param value 任意值
+    @return bool
+    """
+    # STEP 01: 型別（bool 是 int 的子類別，用 type() 比對排除它）
+    if type(value) not in (int, float):
+        return False
+    # STEP 02: 轉得成 float 而且有限
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
+
+
+def merge_intent_problems(record):
+    """合併記錄格式不合的欄位名（空清單＝讀得懂）：缺欄位、型別錯、版本或 kind 不認得、時間不是有限數值。整數欄位排除 bool。
+
+    @param record json 解析出來的物件
+    @return 欄位名清單（頂層不是物件時是一個說明）
+    """
+    # STEP 01: 頂層要是物件
+    if not isinstance(record, dict):
+        return ["不是 JSON 物件"]
+    # STEP 02: 逐欄位（缺欄位也算不合）
+    # 各欄位是否合格
+    valid = {name: isinstance(record.get(name), str) and record.get(name) != "" for name in MERGE_INTENT_TEXT_FIELDS}
+    valid["version"] = type(record.get("version")) is int and record.get("version") == MERGE_INTENT_VERSION
+    valid["pid"] = type(record.get("pid")) is int
+    valid["kind"] = isinstance(record.get("kind"), str) and record.get("kind") in MERGE_KINDS
+    valid["entry"] = "entry" in record and (record["entry"] is None or isinstance(record["entry"], str))
+    valid["attempt"] = "attempt" in record and (record["attempt"] is None or type(record["attempt"]) is int)
+    valid["written_epoch"] = is_finite_number(record.get("written_epoch"))
+    return sorted(name for name, ok in valid.items() if not ok)
+
+
+def read_merge_intent(config):
+    """R0／R1：讀合併記錄並驗格式；讀不懂（讀取失敗、不是 JSON、缺欄位、型別錯）不等於沒有記錄。
+
+    @param config runner 設定
+    @return (status, record, raw, problem)：status 是 MERGE_INTENT_MISSING／OK／UNREADABLE；record 只在 OK 時有值；
+        raw 是原始內容摘要（壞位元組換成替代字元、截到 MERGE_INTENT_RAW_EXCERPT_CHARS，寫進事件用）；problem 是讀不懂的原因
+    """
+    # STEP 01: 讀原始位元組：不存在＝沒有記錄；其他讀取失敗（權限、路徑是目錄）＝讀不懂
+    try:
+        with open(state_path(config, MERGE_INTENT_NAME), "rb") as handle:
+            # 記錄的原始位元組
+            data = handle.read()
+    except FileNotFoundError:
+        return MERGE_INTENT_MISSING, None, "", ""
+    except OSError as exc:
+        return MERGE_INTENT_UNREADABLE, None, "", "讀取失敗: %s" % exc
+    # 原始內容（壞位元組換成替代字元）
+    text = data.decode("utf-8", errors="replace")
+    # 寫進事件的原始內容摘要
+    raw = text[:MERGE_INTENT_RAW_EXCERPT_CHARS]
+    # STEP 02: 解析（深度巢狀會拋 RecursionError，一樣算讀不懂）
+    try:
+        # 解析出來的物件（還沒驗欄位）
+        record = json.loads(text)
+    except (ValueError, RecursionError) as exc:
+        return MERGE_INTENT_UNREADABLE, None, raw, "不是合法的 JSON: %s" % exc
+    # STEP 03: 欄位
+    # 格式不合的欄位
+    bad = merge_intent_problems(record)
+    if bad:
+        return MERGE_INTENT_UNREADABLE, None, raw, "缺欄位或格式錯: %s" % "、".join(bad)
+    return MERGE_INTENT_OK, record, raw, ""
+
+
+def head_mismatches(config, record):
+    """HEAD 是不是還在記錄的分支、記錄的 sha 上（收拾前比對與收拾後驗證共用）；讀取失敗算不符。
+
+    @param config runner 設定
+    @param record 讀得懂的合併記錄
+    @return 不符項目的說明清單（以欄位名開頭）
+    """
+    # STEP 01: 與寫記錄時同一種讀法
+    # 不符項目的說明
+    mismatches = []
+    for field, args in MERGE_INTENT_HEAD_READS:
+        # 現在讀到的值與讀取錯誤
+        value, error = git_read(config, *args)
+        if value != record[field]:
+            mismatches.append("%s（記錄 %s，現在 %s）" % (field, record[field], value if value is not None else error))
+    return mismatches
+
+
+def read_merge_head_lines(git_dir):
+    """讀 MERGE_HEAD 檔的非空行（rev-parse 只看第一行；章魚合併會有多行）。
+
+    @param git_dir git 目錄
+    @return (lines, error)：讀不到時 lines 是 None
+    """
+    # STEP 01: 讀檔
+    try:
+        with open(os.path.join(git_dir, "MERGE_HEAD"), "r", encoding="utf-8", errors="replace") as handle:
+            return [line.strip() for line in handle.read().splitlines() if line.strip()], None
+    except OSError as exc:
+        return None, "讀不到 MERGE_HEAD: %s" % exc
+
+
+def merge_intent_identity_mismatches(config, record):
+    """R4 前半：同一個 repo、同一支分支、同一個 HEAD、同一個合併對象；讀取一律嚴格，失敗算不符。
+
+    repo_real 與 git_dir 擋的是 repo_dir 被換成另一個 clone（狀態可能一模一樣）；MERGE_HEAD 讀檔案本身、要恰一行。
+
+    @param config runner 設定
+    @param record 讀得懂的合併記錄
+    @return (mismatches, git_dir)：不符項目的說明清單（以欄位名開頭）；git_dir 是目前讀到的 git 目錄（讀不到是 None）
+    """
+    # STEP 01: repo 身分
+    # 不符項目的說明
+    mismatches = []
+    # repo_dir 的 realpath
+    repo_real = os.path.realpath(config["repo_dir"])
+    if repo_real != record["repo_real"]:
+        mismatches.append("repo_real（記錄 %s，現在 %s）" % (record["repo_real"], repo_real))
+    # 目前的 git 目錄與讀取錯誤
+    git_dir, error = git_read(config, "rev-parse", "--absolute-git-dir")
+    if git_dir != record["git_dir"]:
+        mismatches.append("git_dir（記錄 %s，現在 %s）" % (record["git_dir"], git_dir if git_dir is not None else error))
+    # STEP 02: 分支與 HEAD
+    mismatches = mismatches + head_mismatches(config, record)
+    # STEP 03: MERGE_HEAD 恰一行、等於記錄的合併對象
+    if git_dir is not None:
+        # MERGE_HEAD 檔的非空行與讀取錯誤
+        lines, error = read_merge_head_lines(git_dir)
+        if lines != [record["target_sha"]]:
+            mismatches.append("target_sha（記錄 %s，MERGE_HEAD %s）" % (record["target_sha"], "、".join(lines) if lines is not None else error))
+    return mismatches, git_dir
+
+
+def worktree_status_paths(config):
+    """列 git status 看得到的項目（改過、衝突、未追蹤）與各自的狀態碼；嚴格：指令失敗回錯誤，不可當成沒有路徑。
+
+    `git --no-optional-locks status --porcelain=v1 -z --untracked-files=all`：--no-optional-locks 等同 GIT_OPTIONAL_LOCKS=0，
+    status 不會順手刷新並寫回 .git/index（那會改掉 index 的時間，讓收拾前的比對失準）；-z 不加引號，改名／複製項目後面多一段
+    原路徑（一併收，狀態碼記成 PORCELAIN_ORIGIN_STATUS）。porcelain 的路徑一律相對 repo 根目錄（不是 repo_dir），根目錄另外嚴格讀。
+
+    @param config runner 設定
+    @return (top, entries, error)：repo 根目錄與 [(狀態碼 XY, 相對路徑)] 清單；失敗時前兩個是 None
+    """
+    # STEP 01: repo 根目錄
+    top, error = git_read(config, "rev-parse", "--show-toplevel")
+    if error is not None:
+        return None, None, error
+    # STEP 02: status
+    code, out, err = git(config, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    if code != 0:
+        return None, None, "git status 失敗: %s" % stderr_excerpt(err)
+    # STEP 03: 逐段解析（「XY 路徑」；X 或 Y 是 R／C 的項目，下一段是原路徑）
+    # (狀態碼, 相對路徑) 清單
+    entries = []
+    # status 輸出以 NUL 切開的各段
+    fields = [field for field in out.split("\0") if field]
+    # 下一段是不是原路徑
+    expect_origin = False
+    for field in fields:
+        if expect_origin:
+            entries.append((PORCELAIN_ORIGIN_STATUS, field))
+            expect_origin = False
+            continue
+        # 這一項的狀態碼（XY）
+        status = field[:PORCELAIN_STATUS_CHARS]
+        entries.append((status, field[PORCELAIN_PATH_OFFSET:]))
+        expect_origin = "R" in status or "C" in status
+    return top, entries, None
+
+
+def newer_worktree_paths(config, limit):
+    """git status 列出的路徑裡，時間晚於 limit（或讀不到時間）的那些，以及不該不見卻不見的那些。
+
+    檔案不存在時沒有時間可比：狀態碼在 MERGE_ABSENT_STATUSES（合併刪掉的、兩邊都刪的衝突、改名的原路徑）是合併本身造成的，
+    略過；其餘（衝突檔、合併新增的檔、沒動過的檔被刪）是有人刪的——1.1.2 第七批初版一律略過，人刪掉衝突檔之後照樣自動 abort，
+    刪除被還原而且不通知（codex silent-failure）。
+
+    @param config runner 設定
+    @param limit 時間上限（epoch 秒）
+    @return (newer, deleted, error)：比 limit 新的、被人刪掉的相對路徑清單；status 失敗時前兩個是 None
+    """
+    # STEP 01: 路徑與狀態碼
+    top, entries, error = worktree_status_paths(config)
+    if error is not None:
+        return None, None, error
+    # STEP 02: 逐一比時間（讀不到時間的算新：不知道不等於沒改）；不存在的依狀態碼分辨是不是合併造成的
+    # 比 limit 新（或讀不到時間）的路徑
+    newer = []
+    # 不是合併造成、卻不存在的路徑
+    deleted = []
+    for status, path in entries:
+        try:
+            if os.lstat(os.path.join(top, path)).st_mtime > limit:
+                newer.append(path)
+        except FileNotFoundError:
+            if status not in MERGE_ABSENT_STATUSES:
+                deleted.append(path)
+        except OSError:
+            newer.append(path)
+    return newer, deleted, None
+
+
+def merge_intent_timing_mismatches(config, record, git_dir):
+    """R4 後半：MERGE_HEAD 寫在合併視窗內、記錄沒超過年齡上限、index 與工作樹檔案都不比 MERGE_HEAD 新、合併留下的檔沒被刪。
+
+    合併視窗是 [written_epoch − 容差, written_epoch + GIT_TIMEOUT_SECONDS + 容差]：記錄在 git merge 之前寫，MERGE_HEAD 在
+    合併結束時寫。index 的時間在 status 之前取；有人 `git add`、改衝突檔，就會比 MERGE_HEAD 新；有人刪掉合併留下的檔（刪檔
+    不會改 index 的時間），見 newer_worktree_paths——那都是人在處理，不動。
+
+    @param config runner 設定
+    @param record 讀得懂的合併記錄
+    @param git_dir 目前的 git 目錄
+    @return 不符項目的說明清單（以欄位名開頭）
+    """
+    # STEP 01: MERGE_HEAD 的時間（讀不到就沒有基準，其餘時間比對無從比）
+    # 記錄寫下的時間
+    written = record["written_epoch"]
+    try:
+        # MERGE_HEAD 的時間（其餘時間比對的基準）
+        merge_head_mtime = os.stat(os.path.join(git_dir, "MERGE_HEAD")).st_mtime
+    except OSError as exc:
+        return ["merge_head_mtime（讀不到: %s）" % exc]
+    # 不符項目的說明
+    mismatches = []
+    if not written - MERGE_MTIME_TOLERANCE_SECONDS <= merge_head_mtime <= written + GIT_TIMEOUT_SECONDS + MERGE_MTIME_TOLERANCE_SECONDS:
+        mismatches.append("merge_head_mtime（MERGE_HEAD 寫於記錄之後 %d 秒，視窗 %d 秒）" % (merge_head_mtime - written, GIT_TIMEOUT_SECONDS))
+    # STEP 02: 年齡
+    # 記錄寫下至今的秒數
+    age = time.time() - written
+    if age > MERGE_RECOVERY_MAX_AGE_SECONDS:
+        mismatches.append("age（記錄寫於 %d 秒前，上限 %d 秒）" % (age, MERGE_RECOVERY_MAX_AGE_SECONDS))
+    # STEP 03: index（先取，status 之前）
+    # index 與工作樹檔案的時間上限
+    limit = merge_head_mtime + MERGE_MTIME_TOLERANCE_SECONDS
+    try:
+        if os.stat(os.path.join(git_dir, "index")).st_mtime > limit:
+            mismatches.append("index_mtime（index 比 MERGE_HEAD 新）")
+    except OSError as exc:
+        mismatches.append("index_mtime（讀不到: %s）" % exc)
+    # STEP 04: 工作樹檔案
+    newer, deleted, error = newer_worktree_paths(config, limit)
+    if error is not None:
+        mismatches.append("status（%s）" % error)
+    if newer:
+        mismatches.append("worktree_mtime（比 MERGE_HEAD 新: %s）" % preview_lines("\n".join(newer), DIRTY_LIST_PREVIEW_LINES))
+    if deleted:
+        mismatches.append("worktree_deleted（合併留下的檔被刪: %s）" % preview_lines("\n".join(deleted), DIRTY_LIST_PREVIEW_LINES))
+    return mismatches
+
+
+def halt_merge_recovery(config, stage, detail, facts):
+    """不收拾（或收拾不完）的出口：先記一筆帶記錄全文的事件，再以 integration_dirty 暫停。
+
+    診斷包不收 merge-intent.json，記錄全文與比對結果靠這筆事件（stage 分辨停在哪一關）。暫停在 CLI 之前、沒有佔呼叫序號，
+    不計入 CLI 後暫停計數；沒解除就每次重啟再停一次，照 enter_paused 的去重只通知一次。
+
+    @param config runner 設定
+    @param stage 停在哪一關（unreadable／merge_head_error／mismatch／abort_failed／verify_failed）
+    @param detail 暫停細節（處理步驟在前）
+    @param facts 寫進事件的其餘內容（record 或 raw、mismatches、error、problems）
+    @return enter_paused 的退出碼
+    """
+    # STEP 01: 事件
+    log_event(config, None, MERGE_RECOVERY_HALTED_EVENT, detail=dict(facts, stage=stage, detail=detail))
+    # STEP 02: 暫停
+    return enter_paused(config, "integration_dirty", detail)
+
+
+def clear_merge_intent(config, facts):
+    """R1／R3：刪記錄並記 merge_intent_cleared；刪失敗只有 remove_merge_intent 記的失敗事件（下次啟動再刪），照樣續跑。
+
+    @param config runner 設定
+    @param facts 事件 detail（reason 與記錄內容）
+    @return None
+    """
+    # STEP 01: 刪成功才記清掉
+    if remove_merge_intent(config) is None:
+        log_event(config, None, MERGE_INTENT_CLEARED_EVENT, detail=facts)
+
+
+def verify_recovered_merge(config, record):
+    """R6：abort 之後嚴格驗證 repo 回到合併前——MERGE_HEAD 不在、HEAD 與分支同記錄、git status 全空。
+
+    MERGE_HEAD 還在（或讀不到）：合併沒收完，保留記錄、暫停。MERGE_HEAD 不在：合併已結束、記錄沒用了，先刪（刪失敗只記事件，
+    下次啟動 R3 再刪）；其餘任一項不成立就暫停並列出來（例如 abort 不清的未追蹤檔）；全部成立記 merge_recovered（不通知）、續跑。
+
+    @param config runner 設定
+    @param record 讀得懂的合併記錄
+    @return None 表示續跑；否則是暫停的退出碼
+    """
+    # STEP 01: MERGE_HEAD 要確定不在
+    state, value = merge_head_state(config)
+    if state != MERGE_HEAD_ABSENT:
+        # MERGE_HEAD 的現況（給人看）
+        seen = "還在" if state == MERGE_HEAD_PRESENT else "讀不到（%s）" % value
+        return halt_merge_recovery(
+            config, "verify_failed", "git merge --abort 回報成功但 MERGE_HEAD %s，未續跑：先在 repo 跑 git status 查明、收拾後再等 runner 重啟" % seen,
+            {"record": record},
+        )
+    # STEP 02: 合併已結束，記錄沒用了
+    remove_merge_intent(config)
+    # STEP 03: HEAD、分支、工作樹
+    # 沒回到合併前的項目
+    problems = head_mismatches(config, record)
+    # git status 列出的路徑與讀取錯誤（根目錄這裡不用）
+    _top, entries, error = worktree_status_paths(config)
+    if error is not None:
+        problems = problems + ["status（%s）" % error]
+    elif entries:
+        problems = problems + ["工作樹不乾淨: %s" % preview_lines("\n".join(path for _status, path in entries), DIRTY_LIST_PREVIEW_LINES)]
+    if problems:
+        return halt_merge_recovery(
+            config, "verify_failed",
+            "已 abort 中斷的合併，但 repo 沒回到合併前，未續跑：看下列項目、確認後收乾淨（git status）再等 runner 重啟。%s" % "；".join(problems),
+            {"record": record, "problems": problems},
+        )
+    # STEP 04: 收拾完成
+    log_event(config, None, MERGE_RECOVERED_EVENT, detail={"record": record})
+    return None
+
+
+def recover_interrupted_merge(config):
+    """重啟時收拾上一輪合併途中被打斷留下的 MERGE_HEAD（1.1.2 第七批）；cmd_run 在 hold 檢查之後、pre-flight 之前呼叫。
+
+    上一輪的 run_recorded_merge 在合併之前寫了合併記錄；合併途中被打斷（SIGKILL、斷電、訊號剛好落在 git 退出之後、abort
+    之前）時記錄還在。這裡持 runner.lock——寫記錄的行程已經不在——依序：
+      R0 沒有記錄：什麼都不做（連 git 都不呼叫；人手動做的合併沒有記錄，交給前置作業的 MERGE_HEAD 守衛暫停）。
+      R1 記錄讀不懂：MERGE_HEAD 確定不在就刪記錄（原始內容摘要進事件）續跑；在或讀不到就不動 repo、保留記錄、暫停。
+      R2 嚴格讀 MERGE_HEAD（merge_head_state）：讀不到不等於不在——保留記錄、暫停。
+      R3 MERGE_HEAD 不在（記了沒合、合完沒清兩個窗）：刪記錄、記 merge_intent_cleared，交給既有守衛（前置作業照常檢查）。
+      R4 MERGE_HEAD 在：記錄與實況逐項比對（merge_intent_identity_mismatches、merge_intent_timing_mismatches），任一不符
+         就不動 repo、保留記錄、暫停，細節處理步驟在前、列出不符的欄位。
+      R5 全部吻合：git merge --abort；失敗保留記錄、暫停（細節附 stderr 摘要；index.lock 被占用時點名那個檔，runner 不刪它；
+         細節叫人排除原因後自己 abort——只排除原因的話，下次啟動在年齡上限內才會自動再試）。
+         記錄留到驗證之後才刪：abort 失敗時下次啟動還要靠它。
+      R6 事後驗證（verify_recovered_merge）。
+    所有暫停都是 integration_dirty、在 CLI 之前，不計入 CLI 後暫停計數；沒解除的話每次重啟再停一次、只通知一次。
+
+    @param config runner 設定
+    @return None 表示繼續啟動（沒有記錄、已清掉記錄、或已收拾乾淨）；否則是暫停的退出碼
+    """
+    # STEP 01: R0 讀記錄
+    status, record, raw, problem = read_merge_intent(config)
+    if status == MERGE_INTENT_MISSING:
+        return None
+    # STEP 02: R2 嚴格讀 MERGE_HEAD
+    state, value = merge_head_state(config)
+    if status == MERGE_INTENT_UNREADABLE:
+        # STEP 02.01: R1 記錄讀不懂：沒有合併就清掉續跑，其餘不動 repo
+        if state == MERGE_HEAD_ABSENT:
+            clear_merge_intent(config, {"reason": "unreadable", "problem": problem, "raw": raw})
+            return None
+        return halt_merge_recovery(
+            config, "unreadable", "合併記錄讀不懂，未自動收拾：%s。原因: %s%s" % (MERGE_MANUAL_STEPS, problem, "；MERGE_HEAD 讀不到: %s" % value if state == MERGE_HEAD_ERROR else ""),
+            {"raw": raw, "problem": problem},
+        )
+    if state == MERGE_HEAD_ERROR:
+        # STEP 02.02: 讀不到 MERGE_HEAD
+        return halt_merge_recovery(
+            config, "merge_head_error",
+            "讀不到 MERGE_HEAD，未自動收拾合併：先在 repo 跑 git status 查明（路徑、權限）；停在合併中的話，確認沒有人在手動處理後"
+            " git merge --abort（或把合併做完），runner 下次重啟會清掉記錄。錯誤: %s" % value,
+            {"record": record, "error": value},
+        )
+    if state == MERGE_HEAD_ABSENT:
+        # STEP 02.03: R3 記錄在、合併不在：清掉記錄，交給既有守衛
+        clear_merge_intent(config, {"reason": "no_merge_head", "record": record})
+        return None
+    # STEP 03: R4 逐項比對；任一不符就不動 repo
+    mismatches, git_dir = merge_intent_identity_mismatches(config, record)
+    if git_dir is not None:
+        mismatches = mismatches + merge_intent_timing_mismatches(config, record, git_dir)
+    if mismatches:
+        return halt_merge_recovery(
+            config, "mismatch", "合併記錄與 repo 現況不符，未自動收拾：%s。不符: %s" % (MERGE_MANUAL_STEPS, "；".join(mismatches)),
+            {"record": record, "mismatches": mismatches},
+        )
+    # STEP 04: R5 abort（記錄這時不刪）
+    # abort 全文的落檔路徑（runner 級命名：這時還沒佔 entry 的呼叫序號）
+    log_path = session_log_path(config, MERGE_ABORT_RECOVER_LOG_NAME)
+    # abort 的結果
+    code, _out, err = git(config, "merge", "--abort", log_path=log_path)
+    if code != 0:
+        # abort 失敗時給人的第一步：index.lock 被占用就點名那個檔（stderr 摘要的首行可能被長路徑截掉）。絕對路徑放在人工步驟
+        # 之後：放前面的話 repo 路徑一長，通知的 300 字截斷就把「自己 abort」那一步切掉（stub 驗收實測）
+        if "index.lock" in (err or ""):
+            action, where = "index.lock 被占用，確認沒有 git 在跑後刪掉它", "。index.lock 位置: %s" % os.path.join(git_dir, "index.lock")
+        else:
+            action, where = "先照下面的錯誤處理", ""
+        # 第二步一律叫人自己 abort：只排除原因、等重啟再試的話，超過 MERGE_RECOVERY_MAX_AGE_SECONDS 就以 age 不符暫停，
+        # 而且同原因不再通知——無人看管時超過 15 分鐘才處理是常態，照做的人會看到 runner 靜默停著
+        return halt_merge_recovery(
+            config, "abort_failed",
+            "自動收拾中斷的合併時 git merge --abort 失敗，未續跑：%s，再到 repo 執行 git merge --abort（或把合併做完），runner 重啟時會清掉記錄%s。錯誤: %s%s"
+            % (action, where, stderr_excerpt(err), log_ref(config, log_path)),
+            {"record": record, "error": stderr_excerpt(err)},
+        )
+    # STEP 05: R6 事後驗證
+    return verify_recovered_merge(config, record)
+
+
 def clear_entry_context(config):
     """entry 處理結束（任何結果）後清掉 cmd_run 佔號時設的 current_entry／current_attempt（1.1.2 第六批）。
 
@@ -5519,14 +6346,20 @@ def clear_entry_context(config):
     entry 迴圈外子行程，log 都會記成 `<上一個 entry>-<n>--<name>.log`（進那個 entry 的診斷包、參與它的取號），
     session_log_path 的 runner 級命名（`runner-<時間>-<name>.log`）永遠碰不到。清的時點：prepare_branch 衝突標 blocked
     之後、process_one_entry 返回之後，以及 cmd_run 的 finally（暫停、crash、停止訊號都經過它；那些路徑在清之前就已跑完
-    暫停／crash 流程，而兩者都不讀這兩個欄位）。
+    暫停／crash 流程）。1.1.2 第七批起 enter_paused 會讀這兩個欄位與 cli_spent（判斷是不是 CLI 之後的暫停），所以清的時點
+    必須在暫停／crash 流程之後——cmd_run 的 except 在 finally 之前執行，現況成立。
 
-    @param config runner 設定（就地移除兩個欄位；本來就沒有也不報錯）
+    一併清 process_one_entry 設的 cli_spent（1.1.2 第七批）：它綁 (entry, 呼叫序號)，佔號清掉之後本來就比對不上，清掉是讓
+    「CLI 之後」的判斷不依賴序號永不重複這個前提。
+
+    @param config runner 設定（就地移除三個欄位；本來就沒有也不報錯）
     @return None
     """
-    # STEP 01: 兩個欄位一起清（process_one_entry 以兩者同時存在判斷有沒有佔號）
+    # STEP 01: 佔號兩個欄位一起清（process_one_entry 以兩者同時存在判斷有沒有佔號）
     config.pop("current_entry", None)
     config.pop("current_attempt", None)
+    # STEP 02: CLI 後暫停的標記
+    config.pop("cli_spent", None)
 
 
 def cmd_run(config, args):
@@ -5552,6 +6385,8 @@ def cmd_run(config, args):
         if not lock.acquire():
             print("錯誤：已有另一個 runner 在執行（runner.lock 被持有）", file=sys.stderr)
             return EXIT_LOCKED
+        # STEP 01.03.01: 持鎖後、第一筆事件之前輪替 runner.log.jsonl（只有持鎖的 run 輪替；失敗記事件與 stderr、不中斷）
+        rotate_runner_log(config)
 
         processed = 0
         stalled_notified = False
@@ -5572,7 +6407,15 @@ def cmd_run(config, args):
             )
             return EXIT_PAUSED
 
-        # STEP 01.05: queue 裡的斷點 id 要能組成子行程 log 名稱（與 import-inventory 同一個判斷）。舊版匯入的壞 id 不擋的話，
+        # STEP 01.05: 上一輪合併途中被打斷留下的 MERGE_HEAD（1.1.2 第七批）：合併記錄與 repo 實況逐項吻合才自動 abort、續跑，
+        # 任一項不符就保持原狀、以 integration_dirty 暫停（見 recover_interrupted_merge）。放在 hold 檢查之後（鎖定中不動 repo）、
+        # pre-flight 之前：認證 smoke 會在 repo 目錄裡啟動 CLI，它做什麼 runner 管不到，比對要看的是上一輪留下的原狀；也在重啟
+        # 對帳之前（對帳要求乾淨工作樹）。這裡還沒佔呼叫序號，暫停不計入 CLI 後暫停計數
+        code = recover_interrupted_merge(config)
+        if code is not None:
+            return code
+
+        # STEP 01.06: queue 裡的斷點 id 要能組成子行程 log 名稱（與 import-inventory 同一個判斷）。舊版匯入的壞 id 不擋的話，
         # 要到前置作業組 log 名稱時才以 ValueError 冒出來、訊息不提斷點 id；放在 pre-flight 之前，連認證 smoke 都不做。
         # 走暫停（通知一次）而不是 exit 2：這是 queue 內容的問題，exit 2 在 launchd 下只會每 300 秒安靜重試、沒人知道。
         # queue 讀不到的交給 pre-flight 的 queue_corrupt 處理
@@ -5643,8 +6486,9 @@ def cmd_run(config, args):
         if code is not None:
             return code
 
-        # STEP 03: 主迴圈
+        # STEP 03: 主迴圈（每輪開頭先輪替 runner.log.jsonl：一個 run 可以連跑好幾天，只在啟動時輪替擋不住 current 長大）
         while True:
+            rotate_runner_log(config)
             if args.max_modules and processed >= args.max_modules:
                 log_event(config, None, "max_modules_reached", detail={"processed": processed})
                 set_runner_state(config, "idle")
@@ -5762,7 +6606,8 @@ def cmd_run(config, args):
         # 未預期例外：traceback 落檔 + 診斷包 + paused（去重、同簽名兩次即 hold），不 raise、不靜默
         return handle_runner_crash(config, exc)
     finally:
-        # 暫停、crash、停止訊號離開主迴圈時 entry 也結束了（這些路徑在這之前已跑完，都不讀 current_entry）
+        # 暫停、crash、停止訊號離開主迴圈時 entry 也結束了（這些路徑在這之前已跑完；enter_paused 讀 current_entry／cli_spent
+        # 判斷是不是 CLI 之後的暫停，所以只能在這裡、它們之後才清）
         clear_entry_context(config)
         lock.release()
 
@@ -5937,13 +6782,16 @@ def unblock_integration_tip(config):
 def unblock_runner(config):
     """解除 runner 級鎖定（hold）與鎖定所屬的暫停，讓下次啟動可以續跑。
 
-    清掉 hold 與簽名；下列暫停連原因一起清成 idle（1.1.2 第四批）——enter_paused 的去重比對 (原因, 簽名)，
+    清掉 hold、簽名與 CLI 後暫停計數；下列暫停連原因一起清成 idle（1.1.2 第四批）——enter_paused 的去重比對 (原因, 簽名)，
     只清簽名、留下原因的話，落盤的是 (原因, None)，之後同原因、不帶簽名、要人處理的暫停（遠端 tip 不符是
     integration_diverged、無簽名）跟它完全相同，被當成重複而永遠不通知：
       * 帶簽名的暫停（crash、整合分支推送失敗、ff-merge 環境類失敗、CLI 判出的 auth_expired）：簽名清掉之後原因已經不代表任何事件。
-      * 以 integration_diverged 鎖定的（HOLD_MERGE_RESULTS：ff-merge 後 HEAD 不符，無簽名、第一次就鎖）：原因與
+      * 以 integration_diverged 鎖定的（HOLD_MERGE_RESULTS：ff-merge 後 HEAD 不符，無簽名、第一次就鎖；以及 1.1.2 第七批
+        CLI 後暫停計數鎖定、最後一次剛好是發佈段切換整合分支或讀 HEAD 失敗的，同樣無簽名）：原因與
         遠端 tip 不符共用，留著就是上面那個洞；清掉不會漏掉任何東西——本機沒對齊的話下次前置作業以
         integration_local_ahead 鎖定並通知，遠端有變動的話以 integration_diverged 暫停並通知。
+    CLI 後暫停計數（post_cli_pause_count）一併歸零：計數鎖定的最後一次暫停必然是 CLI 之後那幾種（推送失敗、切換整合分支失敗、
+    ff-merge 環境類失敗、CLI 判 auth_expired、crash），都落在上面「回 idle」的分支。不歸零的話解除後下一次 CLI 後暫停又立刻鎖。
     integration_local_ahead 的鎖定原因留著：這個原因只有前置作業的本機領先檢查會產生，而且一律第一次就鎖，
     鎖定是新狀態、一定通知，留不留都不會被錯誤去重；留著讓下面的提醒（先對齊本機、必要時 --integration-tip）照實印出。
     其餘 integration 類的暫停原因（沒有鎖定的 master_conflict／integration_dirty／tip 不符）也留著，由
@@ -5951,7 +6799,7 @@ def unblock_runner(config):
     """
 
     def mutator(queue):
-        """清掉 hold 與簽名；上述幾種暫停一併回 idle。回傳 (原本是否 hold, 留下的暫停原因, 清掉的暫停原因)。"""
+        """清掉 hold、簽名與 CLI 後暫停計數；上述幾種暫停一併回 idle。回傳 (原本是否 hold, 留下的暫停原因, 清掉的暫停原因)。"""
         # STEP 01: 清之前先讀出判斷依據
         runner_state = queue.setdefault("runner_state", {})
         was_hold = bool(runner_state.get("hold"))
@@ -5959,9 +6807,10 @@ def unblock_runner(config):
         signed = normalized_signature(runner_state.get("crash_signature")) is not None
         # 是不是 HOLD_MERGE_RESULTS 那種以 integration_diverged 鎖定的暫停
         merge_hold = was_hold and runner_state.get("reason") == "integration_diverged"
-        # STEP 02: 清 hold 與簽名
+        # STEP 02: 清 hold 與簽名；CLI 後暫停計數歸零（同一次寫入）
         runner_state["hold"] = False
         runner_state["crash_signature"] = None
+        runner_state[POST_CLI_PAUSE_COUNT_FIELD] = 0
         # STEP 03: crash、帶簽名、以 integration_diverged 鎖定的暫停連原因一起回 idle
         cleared = None
         if runner_state.get("state") == "paused" and (runner_state.get("reason") == CRASH_REASON or signed or merge_hold):

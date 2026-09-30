@@ -133,15 +133,17 @@ def add_hard_checkpoint(fixture):
 def publish(fixture, kill_before_done):
     """真的跑一次發佈段（開 PR、ff-merge、推送整合分支）；kill_before_done 為真時在 done 寫回之前被殺。
 
-    先照 process_one_entry 的順序寫一筆 cli_outcome 事件——那是對帳時唯一找得到這一輪 session id 的地方。
+    先照 process_one_entry 的順序寫 entry 的 started_at（標 running 時寫）與一筆 cli_outcome 事件——後者是對帳時唯一找得到
+    這一輪 session id 的地方，前者界定哪一筆 cli_outcome 屬於這一輪（last_cli_outcome 只收不早於它的）。
 
     @param fixture build_fixture 的回傳值
     @param kill_before_done 是否在 finish_done_entry 之前模擬行程被殺
     @return None
     """
-    # STEP 01: 這一輪 CLI 的判讀事件
+    # STEP 01: 這一輪開始的時間（與 process_one_entry 標 running 同一個欄位），再寫這一輪 CLI 的判讀事件
     # runner 設定
     config = fixture["config"]
+    runner.mutate_queue(config, lambda queue: runner.find_entry(queue, ENTRY_ID).update(started_at=runner.now_iso()))
     runner.log_event(config, ENTRY_ID, "cli_outcome", attempt=1, session_id=CRASHED_SESSION_ID, cost_usd=CRASHED_ROUND_COST)
     # CLI 判讀結果
     outcome = {"structured": {}, "session_id": CRASHED_SESSION_ID, "cost": CRASHED_ROUND_COST}

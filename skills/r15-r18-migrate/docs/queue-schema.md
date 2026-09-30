@@ -20,7 +20,7 @@
 | `integration_branch` | 整合分支名稱；所有頁面 branch 從這個分支的 HEAD 切出，完成後 fast-forward merge 回去 |
 | `base_branch` | 最終要合併回去的正式分支（例如 `master`） |
 | `limits` | `{ entry_max_files, entry_max_lines, checkpoint_max_modules, checkpoint_max_lines, module_timeout_min, module_budget_usd }`——單個 entry 允許的最大檔數/行數、多少模組或多少行累積後自動開一個斷點、單模組跑多久算超時、單模組預算上限。這組值由 runner 啟動時從環境變數寫入，skill 執行期只讀不寫 |
-| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是這次暫停的簽名，給「同簽名連續第二次就鎖定」用：runner 未預期例外時是 `<例外類別>@<檔>:<行>`，整合分支推送失敗時（1.1.1）是 `integration_push_failed`，發佈段 ff-merge 環境類失敗（暫停原因 `ff_merge_env_failed`，1.1.2 第三批）是同一個字串 `ff_merge_env_failed`，hard 斷點開不起來（暫停原因 `checkpoint_open_failed`）是同一個字串 `checkpoint_open_failed`，CLI 呼叫後判出 `auth_expired`（1.1.2 第六批；pre-flight 認證 smoke 判出的不帶）是 `cli_auth_expired`，其餘暫停原因為 `null`（完整清單以 `runner.py` 裡所有帶 `signature=` 的 `enter_paused` 呼叫為準）；`hold`（1.1.0）為 `true` 表示 runner 鎖定——同簽名例外已發生兩次，或（1.1.1）第一次就必須人工確認的狀況：殘留行程、ff-merge 後 HEAD 不符、本機整合分支領先遠端——每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉；`reason` 是 integration 類時另需 `unblock --integration-tip`（見 `docs/environment.md`「整合分支守則」）。`state` 與 `hold` 的合法組合、誰設誰清見下方「runner_state：state 與 hold」 |
+| `runner_state` | `{ state, reason, since, pid, host, consecutive_failures, last_digest_date, crash_signature, hold, post_cli_pause_count }`；`state` 是 `idle` \| `running` \| `waiting_quota` \| `paused_for_review` \| `paused` 之一。`last_digest_date` 是每日摘要通知（`daily_digest`）最後送出的日期（`YYYY-MM-DD`），用來避免同一天重送；由 runner 寫入，非人工填。`crash_signature`（1.1.0）是這次暫停的簽名，給「同簽名連續第二次就鎖定」用：runner 未預期例外時是 `<例外類別>@<檔>:<行>`，整合分支推送失敗時（1.1.1）是 `integration_push_failed`，發佈段 ff-merge 環境類失敗（暫停原因 `ff_merge_env_failed`，1.1.2 第三批）是同一個字串 `ff_merge_env_failed`，hard 斷點開不起來（暫停原因 `checkpoint_open_failed`）是同一個字串 `checkpoint_open_failed`，CLI 呼叫後判出 `auth_expired`（1.1.2 第六批；pre-flight 認證 smoke 判出的不帶）是 `cli_auth_expired`，其餘暫停原因為 `null`（完整清單以 `runner.py` 裡所有帶 `signature=` 的 `enter_paused` 呼叫為準）；`hold`（1.1.0）為 `true` 表示 runner 鎖定——同簽名例外已發生兩次，或（1.1.1）第一次就必須人工確認的狀況：殘留行程、ff-merge 後 HEAD 不符、本機整合分支領先遠端，或（1.1.2 第七批）CLI 跑完之後連續暫停累計 3 次（不分原因與簽名，見 `post_cli_pause_count`）——每次啟動在 pre-flight 之前就靜默退出，直到 `runner.py unblock --runner` 清掉；`reason` 是 integration 類時另需 `unblock --integration-tip`（見 `docs/environment.md`「整合分支守則」）。`post_cli_pause_count`（1.1.2 第七批，int，缺欄位＝0）是「CLI 跑完之後的暫停」連續發生的次數，給跨簽名煞車用，誰寫誰清見下方同一節。`state` 與 `hold` 的合法組合、誰設誰清見下方「runner_state：state 與 hold」 |
 | `integration_tip_sha` | runner 每次 push 整合分支後寫入的 HEAD SHA。每次要處理新模組之前，runner 會把這個值跟遠端整合分支的實際 tip 比對；不同就代表有人在 runner 不知道的情況下動過整合分支，runner 會暫停並發通知，不會繼續往下處理。首次啟動時這個值是 `null`，runner 會直接把當下的遠端 tip 寫進來當基線。推送之後、寫回之前被中斷時，下次啟動的重啟對帳（1.1.2 第五批）在確認遠端多出來的正是某個 pending entry 的 commit 之後，與該 entry 的 done 一起補寫（條件見 environment.md「出錯時怎麼做」第 9 點）；不要用 `unblock --integration-tip` 代替它 |
 | `checkpoints[]` | 斷點清單，見下方「checkpoint 物件」 |
 | `modules[]` | entry 清單，見下方「entry 物件」 |
@@ -39,8 +39,8 @@
 | `state=waiting_quota` | `wait_until` | 等額度恢復期間 |
 | `state=paused_for_review` | `wait_for_release` | 等 hard 斷點放行期間 |
 | `state=paused` | `enter_paused`（唯一寫入點） | 任何暫停；同一次寫入一併寫 `crash_signature` 與 `hold` |
-| `hold=true` | `enter_paused` | `force_hold`（殘留行程、ff-merge 後 HEAD 不符／退不回去、本機整合分支領先遠端），或同簽名連續第二次；已經是 `true` 時之後的暫停一律保持 `true`（`hold = 上一次 hold or …`） |
-| `hold=false` | `unblock_runner`（`unblock --runner`，唯一清除點） | 同時清 `crash_signature` |
+| `hold=true` | `enter_paused` | `force_hold`（殘留行程、ff-merge 後 HEAD 不符／退不回去、本機整合分支領先遠端），或同簽名連續第二次，或 CLI 後暫停計數累計到門檻（`POST_CLI_PAUSE_HOLD_THRESHOLD`＝3，1.1.2 第七批）；已經是 `true` 時之後的暫停一律保持 `true`（`hold = 上一次 hold or …`） |
+| `hold=false` | `unblock_runner`（`unblock --runner`，唯一清除點） | 同時清 `crash_signature`、`post_cli_pause_count` 歸零 |
 
 讀取點：`cmd_run` 在 pre-flight 之前只看 `hold`（為真就記 `hold_active`、退出碼 3，**不看 `state`**）；`enter_paused` 讀上一次的 `hold` 決定這次要不要通知「新鎖定」；`unblock --integration-tip` 回報 `hold` 是否仍在；`status` 印出提示。
 
@@ -53,6 +53,19 @@
 | `idle` | `true` | 鎖定中先跑了 `unblock --integration-tip`（它把 integration 類暫停改成 `idle`、刻意不動 `hold`）。`state` 看起來沒事，但 runner 仍會在 pre-flight 之前退出，還要 `unblock --runner` |
 | `idle`／`running`／`waiting_quota`／`paused_for_review` | `false`／缺欄位 | 正常。runner 已經沒在執行、檔案卻還是 `running` 等三種，代表上一個行程被停掉或中斷；下次啟動直接覆寫 |
 | `running`／`waiting_quota`／`paused_for_review` | `true` | 程式不會產生：`hold` 為真時 `cmd_run` 在寫 `running` 之前就退出，而 `hold` 只在 `enter_paused`（同時寫 `paused`）時變真 |
+
+### post_cli_pause_count：CLI 之後的暫停計數（1.1.2 第七批）
+
+同簽名連續第二次鎖定只擋得住同一種失敗；CLI 跑完之後的幾種暫停（整合分支推送失敗、發佈段切換整合分支或讀 HEAD 失敗、ff-merge 環境類失敗、CLI 判出的 `auth_expired`、模組處理中的 crash）輪流出現時，每次 launchd 重啟都再燒一次完整模組。這個計數不看原因與簽名，連續累計到 3 就鎖定。
+
+| 動作 | 函式 | 條件與時機 |
+|---|---|---|
+| +1 | `enter_paused` | 這次暫停發生在這一輪 CLI 呼叫之後：`process_one_entry` 在呼叫 CLI 之前把 `(entry, 呼叫序號)` 記在行程內（`config["cli_spent"]`），`enter_paused` 比對它與目前佔號的 `(current_entry, current_attempt)` 完全相同才算。與 `paused`、`hold` 同一次寫入。CLI 之前的暫停（pre-flight、git 前置、依賴安裝、準備分支、斷點、`checkpoint_id_invalid`）不計也不寫；額度等待逾時不走暫停，也不計 |
+| 歸零 | `finish_done_entry` | 有模組完成（含重啟對帳補 done），與 done 同一次寫入 |
+| 歸零 | `unblock_runner`（`unblock --runner`） | 與清 `hold` 同一次寫入。`unblock <entry>`、`--integration-tip`、`import-inventory` 不動它 |
+| 讀 | `enter_paused` | 決定這次要不要鎖定；新鎖定的通知前綴優先序：第一次就鎖定的那幾種 ＞ 同簽名連續 ＞ 這個計數（「CLI 跑完後連續暫停 N 次（中間沒有模組完成）」）。`paused` 事件的 `detail` 帶 `cli_spent`、`post_cli_pause_count`、`post_cli_count_malformed` |
+
+邊界：欄位存在但不是 int（含 `true`／`false`、`null`）或是負數＝格式錯，下一次 CLI 後暫停直接以門檻計、鎖定並在通知寫明（讀不懂不等於 0）。`queue.json` 讀不到時計數不動不寫。暫停寫入本身失敗（磁碟滿、I/O 錯誤）時計數與 `paused` 一起沒寫，沿用 hold 寫不進去的通知；重啟後會多燒一輪 CLI（與同簽名煞車相同的既有語意）。與同簽名煞車同時成立時先到者鎖：推送失敗連兩次在第 2 次由同簽名先鎖（計數是 2）；鎖定後每次啟動在 pre-flight 之前就退出，不再累加。
 
 `crash_signature` 只由 `enter_paused`（寫這次的簽名或 `null`）與 `unblock --runner`（清成 `null`）寫；之後的 `set_runner_state("running")` 不清它，所以 `state=running` 時可能還留著上一次暫停的簽名。這不影響判斷：暫停去重的第二層只在 `state=paused` 時才比簽名（`runner_paused_for`），第一層用的是啟動當下存進 config 的值。
 
@@ -70,7 +83,7 @@
 | `status` | `pending` \| `opening` \| `opened` \| `failed` \| `released` \| `merged`（轉移見下方） |
 | `branch` | 這個斷點凍結出來的分支名稱；`opening` 時就已寫入（write-ahead，分支與 PR 可能還沒建） |
 | `pr_url` | 對應的 PR 連結；`status` 是 `opened` 但這裡是空字串＝連結未知，見 `pr_unverified` |
-| `pr_unverified` | `true`＝`gh pr create` 退出碼 0 卻沒印連結、再查也沒查到：runner 仍寫 `opened`、蓋章（閘門與 auto 門檻照常），但不知道 PR 有沒有真的開成。runner 啟動時、每完成一個模組後、hard 斷點等待放行期間（第 1、3、7、15…次輪詢，間隔倍增、上限 6 小時，1.1.2 第五批收尾）用 `gh pr list --head <branch>` 補查，查到就補上 `pr_url` 並改回 `false`；查詢失敗只記事件（`checkpoint_pr_verify_failed`），不改狀態（1.1.2 第五批階段三）。重新 `import-inventory` 會保留 |
+| `pr_unverified` | `true`＝`gh pr create` 退出碼 0 卻沒印連結，而且再查失敗而無法確認、或斷點是 soft／auto（再查確定沒有 open 的 PR 也算）：runner 仍寫 `opened`、蓋章（閘門與 auto 門檻照常），但不知道 PR 有沒有真的開成。**hard** 斷點再查確定沒有 open 的 PR 則是開啟失敗、不寫這個旗標（保持 `opening` 並暫停，05aeecf review）。runner 啟動時、每完成一個模組後、hard 斷點等待放行期間（第 1、3、7、15…次輪詢，間隔倍增、上限 6 小時，1.1.2 第五批收尾）用 `gh pr list --head <branch>` 補查，查到就補上 `pr_url` 並改回 `false`；查詢失敗只記事件（`checkpoint_pr_verify_failed`），不改狀態（1.1.2 第五批階段三）。補查不只看 `opened`：之後被 `release` 或判成 `merged` 的也照查、狀態不動，`merged` 用 `--state merged`、其餘用 `--state open`；`release` 之後 PR 才被合併的查不到（05aeecf review）。重新 `import-inventory` 會保留 |
 | `last_error` | 上一次開啟失敗的原因（hard 斷點保持 `opening` 時由暫停通知、`PROGRESS.md` 顯示）；開成功時清成 `null`。重新 `import-inventory` 會保留 |
 | `opened_at` / `last_remind_at` | 時間戳 |
 | `frozen_sha` | write-ahead 時凍結的整合分支 tip（1.1.2 第五批收尾 review）：cp 分支一律建在這裡、重試不跟著整合分支前進；補完 `opening` 時「已合併」只看它。重新 `import-inventory` 會保留 |
@@ -100,8 +113,8 @@
 | `opening` → `failed` | `mark_checkpoint_failed`（只在仍是 `opening` 時改） | `checkpoint_open_failed`，只限 soft／auto；hard 在同一個函式只記 `last_error`、狀態留在 `opening` |
 | `opened` → `merged` | `sync_merged_checkpoints` | `module_preflight` |
 | `opened`／`failed`／`opening` → `released` | `cmd_release` | `runner.py release <id>` |
-| `pr_unverified` → `true`／`false` | `persist_checkpoint_opened`（開成時照實寫） | `open_checkpoint` |
-| `pr_unverified` `true` → `false` | `refresh_unverified_checkpoint_prs`（補上 `pr_url`） | `cmd_run` 啟動時、每完成一個模組後、`wait_for_release` 輪詢時 |
+| `pr_unverified` → `true`／`false` | `persist_checkpoint_opened`（開成時照實寫；`find_or_create_checkpoint_pr` 回連結未知（c1）時是 `true`） | `open_checkpoint` |
+| `pr_unverified` `true` → `false` | `refresh_unverified_checkpoint_prs`（補上 `pr_url`；`opened`／`released`／`merged` 都補查，狀態不動） | `cmd_run` 啟動時、每完成一個模組後、`wait_for_release` 輪詢時 |
 
 `merged`、`released` 之後沒有任何轉移（`CHECKPOINT_PASSED_STATUSES`：人工閘門已過）；`failed` 只能被 `release`。
 

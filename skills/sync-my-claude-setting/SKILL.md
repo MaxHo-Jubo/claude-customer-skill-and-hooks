@@ -34,6 +34,7 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 | `scripts/` | `scripts/` | 目錄（排除 `*.bak`） |
 | `rules/` | `rules/` | 目錄（排除 `*.bak` 與 repo 專屬 `README.md`） |
 | `harness/` | `harness/` | 目錄（排除機器專屬檔，見下方安全規則） |
+| `agents/` | `agents/` | 目錄（排除 `*.bak`） |
 | `statusline-command.sh` | `statusline/statusline-command.sh` | 檔案 |
 | `~/.claude.json` → `mcpServers` | `mcp-servers.json` | 檔案（過濾 env） |
 
@@ -100,6 +101,7 @@ diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/hooks/
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/scripts/" "$TARGET/scripts/" || true
 # rules/ 額外排除 repo 專屬的 README.md（本機無此檔，不應列入差異或被刪）
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'README.md' "$SOURCE/rules/" "$TARGET/rules/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/agents/" "$TARGET/agents/" || true
 # harness/ 排除機器專屬檔（harness-diagnosis.md / handover-letter.md 不列入差異）
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
 ```
@@ -337,7 +339,7 @@ jq -r 'to_entries | map(select(.key | startswith("_") | not)) | .[].key' "$SOURC
 ### STEP 04: Commit（先不 push）
 
 **commit 前先跑全 repo 私有內容掃描**（`settings.json` 的過濾只覆蓋 7 個同步目標中的 1 個；
-其餘六個目錄是 `rsync` 原封鏡像，這一步是它們唯一的守門員）：
+其餘六個目錄是 `rsync` 原封鏡像，下面兩道掃描是它們唯一的守門員）：
 
 ```bash
 cd "$TARGET"
@@ -345,11 +347,18 @@ python3 ~/.claude/scripts/check-private-content.py || {
   echo "❌ 發現新增的私有內容，請先改成佔位符（<org>/<repo>、<TICKET>）再 commit"; exit 1;
 }
 git add -A
+# 憑證掃描（同 rules/common/security.md 的 pre-commit-scan；只列命中的檔名，不印憑證值）
+CRED_HITS=$(git diff --cached --name-only -E -G'://[^/:@[:space:]]+:[^@/[:space:]]+@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY')
+if [ -n "$CRED_HITS" ]; then
+  echo "❌ 疑似憑證，停止 commit。命中檔案："; echo "$CRED_HITS"; exit 1;
+fi
 git status
 ```
 
-掃描器只擋**新增**命中，現存命中由 `.private-content-baseline.tsv` 凍結（納入版控以追蹤清理進度）。
+私有內容掃描器只擋**新增**命中，現存命中由 `.private-content-baseline.tsv` 凍結（納入版控以追蹤清理進度）。
 確認某筆新增可公開時，用 `--write-baseline` 更新基線；不要為了通過而放寬 pattern。
+
+**兩道掃描分工不同，缺一不可**：`check-private-content.py` 只抓組織名／私有 repo／內部域名／本機路徑，**不抓憑證**（2026-09-29 用假樣本實測：連線字串內嵌密碼、`ghp_`、`sk-`、`AIza`、PEM 私鑰全部未命中）；憑證由上面的 `git diff --cached` 掃描負責。憑證掃描有命中就不 commit、回報檔名，並依 security.md 的 exposed 規則處理（撤銷、輪換），不要用基線放行。
 
 根據 STEP 01 的差異報告產生 commit message：
 
@@ -368,10 +377,10 @@ git commit -m "{message}"
 
 ### STEP 05: Review（commit-review chain）
 
-commit 成功後 PostToolUse hook 會算好 Tier 並指派 `commit-review` skill。**依 hook 帶入的 tier 執行，不要跳過**：
+commit 成功後 PostToolUse hook 會算好 Tier 並指派 `commit-review` skill。**依 hook systemMessage 帶入的 args 原樣執行，不要跳過**：
 
 ```
-Skill(commit-review) args: "tier=N target=HEAD"
+Skill(commit-review) args: "<hook 帶入的 args，例如 tier=2 target=HEAD engine=codex>"
 ```
 
 - **Tier 0（純文件同步）**：只發通知，直接進 STEP 06。
@@ -590,6 +599,6 @@ else:
 - `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）
 - `*.bak`／`*.bak-*`（日期／版本後綴備份，如 `pr-reviewer.md.bak-20260813`、`model-dispatch.md.bak-20260813`）／`*.bak[0-9]*`（無 dash 編號備份，如 `README.md.bak2`）雙向不同步；`.DS_Store` 等 macOS 系統垃圾檔不同步；`skills/synced/` 為 Claude Code 平台管理的 skill bundle 快取（UUID 命名，非使用者 skill）不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回
-- **push 在 review 之後（v1.6.0 起）**：STEP 04 只 commit，STEP 05 跑 review，STEP 06 才 push。這樣 review 修出的問題可以 `--amend` 收進同一個 commit，不必另開 fix commit 或改寫已發布歷史
+- **push 在 review 之後**：STEP 04 只 commit，STEP 05 跑 review，STEP 06 才 push。這樣 review 修出的問題可以 `--amend` 收進同一個 commit，不必另開 fix commit 或改寫已發布歷史
 - **review 修正先落回本機 `~/.claude/` 再 rsync 到 repo**（只改 repo 會被下次同步的本機舊版覆蓋掉）；`README.md`/`CATALOG.md`/`plugins/README.md` 為 repo 專屬，直接改 repo
 - 如果 `diff` 回報無任何差異，直接告知使用者「已同步，無需更新」並結束

@@ -22,7 +22,7 @@ version: 1.0.0
 
 ## 分析框架
 
-依序執行以下 6 步，每步產出一段結論：
+以下六個面向都要涵蓋：STEP 2 的案例不足時先停下補資料，其餘順序不拘；結論依「輸出格式」彙整，不必逐步各寫一段。
 
 ### STEP 1: 這是真問題嗎？
 
@@ -95,4 +95,4 @@ version: 1.0.0
 需求分析完成。是否將結論回寫到 {ISSUE_ID} 的 Jira comment？(y/n)
 ```
 
-若同意，使用 Atlassian MCP 工具 `addJiraComment` 將輸出格式的內容寫入 issue comment。
+若同意，使用 Atlassian MCP 的 Jira 留言工具（目前為 `addOrEditJiraIssueComment`，與 jira-release-sync 相同）將輸出格式的內容寫入 issue comment。

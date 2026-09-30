@@ -38,7 +38,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 - **args 含 tier** → 直接用（被動模式，不重算）。
 - **args 不含 tier** → 手動模式，執行 `bun ~/.claude/scripts/compute-tier.ts <target>`，讀取輸出的 `TIER=N`。
   - **exit code 非 0 → 停止並回報使用者**（通常是 ref 打錯），不得逕自採用任何 TIER 值。
-- **args 不含 engine 且 tier ≥ 2**（手動模式最常見情形）→ 執行 `bun ~/.claude/scripts/resolve-engine.ts`，讀取輸出的 `ENGINE=<agent|codex>`；`REASON=` 非空時原樣轉告使用者。**不得省略此步驟、逕自假設 codex 可用**——這是手動模式先前的缺口：被動模式由 hook 在上鎖當下探測，手動模式若只採 SKILL.md 文字上的預設值而不實際探測，codex 未安裝時會導致該次面向全部判定失敗（見 §3.2 exit 1），而非像被動模式一樣自動退回 agent。
+- **args 不含 engine 且 tier ≥ 2**（手動模式最常見情形）→ 執行 `bun ~/.claude/scripts/resolve-engine.ts`，讀取輸出的 `ENGINE=<agent|codex>`；`REASON=` 非空時原樣轉告使用者。**不得省略此步驟、逕自假設 codex 可用**：codex 未安裝時，未經探測就走 codex 會讓該次面向全部判定失敗（見 §3.2 exit 1），探測則會自動退回 agent。
 - target 解析不出 → fallback HEAD。
 - **engine 只影響 Tier 2/3 的面向 review 由誰執行**（§3.2 vs §3.3），其餘步驟（eslint、`/simplify`、修 Critical、blast radius、解鎖、通知）兩條路徑完全相同。Tier 0/1 不受 engine 影響。
 
@@ -90,13 +90,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 
 > **`engine=codex` 時**：本節的五面向 spawn 與 Tier 2 的 lite agent 合併為 §3.2 的一次 codex 執行（面向數 6），下方的 agent 對照表與 prompt 要求改由 runner 內建（`scripts/lib/codex-aspects.ts`），其餘步驟一字不變。下方那段「不得改用 review-pr 委派」的教訓對 codex 路徑同樣成立——那正是 codex 路徑不讓單一 codex 自行 spawn 六個 subagent 的理由。
 
-> **不得改用 `/pr-review-toolkit:review-pr` 委派**（2026-08-17 起）。該 command 有自己的 "Determine Applicable Reviews" 篩選（`commands/review-pr.md:36-43`），**傳五個 aspect 參數不等於跑五個面向**，決定權在被委派方；且該 command 的 workflow 明定用於 commit **之前**，預設 scope 是 `git diff`（未 commit 變更），在 commit 後跑會是空的。
->
-> 實測主證據：claude-mem observation 13128 記錄 Tier 3 新架構首次執行**只 spawn 3 個 agent**（缺 code-reviewer / pr-test-analyzer / type-design-analyzer，其中 code-reviewer 還是該 command 標記 Always applicable 的）。
->
-> 佐證（**不足以單獨成立**）：SubagentStop debug log 五面向完成次數為 15/14/13/11/10。該 log 78% 的 `agent_type` 為空且無 session_id，無法把任一行歸屬到某一輪 Tier 3，故落差同樣可能只是「部分 stop 記成空」——它支持縮水的存在，但證明不了哪一輪缺哪個面向。
->
-> 故改為本節逐一明列、由本 skill 直接 spawn。
+> **不得改用 `/pr-review-toolkit:review-pr` 委派**。該 command 有自己的 "Determine Applicable Reviews" 篩選（`commands/review-pr.md:36-43`），**傳五個 aspect 參數不等於跑五個面向**，決定權在被委派方（實測出現過只 spawn 3 個面向，連該 command 標記 Always applicable 的 code-reviewer 都缺）；且該 command 的 workflow 明定用於 commit **之前**，預設 scope 是 `git diff`（未 commit 變更），在 commit 後跑會是空的。故本節逐一明列、由本 skill 直接 spawn。
 
 1. **五個面向 agent 放在同一則訊息內平行發出**，全部**不得帶 `name` 參數**（帶 `name` 的 agent 結果不會自動回流，實測對照表見 `~/.claude/agents/pr-reviewer.md` §Agent 執行約定）。需要區分用途用 `description`：
 
@@ -139,7 +133,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 - 已回來的面向照常處理，不因此丟棄。
 - **降級時不得清 marker**（見 §5），改為回報使用者，由其決定補跑或手動解鎖。
 
-理由：面向靜默消失與「該面向沒發現問題」在輸出上完全無法區分，這正是 `~/.claude/CLAUDE.md` core-principles 的 `verify-the-observer` 所指的盲區——PR 1134 的兩個 CRITICAL（`.then()` 缺 `.catch()` 造成連線洩漏與需重啟 App）在 commit 層是 Tier 3 卻未被攔下，兩天後才由 PR full review 抓出。
+理由：面向靜默消失與「該面向沒發現問題」在輸出上完全無法區分，這正是 `~/.claude/CLAUDE.md` core-principles 的 `verify-the-observer` 所指的盲區。
 
 ### 3.2 codex 引擎路徑（`engine=codex` 時取代面向 spawn）
 
@@ -179,7 +173,7 @@ bun ~/.claude/scripts/codex-review.ts --tier=<N> --target=<ref>
 
 ### 5. 解鎖 marker（有 pending-review marker 時）
 
-**本步是唯一的自動解鎖路徑**（2026-08-17 起）。SubagentStop hook 已停止清除 marker——舊行為是「任一 `agent_type` 含 `review` 的子 agent 完成就清」，Tier 3 並行 6 個 agent 時第一個回來的就解除閘門，其餘面向與 Critical 修復形同虛設；full review 的面向 agent（`pr-1134-full-review` 等）也命中該 pattern 誤清。詳見 `hooks/subagent-review-clear.ts` 檔頭。
+**本步是唯一的自動解鎖路徑**。SubagentStop hook 不清除 marker：它只看得到單一子 agent 完成，判斷不了整輪 chain 是否跑完（詳見 `hooks/subagent-review-clear.ts` 檔頭）。
 
 清除前置條件（**兩項都滿足**才可執行）：
 
@@ -192,16 +186,13 @@ bun ~/.claude/scripts/codex-review.ts --tier=<N> --target=<ref>
 bun ~/.claude/scripts/clear-pending-review.ts --aspects-done=<N>
 ```
 
-自 2026-08-19 起這兩個前置條件**由腳本機械檢查**，不再只是本節的文字約定：marker 帶有
+這兩個前置條件**由腳本機械檢查**：marker 帶有
 `expectedAspects`（Tier 2 = 1、Tier 3 = 6），`N < expectedAspects` 時腳本 exit 1 拒絕解鎖並印出缺口。
 每次成功解鎖都追加一行到 `~/.claude/state/pending-review/unlock-audit.log`，可事後對帳。
-
-改動理由：此前腳本無條件 `unlink`，整套閘門是「上鎖機械、解鎖靠自覺」——而 commit-gate-guard 與
-stop-review-guard 的攔阻訊息還直接把解鎖指令印給模型，等於在最想結束回合的時刻遞上鑰匙。
-N 仍是自報（腳本無從驗證 agent 真的跑過），但把靜默省略換成顯式、留痕的斷言。
+N 是自報的斷言（腳本無從驗證 agent 真的跑過），audit log 讓它顯式留痕。
 
 - **§3.1 判定為降級（有面向沒回傳）時不得清**：先向使用者回報未回傳的面向名稱，取得同意後才用
-  `--force "<理由>"` 放行（會在 audit log 標記 `FORCE=`）。不得為了通過檢查而虛報 N。
+  `--force="<理由>"` 放行（等號形式；空格形式會被腳本拒絕。會在 audit log 標記 `FORCE=`）。不得為了通過檢查而虛報 N。
 - clear 腳本 idempotent，無 marker 也安全。
 - 防 brick 由既有三層負責，不需為此放寬上述條件：marker 逾 4 小時自動清除（`commit-gate-guard.ts`）、Stop hook per-session 有界計數（`MAX_STOP_BLOCKS=3`）、手動執行上述腳本（權威解鎖方式）。
 

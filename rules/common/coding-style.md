@@ -1,6 +1,6 @@
 # CODING-STYLE | for-AI-parsing
 
-> 專案特定規則見 CLAUDE.md CODE-STYLE section，以該處為準。
+> 專案特定規則見 CLAUDE.md `<code-style>`，以該處為準。
 
 <!-- 2026-08-04: 新增 ASYNC-INTERRUPT-EXITS 與對應 checklist 一行，來源為 ERPD-11967 的 fix commit 有 5/7 落在 async 中斷路徑；改前備份 coding-style.md.bak -->
 

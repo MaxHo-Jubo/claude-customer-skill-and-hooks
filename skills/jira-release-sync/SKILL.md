@@ -73,7 +73,7 @@ version: 1.5.0
 | weihuang | `712020:4628ffd9-efa5-42ac-8620-806c1b306a1a` |
 | Yenwen Chen 陳妍妏 | `712020:7c9fe298-14d9-4c4b-97ce-c545c1e401f4` |
 
-**留言必須用 HTML 格式送出**（`addOrEditJiraIssueComment` 的 `contentFormat: "html"`），mention 才會渲染成可點擊、會通知對方的標註。**2026-09-04 版原先寫的 `contentFormat: "adf"` 是錯的**——2026-09-17 實測：這支工具的 `contentFormat` 參數 schema 只接受 `"markdown"` / `"html"` 兩種 enum 值，沒有 `"adf"`，照原文件寫法會直接被參數驗證擋掉。正確做法是呼叫 `getContentFormatGuide(toolName: "addOrEditJiraIssueComment")` 取得 HTML 節點對照表，mention 節點語法是 `<span data-type="mention" data-user-id="ACCOUNT_ID">@顯示名稱</span>`，`data-user-id` 就是 accountId（含 `712020:` 前綴原樣帶入）。純文字/markdown 格式下 `[~accountid:...]` 這類 wiki markup 語法在這個 MCP 工具上未經驗證，不要用。
+**留言必須用 HTML 格式送出**（`addOrEditJiraIssueComment` 的 `contentFormat: "html"`），mention 才會渲染成可點擊、會通知對方的標註。這支工具的 `contentFormat` 參數 schema 只接受 `"markdown"` / `"html"` 兩種 enum 值（沒有 `"adf"`，傳了會被參數驗證擋掉）。正確做法是呼叫 `getContentFormatGuide(toolName: "addOrEditJiraIssueComment")` 取得 HTML 節點對照表，mention 節點語法是 `<span data-type="mention" data-user-id="ACCOUNT_ID">@顯示名稱</span>`，`data-user-id` 就是 accountId（含 `712020:` 前綴原樣帶入）。純文字/markdown 格式下 `[~accountid:...]` 這類 wiki markup 語法在這個 MCP 工具上未經驗證，不要用。
 
 HTML body 結構：主文一個 `<p>`，標註人員另起一個 `<p>`、每人一個 mention span：
 
@@ -221,7 +221,7 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
         - 成功 → 這筆視為完全成功
         - 失敗 → 記錄實際錯誤，標記部分成功
       - 沒找到（清單裡沒有 `name === "結案日"`，例如 ERPD 專案）→ 記錄「結案日欄位維持系統轉態當下日期，無法回填為 {release_date}；正確版本與日期已寫入留言內文」，不視為整體失敗
-   - **`customfield_10502` 這個 ID 只在 LVB 專案驗證過，不可寫死當全域常數**——不同 Jira 專案就算都有「結案日」欄位，custom field 的編號也可能不同，每次都要照 a 失敗後的 `settableFields` 動態找，不要跳過 a 直接猜 ID。
+   - **`customfield_10502` 這個 ID 只在 LVB 專案驗證過，不可寫死當全域常數**——不同 Jira 專案就算都有「結案日」欄位，custom field 的編號也可能不同，換到不在已知清單內的專案時，照上面 b 的做法（`getJiraIssueTypeMetaWithFields` 或問使用者）取得欄位 ID，不要直接猜。
 
 **不寫入 Fix Version 欄位（2026-09-03 使用者確認）**：使用者帳號沒有在 Jira 專案新增 Version 的權限，`release_version` 若尚未存在於該專案的 Version 清單，寫入一定失敗；就算已存在，這裡也刻意不去動這個欄位。版本資訊已完整包含在留言文字內，足夠追溯，Fix Version 由使用者自行視情況手動處理。
 
@@ -256,18 +256,18 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 ### `app-store` 模式
 
 - 掃描範圍是**整個 repo 的所有 commit**（不限特定作者），因為目的是同步「這個 App 版本上架了什麼」而非個人工作記錄。
-- `scan_commits.py` 用 `git merge-base --is-ancestor` 判斷「已上架」，已用本 repo 實際歷史驗證過一個真實邊界案例：LVB-8340 的 fix commit 自己的 committer date（2026-08-31T10:51）晚於 `update version to 1.50.33` 版號 commit 自己的日期（2026-08-28T11:32），若單純比日期會誤判成沒搭上 1.50.33、掉到 1.50.34；但它實際透過 PR #1143 在 1.50.33 真正 merge 進 master（PR #1144，2026-08-31T17:59）之前就先併入，ancestry 判斷正確給出 1.50.33。**這是本 skill 從日期比較改成 ancestry 判斷的直接原因，不要再改回日期比較。**
+- `scan_commits.py` 用 `git merge-base --is-ancestor` 判斷「已上架」；理由與實測邊界案例（LVB-8340 / 1.50.33）見上方核心判定規則 3，修改腳本時不要改回日期比較。
 - 版本判定只認「分支名稱純粹是版本號」的 merge commit（`Merge pull request #N from {org}/{X.Y.Z}`）；`LVB-8340/fix/...`、`chore/...` 這類 feature branch 的 merge commit 不會被誤認成版本釋出點。
 - `is_ancestor` 檢查以「每個候選 commit × 每個版本 merge，依時間序找第一個命中」提前 return，一般不會有效能問題；候選數與版本數都不多（單月頂多十幾筆）時可忽略。
 
 ### `luna` 模式
 
 - `scan_commits_luna.py` 掃描範圍**限定 author 是 Max_Ho**，跟 `app-store` 模式（不限作者）完全相反——因為 luna_web 是多人協作 repo，目的是同步「我自己」的哪些修改上架了，不是整個系統的發版紀錄。
-- `git log --author` 預設吃 BRE（basic regex），`max[_ ]?ho` 這種帶 `?` 量詞的 pattern 在 BRE 下 `?` 不會被解析成量詞、直接掃出 0 筆；腳本已加 `--extended-regexp` 修正，**這是 2026-09-04 實測踩過的坑，之後改這支腳本的 author 比對邏輯不要拿掉這個 flag**。
+- author 比對的 `max[_ ]?ho` pattern 依賴 `--extended-regexp`（原因見上方 `luna` 核心判定規則 2）；修改腳本的 author 比對邏輯時保留這個 flag。
 - 版本判定不是靠 merge commit subject 規則，是直接讀 release 分支上 `frontend-vYYYY.MM.DD` / `backend-vYYYY.MM.DD` 精確格式的 git tag；`load_component_releases()` 只認結尾就是 `v\d{4}\.\d{2}\.\d{2}` 的 tag 名稱，`-test`／`-2`／`.1` 這類尾綴或舊的無點格式（`frontend-v20260605`）一律排除，且會驗證 tag 指到的 commit 確實是 `release` 分支的祖先才採用（避免拿到打在其他分支或已失效的 tag）。
 - frontend／backend 分開上架、同一 Jira issue 橫跨兩者時「兩邊都上架才算完成、取較晚日期」這條規則，已用手動建立的合成 repo 驗證過三種情境（單一 commit 同時動兩邊路徑／同一 issue 拆兩筆 commit 各自只動一邊／commit 還沒被任何 tag 收進去），行為符合預期——2026-09-04 因為近 8 週真實樣本剛好沒出現橫跨兩個 component 的 issue，才特地補這個合成測試，不是憑空信任邏輯正確。
 - `pending` 與 `manual_review` 是刻意設計成「看得到卡在哪裡」而不是靜默丟掉：component 判定不出來的 commit 不會被排除在輸出之外，而是進 `manual_review` 附上原因；只上架一半的 issue 也不會被誤判成已完成，而是進 `pending` 附上已上架/尚未上架的明細。
-- **腳本每次執行都會先 `git fetch origin release:release`（fast-forward only），不會直接信任本地 release 分支**——2026-09-04 加入前，2026-09-17 實測踩過真坑：本地 release 落後 origin 158 個 commit，其中一次 `Merge pull request #11124 from compal-swhq/master`（master 併入 release）只有 fetch 後才看得到，導致當時整輪掃描漏掉 ERPD-12090 等已 merge 進 release 但用舊分支資料完全查不到蹤影的 issue（不是進 `pending`，是整個不出現在任何清單，因為 `git log release --author=...` 本身就讀不到那幾筆 commit）。fetch 只接受 fast-forward；本地有 origin 沒有的 commit 視為 diverge，腳本會直接中止讓人工排查，不靜默覆蓋本地分支。
+- **腳本每次執行都會先 `git fetch origin release:release`（fast-forward only），不會直接信任本地 release 分支**：本地 release 落後 origin 時，落後那段的 commit 用 `git log release --author=...` 根本讀不到，相關 issue 不會進 `pending`，而是整個不出現在任何清單。fetch 只接受 fast-forward；本地有 origin 沒有的 commit 視為 diverge，腳本會直接中止讓人工排查，不靜默覆蓋本地分支。
 
 ### 共用
 
