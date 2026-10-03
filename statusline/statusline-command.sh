@@ -192,6 +192,19 @@ format_reset_time() {
     epoch=$(iso_to_epoch "$iso_str")
     [ -z "$epoch" ] && return
 
+    format_epoch "$epoch" "$style"
+}
+
+# epoch 秒數格式化成時間字串
+# $1 = epoch 秒數，$2 = style（time / datetime / 其他=只顯示日期）
+# 輸出格式化後的字串到 stdout；epoch 為空時不輸出
+format_epoch() {
+    local epoch="$1"
+    local style="$2"
+    if [ -z "$epoch" ]; then
+        return
+    fi
+
     # 強制 C locale → am/pm 為英文（避免 zh_TW 變成「上午/下午」）
     case "$style" in
         time)
@@ -210,6 +223,9 @@ format_reset_time() {
 }
 
 # ── Extract JSON data ───────────────────────────────────
+# 本次重繪的當下時間（epoch 秒），pace / cache 計算共用
+now_ts=$(date +%s)
+
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 
 size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
@@ -361,28 +377,14 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         # STEP 05: 最後 assistant 回應時間（ISO 8601）
         t_last_reply=$(jq -s -r '[.[] | select(.type == "assistant") | .timestamp // empty] | last // ""' "$transcript_path" 2>/dev/null)
 
-        # STEP 06: token 加總（session 累計，所有 assistant turn 的 usage 加起來）
-        # 來源：transcript 每個 assistant message 都有 message.usage 四欄
-        t_usage_sum=$(jq -s '[.[] | select(.type == "assistant") | .message.usage // {}] |
-            {tin: (map(.input_tokens // 0) | add // 0),
-             tcc: (map(.cache_creation_input_tokens // 0) | add // 0),
-             tcr: (map(.cache_read_input_tokens // 0) | add // 0),
-             tout: (map(.output_tokens // 0) | add // 0)}' "$transcript_path" 2>/dev/null)
-        t_tok_in=$(echo "$t_usage_sum" | jq -r '.tin // 0' 2>/dev/null)
-        t_tok_cc=$(echo "$t_usage_sum" | jq -r '.tcc // 0' 2>/dev/null)
-        t_tok_cr=$(echo "$t_usage_sum" | jq -r '.tcr // 0' 2>/dev/null)
-        t_tok_out=$(echo "$t_usage_sum" | jq -r '.tout // 0' 2>/dev/null)
-
-        # STEP 07: 寫入 cache
+        # STEP 06: 寫入 cache
         jq -nc --arg name "$t_session_name" --arg tools "$t_tools" \
             --argjson agents "${t_agents:-0}" --arg todo "$t_todo" \
             --arg todo_current "$t_todo_current" \
             --arg last_reply "$t_last_reply" \
-            --argjson tin "${t_tok_in:-0}" --argjson tcc "${t_tok_cc:-0}" \
-            --argjson tcr "${t_tok_cr:-0}" --argjson tout "${t_tok_out:-0}" \
-            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current,last_reply:$last_reply,tok_in:$tin,tok_cc:$tcc,tok_cr:$tcr,tok_out:$tout}' > "$t_cache" 2>/dev/null
+            '{name:$name,tools:$tools,agents:$agents,todo:$todo,todo_current:$todo_current,last_reply:$last_reply}' > "$t_cache" 2>/dev/null
     else
-        # STEP 08: 讀取 cache
+        # STEP 07: 讀取 cache
         t_data=$(cat "$t_cache" 2>/dev/null)
         t_session_name=$(echo "$t_data" | jq -r '.name // ""' 2>/dev/null)
         t_tools=$(echo "$t_data" | jq -r '.tools // ""' 2>/dev/null)
@@ -390,68 +392,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
         t_todo=$(echo "$t_data" | jq -r '.todo // ""' 2>/dev/null)
         t_todo_current=$(echo "$t_data" | jq -r '.todo_current // ""' 2>/dev/null)
         t_last_reply=$(echo "$t_data" | jq -r '.last_reply // ""' 2>/dev/null)
-        t_tok_in=$(echo "$t_data" | jq -r '.tok_in // 0' 2>/dev/null)
-        t_tok_cc=$(echo "$t_data" | jq -r '.tok_cc // 0' 2>/dev/null)
-        t_tok_cr=$(echo "$t_data" | jq -r '.tok_cr // 0' 2>/dev/null)
-        t_tok_out=$(echo "$t_data" | jq -r '.tok_out // 0' 2>/dev/null)
     fi
-fi
-
-# ── Lifetime 5h aggregation (cached 30s) ──────────────
-# 聚合最近 5h 內有活動的所有 session 的 usage，對齊 5h quota window
-l5_tok_in=0 l5_tok_cc=0 l5_tok_cr=0 l5_tok_out=0
-l5_cache="/tmp/claude/statusline-lifetime-5h.json"
-
-l5_refresh=true
-if [ -f "$l5_cache" ]; then
-    l5_age=$(( $(date +%s) - $(stat -f %m "$l5_cache" 2>/dev/null || echo 0) ))
-    [ "$l5_age" -lt 30 ] && l5_refresh=false
-fi
-
-if $l5_refresh; then
-    now_ts=$(date +%s)
-    cutoff_ts=$(( now_ts - 5*3600 ))
-    # STEP 01: 先用 find -mmin 快速過濾 5h 內有改動的 transcript，避免掃 2000+ 檔
-    l5_files=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -mmin -300 2>/dev/null)
-
-    if [ -n "$l5_files" ]; then
-        # STEP 02: 把符合的檔案丟給 jq 聚合，只算 timestamp 在 cutoff 之後的 assistant turn
-        l5_sum=$(echo "$l5_files" | while IFS= read -r f; do
-            [ -f "$f" ] && printf "%s\0" "$f"
-        done | xargs -0 jq -s --argjson cutoff "$cutoff_ts" '
-            [.[]
-             | select(type == "object")
-             | select(.type == "assistant")
-             | select(
-                 (.timestamp // "")
-                 | split(".")[0] + "Z"
-                 | fromdateiso8601? // 0
-                 | . >= $cutoff
-               )
-             | .message.usage // {}] |
-            {tin: (map(.input_tokens // 0) | add // 0),
-             tcc: (map(.cache_creation_input_tokens // 0) | add // 0),
-             tcr: (map(.cache_read_input_tokens // 0) | add // 0),
-             tout: (map(.output_tokens // 0) | add // 0)}
-        ' 2>/dev/null)
-
-        if [ -n "$l5_sum" ]; then
-            l5_tok_in=$(echo "$l5_sum" | jq -r '.tin // 0')
-            l5_tok_cc=$(echo "$l5_sum" | jq -r '.tcc // 0')
-            l5_tok_cr=$(echo "$l5_sum" | jq -r '.tcr // 0')
-            l5_tok_out=$(echo "$l5_sum" | jq -r '.tout // 0')
-        fi
-    fi
-
-    jq -nc --argjson tin "${l5_tok_in:-0}" --argjson tcc "${l5_tok_cc:-0}" \
-        --argjson tcr "${l5_tok_cr:-0}" --argjson tout "${l5_tok_out:-0}" \
-        '{tok_in:$tin,tok_cc:$tcc,tok_cr:$tcr,tok_out:$tout}' > "$l5_cache" 2>/dev/null
-else
-    l5_data=$(cat "$l5_cache" 2>/dev/null)
-    l5_tok_in=$(echo "$l5_data" | jq -r '.tok_in // 0')
-    l5_tok_cc=$(echo "$l5_data" | jq -r '.tok_cc // 0')
-    l5_tok_cr=$(echo "$l5_data" | jq -r '.tok_cr // 0')
-    l5_tok_out=$(echo "$l5_data" | jq -r '.tok_out // 0')
 fi
 
 # ── Compact count（讀 PreCompact hook 寫入的檔案）────────
@@ -766,7 +707,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
 
     five_hour_pct=$(echo "$usage_data" | jq -r '.five_hour.utilization // 0' | awk '{printf "%.0f", $1}')
     five_hour_reset_iso=$(echo "$usage_data" | jq -r '.five_hour.resets_at // empty')
-    five_hour_reset=$(format_reset_time "$five_hour_reset_iso" "time")
+    five_hour_reset_epoch=$(iso_to_epoch "$five_hour_reset_iso")
+    five_hour_reset=$(format_epoch "$five_hour_reset_epoch" "time")
     five_hour_bar=$(build_bar "$five_hour_pct" "$bar_width")
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
     five_hour_pct_fmt=$(printf "%3d" "$five_hour_pct")
@@ -775,7 +717,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
 
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
     seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
-    seven_day_reset=$(format_reset_time "$seven_day_reset_iso" "datetime")
+    seven_day_reset_epoch=$(iso_to_epoch "$seven_day_reset_iso")
+    seven_day_reset=$(format_epoch "$seven_day_reset_epoch" "datetime")
     seven_day_bar=$(build_bar "$seven_day_pct" "$bar_width")
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
     seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
@@ -785,20 +728,11 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
 fi
 
 # ── Last reply line ─────────────────────────────────────
-# 最後 assistant 回應時間，超過 55 分鐘顯示 TTL expired 警告
+# 最後 assistant 回應時間（cache 是否過期改看 box 內的 cache 行）
 last_reply_line=""
-TTL_SECONDS=3300  # 55 分鐘
-if [ -n "$t_last_reply" ] && [ "$t_last_reply" != "null" ] && [ "$t_last_reply" != "" ]; then
-    reply_epoch=$(iso_to_epoch "$t_last_reply")
-    if [ -n "$reply_epoch" ]; then
-        reply_fmt=$(format_reset_time "$t_last_reply" "datetime")
-        last_reply_line="${dim}last reply${reset} ${white}${reply_fmt}${reset}"
-        now_epoch=$(date +%s)
-        elapsed=$(( now_epoch - reply_epoch ))
-        if [ "$elapsed" -ge "$TTL_SECONDS" ]; then
-            last_reply_line+=" ${red}TTL expired${reset}"
-        fi
-    fi
+reply_fmt=$(format_reset_time "$t_last_reply" "datetime")
+if [ -n "$reply_fmt" ]; then
+    last_reply_line="${dim}last reply${reset} ${white}${reply_fmt}${reset}"
 fi
 
 # ── Todo line ────────────────────────────────────────────
@@ -818,65 +752,100 @@ if [ -n "$t_todo" ] && [ "$t_todo" != "0/0" ]; then
     fi
 fi
 
-# ── Token usage lines（turn 與 session 累計）────────────
-# Opus 4.x 定價（USD per 1M tokens）
-#   in: $15、cc: $18.75（in×1.25）、cr: $1.50（in×0.10）、out: $75
-# 來源：Anthropic 官方 pricing；變動時改下方 awk 公式
-calc_cost() {
-    local in=$1 cc=$2 cr=$3 out=$4
-    awk -v i="$in" -v c="$cc" -v r="$cr" -v o="$out" \
-        'BEGIN { printf "%.2f", (i*15 + c*18.75 + r*1.5 + o*75) / 1000000 }'
+# ── Pace / cache / code lines（rate limit 下方，各一行）──
+# 5h / 7d 額度時間窗長度（秒），用來換算時間窗已過比例
+FIVE_HOUR_WINDOW_SEC=18000
+SEVEN_DAY_WINDOW_SEC=604800
+# 時間窗已過百分比低於此值（剛 reset）時 pace 樣本太少不具參考性，顯示 —
+PACE_MIN_ELAPSED_PCT=2
+# 四捨五入後的 pace×10 >= 此值（顯示 >= 0.8x）轉黃色
+# 紅色另以未四捨五入的 pace >= 1 判定（真的會在 reset 前用完才附見頂時間），所以 0.95~0.99 會顯示黃色的 1.0x
+PACE_WARN_TENTHS=8
+# prompt cache 剩餘秒數低於此值時過期時間改黃色
+CACHE_WARN_SEC=600
+
+# 單一時間窗的消耗速度片段：pace = 已用% ÷ 時間窗已過%
+# >= 1 代表照目前速度會在 reset 前用完，附上線性外推的見頂時間
+# $1 = label（5h / wk），$2 = 已用百分比，$3 = reset 時間（epoch 秒）
+# $4 = 時間窗長度（秒），$5 = 見頂時間格式（format_epoch 的 style）
+# 輸出帶色彩的片段到 stdout；reset 時間缺漏時不輸出
+# 全程整數運算：pace 以「×10」表示（四捨五入到 0.1），顯示時再補小數點
+render_pace_seg() {
+    local label=$1 used=$2 reset_epoch=$3 window=$4 style=$5
+    local elapsed pace10 color
+
+    # STEP 01: reset 時間缺漏就不輸出這段
+    if [ -z "$reset_epoch" ]; then
+        return
+    fi
+
+    # STEP 02: 時間窗已過秒數；剛 reset 樣本不足顯示 —
+    elapsed=$(( window - (reset_epoch - now_ts) ))
+    if [ $(( elapsed * 100 )) -lt $(( window * PACE_MIN_ELAPSED_PCT )) ]; then
+        printf "${dim}%s —${reset}" "$label"
+        return
+    fi
+
+    # STEP 03: pace = 已用% ÷ 已過%，依分級上色
+    pace10=$(( (used * window * 2 + elapsed * 10) / (elapsed * 20) ))
+    color="$green"
+    if [ "$pace10" -ge "$PACE_WARN_TENTHS" ]; then
+        color="$yellow"
+    fi
+    if [ $(( used * window )) -ge $(( elapsed * 100 )) ]; then
+        color="$red"
+    fi
+    printf "${white}%s${reset} ${color}%d.%dx${reset}" "$label" $(( pace10 / 10 )) $(( pace10 % 10 ))
+
+    # STEP 04: 會在 reset 前用完 → 附上線性外推的見頂時間
+    if [ "$color" = "$red" ]; then
+        printf "${red}→%s${reset}" "$(format_epoch $(( now_ts + (100 - used) * elapsed / used )) "$style")"
+    fi
 }
 
-# 顏色：成本分級（綠/黃/紅）
-color_for_cost() {
-    awk -v c="$1" 'BEGIN {
-        if (c+0 < 1) print "g"
-        else if (c+0 < 3) print "y"
-        else print "r"
-    }'
-}
-
-# 渲染一排 token 行：label in cc cr ≈$cost
-render_tok_line() {
-    local label=$1 in=$2 cc=$3 cr=$4 out=$5
-    local cost cost_color color_code
-    cost=$(calc_cost "$in" "$cc" "$cr" "$out")
-    cost_color=$(color_for_cost "$cost")
-    case "$cost_color" in
-        g) color_code="$green" ;;
-        y) color_code="$yellow" ;;
-        r) color_code="$red" ;;
-    esac
-    local in_fmt cc_fmt cr_fmt
-    in_fmt=$(format_tokens "$in")
-    cc_fmt=$(format_tokens "$cc")
-    cr_fmt=$(format_tokens "$cr")
-    printf "${dim}%-5s${reset} in=${white}%-7s${reset} cc=${white}%-7s${reset} cr=${white}%-7s${reset} ${dim}≈${reset}${color_code}\$%s${reset}" \
-        "$label" "$in_fmt" "$cc_fmt" "$cr_fmt" "$cost"
-}
-
-# 本 turn 數字（既有 line 138-141 提取的 current_usage）
-turn_tok_line=""
-if [ "$input_tokens" -gt 0 ] || [ "$cache_create" -gt 0 ] || [ "$cache_read" -gt 0 ] 2>/dev/null; then
-    # turn 沒有 output_tokens（statusline JSON 不含），先當 0
-    turn_tok_line=$(render_tok_line "turn" "$input_tokens" "$cache_create" "$cache_read" 0)
+# pace：stale 的 cache 資料已過時，算出來的速度沒意義，直接不顯示
+pace_line=""
+if [ -n "$rate_lines" ] && ! $usage_stale; then
+    pace_5h=$(render_pace_seg "5h" "$five_hour_pct" "$five_hour_reset_epoch" "$FIVE_HOUR_WINDOW_SEC" "time")
+    pace_wk=$(render_pace_seg "wk" "$seven_day_pct" "$seven_day_reset_epoch" "$SEVEN_DAY_WINDOW_SEC" "date")
+    # 兩段都沒有資料（reset 時間皆解析失敗）就不顯示空殼標籤
+    if [ -n "$pace_5h$pace_wk" ]; then
+        pace_line="${white}pace${reset}    ${pace_5h}  ${pace_wk}"
+    fi
 fi
 
-# Session 累計（從 transcript 加總）
-total_tok_line=""
-if [ -n "$t_tok_in" ] && { [ "$t_tok_in" -gt 0 ] || [ "$t_tok_cc" -gt 0 ] || [ "$t_tok_cr" -gt 0 ]; } 2>/dev/null; then
-    total_tok_line=$(render_tok_line "total" "$t_tok_in" "$t_tok_cc" "$t_tok_cr" "$t_tok_out")
+# cache / code 共用一次 jq；欄位以 \x1f 分隔（非空白字元，read 不會把連續空欄位合併）
+# prompt_cache 尚未觀測到 caching、或 stdin 沒有 cost 時，對應欄位留空、該行不顯示
+IFS=$'\x1f' read -r pc_warm pc_exp pc_hit pc_ttl pc_cold_tok code_add code_rm <<< "$(echo "$input" | jq -r '
+    (.prompt_cache // {} | if .caching_observed == true
+        then [(.warm // false), (.expires_at // 0), ((.hit_ratio // 0) * 100 | round), (.ttl // ""), (.recache_tokens_if_cold // 0)]
+        else ["", "", "", "", ""] end)
+    + (.cost // null | if . then [(.total_lines_added // 0), (.total_lines_removed // 0)] else ["", ""] end)
+    | map(tostring) | join("\u001f")' 2>/dev/null)"
+
+# cache：顯示絕對過期時間而非倒數——閒置時 statusline 不會重繪，倒數會停在舊值
+cache_line=""
+if [ -n "$pc_exp" ]; then
+    pc_left=$(( pc_exp - now_ts ))
+    if [ "$pc_warm" = "true" ] && [ "$pc_left" -gt 0 ]; then
+        pc_exp_color="$green"
+        if [ "$pc_left" -le "$CACHE_WARN_SEC" ]; then
+            pc_exp_color="$yellow"
+        fi
+        cache_line="${white}cache${reset}   ${white}${pc_hit}% hit${reset}  ${dim}${pc_ttl} ttl${reset} ${pc_exp_color}→$(format_epoch "$pc_exp" "time")${reset}"
+    else
+        cache_line="${white}cache${reset}   ${red}cold${reset} ${dim}next turn rebuilds${reset} ${white}$(format_tokens "$pc_cold_tok")${reset}"
+    fi
 fi
 
-# 5h lifetime 累計（跨 session）
-life_tok_line=""
-if { [ "$l5_tok_cc" -gt 0 ] || [ "$l5_tok_cr" -gt 0 ]; } 2>/dev/null; then
-    life_tok_line=$(render_tok_line "5h" "$l5_tok_in" "$l5_tok_cc" "$l5_tok_cr" "$l5_tok_out")
+# code：本 session 累計增刪行數
+code_line=""
+if [ -n "$code_add" ]; then
+    code_line="${white}code${reset}    ${green}+${code_add}${reset} ${red}-${code_rm}${reset}"
 fi
 
 # ── Build box content lines ─────────────────────────────
-# 區塊順序（自上而下）：rate limits → last reply → tokens
+# 區塊順序（自上而下）：rate limits → compact → ── → pace / cache / code
 # 每一行放進 box_rows 陣列，之後用 box drawing 包起來並配右側 history
 box_rows=()
 
@@ -896,14 +865,18 @@ if [ "$compact_count" -gt 0 ] 2>/dev/null; then
     fi
 fi
 
-# STEP 01: rate limits 與 token 統計間插入分隔線（sentinel: "__SEP__"）
-if [ -n "$turn_tok_line" ] || [ -n "$total_tok_line" ] || [ -n "$life_tok_line" ]; then
-    [ ${#box_rows[@]} -gt 0 ] && box_rows+=("__SEP__")
+# 分隔線下方的統計行，空的不放
+stat_rows=()
+for r in "$pace_line" "$cache_line" "$code_line"; do
+    if [ -n "$r" ]; then
+        stat_rows+=("$r")
+    fi
+done
+# 上下兩區都有內容才插入分隔線（sentinel: "__SEP__"）
+if [ ${#stat_rows[@]} -gt 0 ] && [ ${#box_rows[@]} -gt 0 ]; then
+    box_rows+=("__SEP__")
 fi
-
-[ -n "$turn_tok_line" ] && box_rows+=("$turn_tok_line")
-[ -n "$total_tok_line" ] && box_rows+=("$total_tok_line")
-[ -n "$life_tok_line" ] && box_rows+=("$life_tok_line")
+box_rows+=("${stat_rows[@]}")
 
 # ── History lines（右側）──────────────────────────────
 history_rows=()
@@ -920,31 +893,20 @@ if [ -n "$history_lines" ]; then
 fi
 
 # ── 計算 box 與 history 寬度 ─────────────────────────────
-# 計算基準：weekly 行（含中文日期 + ●○ 序列）在 Ghostty Monaspace Neon 下
-# 是最寬的內容行。我們取所有 box_rows 最大 visible_width，再加固定補正值，
-# 確保右邊框位置落在 terminal 實際 render 的最寬內容之後。
-#
-# 補正原理：Monaspace Neon 對 ●○ 等 Geometric Shapes 實測為 2 格，但由於
-# visible_width 內部計算與 terminal 實際 render 的 cell advance 有微小差異
-# （特別是帶色彩跟全形混合時），加 3 格緩衝確保右邊框不被內容擠掉。
-# 框線寬度強制以 limit rate（weekly 行）為基準
-# token 區塊維持不 pad 收合，由使用者稍後微調
+# 取所有 box_rows 最大 visible_width 當框內寬度，較短的行由繪製時補空白對齊
+# 各行寬度存進 box_widths 供繪製迴圈直接取用（visible_width 每次約 3 個 fork，不重算）
 left_content_width=0
-if [ -n "$rate_lines" ]; then
-    while IFS= read -r r; do
-        [ -z "$r" ] && continue
+box_widths=()
+for r in "${box_rows[@]}"; do
+    w=0
+    if [ "$r" != "__SEP__" ]; then
         w=$(visible_width "$r")
-        [ "$w" -gt "$left_content_width" ] && left_content_width=$w
-    done < <(printf "%b\n" "$rate_lines")
-fi
-# fallback: 沒 rate 資料時用所有 box_rows 最大寬
-if [ "$left_content_width" -eq 0 ]; then
-    for r in "${box_rows[@]}"; do
-        [ "$r" = "__SEP__" ] && continue
-        w=$(visible_width "$r")
-        [ "$w" -gt "$left_content_width" ] && left_content_width=$w
-    done
-fi
+    fi
+    box_widths+=("$w")
+    if [ "$w" -gt "$left_content_width" ]; then
+        left_content_width=$w
+    fi
+done
 
 # 邊框：│ + space + content + space + │ = content + 4
 box_outer_width=$(( left_content_width + 4 ))
@@ -1038,7 +1000,7 @@ if [ ${#box_rows[@]} -gt 0 ]; then
             continue
         fi
 
-        row_w=$(visible_width "$row")
+        row_w=${box_widths[$i]}
         pad=$(( left_content_width - row_w ))
         pad_str=""
         for ((j=0;j<pad;j++)); do pad_str+=" "; done

@@ -257,6 +257,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-10-03（三）: statusline 以 pace／cache／code 取代 token 預估金額
+
+- **`statusline-command.sh`**：框線分隔線下方的 `turn / total / 5h` token 與預估金額三行移除（單價寫死 Opus 4.x 並套用到所有模型、`turn` 行 output 恆為 0、訂閱方案下 USD 非實際花費）。改為三行：`pace`（已用% ÷ 時間窗已過%，≥1 時附線性外推見頂時間；stale 時不顯示）、`cache`（stdin 原生 `prompt_cache` 的命中率／TTL／過期絕對時間，過期顯示下一輪重建 token 數）、`code`（`cost.total_lines_added/removed`）。欄位先 dump 實際 stdin（2.1.288）核對存在才實作。
+- 連帶移除：每 30 秒 `find` + `jq -s` 掃 5h 內所有 transcript 的 lifetime 聚合（整支腳本最重的計算）、transcript token 加總、last reply 行寫死 55 分鐘的 `TTL expired`。box 寬度改取所有行最大寬（原本硬綁 weekly 行＋fallback 特例）；抽出 `format_epoch()` 供 `format_reset_time()` 共用。
+- 驗證：`bash -n`；隔離 HOME 跑 5 種 fixture（正常／爆量／剛 reset＋cache cold／stale／欄位全缺），pace 與見頂時間手算核對一致。
+- **`statusline/README.md`**：框線區塊說明改為現況（含新三行），修正 usage cache 實際路徑。
+
 ### 2026-10-03（二）: mods/ 納入同步 + ctx-handoff mod
 
 - **`sync-my-claude-setting` 1.9.0**：`mods/` 加入雙向同步清單。起因：上一筆同步讓 `settings.json` 帶著 `CLAUDE_CODE_PLUGIN_DIRS` 指向 `~/.claude/mods/ctx-handoff`，但 mod 本身不在同步範圍，換機 restore 後設定指向不存在的資料夾、mod 靜默不載入。外部來源 mod 比照外部 skill：只同步檔案、不帶 `.git/`（本機保留供與上游比對），出處寫在 mod 的 README，LICENSE 原樣保留。排除規則（`.git/`、`node_modules/`、`.claude-plugin/types/`）實測對巢狀路徑生效，mod 自己的 `types/` 契約檔不受影響，接收端被排除的檔案受 `--delete` 保護。

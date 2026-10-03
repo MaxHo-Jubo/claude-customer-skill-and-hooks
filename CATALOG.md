@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-03（新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -734,8 +734,9 @@
 - **顯示**：
   - 第一行：目錄 (branch*) │ Model │ ctx:N% │ ⏱ session │ thinking
   - 第二行：session name │ 工具統計（前 5 名×次數）│ agent 數量 │ todo 進度 │ config counts
-  - 第三～五行：current / weekly / extra usage 進度條（需 OAuth）
-- **快取**：rate limit 60 秒、transcript 3 秒、config 120 秒
+  - 框線區塊上半：current / weekly rate limit 進度條（stdin `rate_limits`）
+  - 框線區塊下半：`pace`（額度消耗速度與見頂時間）、`cache`（prompt cache 命中率／TTL／過期時間）、`code`（本 session 增刪行數），皆讀 stdin 原生欄位，零額外掃描
+- **快取**：rate limit 有原生資料時每次覆寫（stale fallback 用）、transcript 3 秒、config 120 秒
 - **詳細說明**：[`statusline/README.md`](statusline/README.md)
 
 ---

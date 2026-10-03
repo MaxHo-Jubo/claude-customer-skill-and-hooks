@@ -35,19 +35,29 @@ my-session │ ◐ Edit×5 Read×12 Bash×3 │ ⚡2 agents │ ☑ 3/7 │ 2md 
 - Todo 完成進度
 - Config counts（載入的 CLAUDE.md、rules、hooks 數量）
 
-**第三～五行** — Rate limits（從 statusline JSON stdin 原生取得，2.1.80+）：
+**框線區塊** — Rate limits 與消耗狀態（全部從 statusline JSON stdin 原生欄位取得）：
 
 ```
-current ● ● ● ○ ○ ○ ○ ○ ○ ○  30% ⟳ 5:42pm
-weekly  ● ● ○ ○ ○ ○ ○ ○ ○ ○  20% ⟳ mar 15, 3:00am
-extra   ○ ○ ○ ○ ○ ○ ○ ○ ○ ○  $0.00/$50.00 ⟳ apr 1
+┌───────────────────────────────────────────────────┐
+│ current ● ● ● ● ● ● ● ● ○ ○  80% ⟳ 2:54am         │
+│ weekly  ● ● ● ● ● ● ● ● ● ○  90% ⟳ oct 7, 10:54pm │
+├───────────────────────────────────────────────────┤
+│ pace    5h 4.0x→11:09pm  wk 2.1x→oct 4            │
+│ cache   91% hit  1h ttl →10:59pm                  │
+│ code    +214 -37                                  │
+└───────────────────────────────────────────────────┘
 ```
 
-- 5 小時滾動用量（current）
-- 7 天滾動用量（weekly）
-- Extra usage 月度費用（如有啟用）
+分隔線上方（`rate_limits`，2.1.80+）：
+- 5 小時滾動用量（current）、7 天滾動用量（weekly）
 - 進度條顏色：綠(<50%) → 橘(50-69%) → 黃(70-89%) → 紅(90%+)
 - 原生資料不可用時 fallback 至舊 cache 並標記 `(stale)`
+
+分隔線下方（2026-10-03 取代原本的 `turn / total / 5h` token 與預估金額三行）：
+- **pace**：已用% ÷ 時間窗已過%。<0.8 綠、0.8–1 黃、≥1 紅（照目前速度會在 reset 前用完，附線性外推的見頂時間）；剛 reset（時間窗已過 <2%）顯示 `—`；rate limit 為 stale 時整行不顯示
+- **cache**：`prompt_cache` 的命中率、TTL 與過期時間（顯示絕對時間而非倒數，因為閒置時 statusline 不重繪）；剩 10 分鐘內轉黃；過期顯示 `cold next turn rebuilds Nk`（下一輪需重建的 token 數）
+- **code**：本 session 累計增刪行數（`cost.total_lines_added/removed`）
+- 框寬取所有行最大顯示寬度，較短的行補空白對齊
 
 ## 安裝
 
@@ -78,7 +88,7 @@ chmod +x ~/.claude/statusline-command.sh
 
 | 快取檔案 | 刷新頻率 | 用途 |
 |----------|---------|------|
-| `/tmp/claude/statusline-usage-cache.json` | 每次更新（有原生資料時覆寫） | Rate limit 資料 |
+| `~/.claude/statusline-usage-cache.json` | 每次更新（有原生資料時覆寫） | Rate limit 資料（stale fallback 用） |
 | `/tmp/claude/statusline-transcript.json` | 3 秒 | Transcript 解析（工具/agent/todo） |
 | `/tmp/claude/statusline-config.json` | 120 秒 | Config counts（CLAUDE.md/rules/hooks） |
 
@@ -90,4 +100,6 @@ chmod +x ~/.claude/statusline-command.sh
 | transcript_path | statusline JSON stdin |
 | 工具統計、agent、todo、session name | transcript `.jsonl` 檔案解析 |
 | config counts | 直接掃描檔案系統 |
-| rate limits | statusline JSON stdin `rate_limits` 欄位（2.1.80+ 原生支援） |
+| rate limits、pace | statusline JSON stdin `rate_limits` 欄位（2.1.80+ 原生支援） |
+| cache 命中率／TTL／過期時間 | statusline JSON stdin `prompt_cache` 欄位（2.1.288 實測存在） |
+| 增刪行數 | statusline JSON stdin `cost.total_lines_added` / `total_lines_removed` |
