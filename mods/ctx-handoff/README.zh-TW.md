@@ -24,6 +24,8 @@
 
 門檻數值、閒置刷新節奏、背景工作偵測與原版相同；`/handoff-*` 指令名稱沿用原版，行為依上表調整。
 
+**程式風格範圍**：本改版新增或改寫的函式與宣告，依 fork 者的程式規範補上 JSDoc、STEP 註解、變數註解與 if 大括號；原作者未改動的函式（`runningWork`、`isRefreshOn`、`tool.call`、`prompt.submit`、`/handoff-refresh`）維持原樣，方便對照上游。
+
 原作者用 probe mod 實測過的基本元件（引自[原作者 README](https://github.com/cablate/ctx-handoff-mod)），本改版仍沿用：mod 可以執行 `/clear` 後接著 `prompt.submit`；對 102k token 的對話做 fork 時約 99.5% 的輸入 token 從快取讀取。
 
 ## 它會做什麼

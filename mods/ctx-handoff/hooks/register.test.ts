@@ -2,34 +2,57 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
+/**
+ * 組一份 fork 回傳用的 token 用量，全部算成快取讀取。
+ * @param tokens 讀取的 token 數
+ * @returns ModelUsage 形狀的物件
+ */
 const usage = (tokens: number) =>
   ({ input_tokens: 1, output_tokens: 1, cache_read_input_tokens: tokens, cache_creation_input_tokens: 0 })
 
-// 交接紀錄的測試路徑
+/** 交接紀錄的測試路徑 */
 const FILE = '/repo/.claude/PROJ-1234.md'
-// 檔案的修改時間：FRESH 一定晚於存檔開始，STALE 一定早於
+/** 檔案的修改時間：一定晚於存檔開始 */
 const FRESH = 1e15
+/** 檔案的修改時間：一定早於存檔開始 */
 const STALE = -1
 
+/** 測試世界的設定 */
 type World = {
+  /** $.session.usage 回報的 context token 數 */
   tokens: number
+  /** context 視窗大小，預設 1M */
   window?: number
+  /** $.store 的初始內容 */
   store?: Record<string, unknown>
+  /** $.agent.list 回報的子代理 */
   agents?: { id: string; status: string }[]
+  /** 存在的檔案：路徑 → mtimeMs；不在表內的路徑 fs.stat 會拋 ENOENT */
   files?: Record<string, number>
-  // 回傳 true 的 prompt 會被引擎擋下（resolve 成 { drop }），模擬其他 plugin 或 settings hook 攔截
+  /** 回傳 true 的 prompt 會被引擎擋下（resolve 成 { drop }），模擬其他 plugin 或 settings hook 攔截 */
   dropIf?: (text: string) => boolean
 }
 
-// 引擎底下的世界：用量、fork、/clear、送出、檔案，全部記下來
+/**
+ * 建立引擎底下的世界：用量、fork、/clear、送出、toast、檔案，全部記下來。
+ * @param on 測試的 on
+ * @param config 世界設定（見 World）
+ * @returns 時鐘與各種紀錄陣列
+ */
 const world = (on: On, { tokens, window = 1_000_000, store = {}, agents = [], files = { [FILE]: FRESH }, dropIf = () => false }: World) => {
+  /** fork 的 prompt */
   const forks: string[] = []
+  /** 執行過的指令 */
   const commands: string[] = []
+  /** 成功送出的 prompt（被 drop 的不算） */
   const submits: string[] = []
   // /clear 與送出依發生順序記錄，用來斷言「先 /clear 再送出」
   const events: string[] = []
+  /** 跳出的 toast 文字 */
   const toasts: string[] = []
+  /** 放回輸入框的文字 */
   const fills: string[] = []
+  /** 只在測試推進時才走的時鐘 */
   const clock = mock.clock(on)
   mock.store(on, store)
   on('session.id', () => ({ value: 'S1' }))
@@ -66,6 +89,7 @@ const world = (on: On, { tokens, window = 1_000_000, store = {}, agents = [], fi
     ? { result: {}, text: 'Workflow started in the background. Task ID: wf_abc123' }
     : { result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'bg123456' } })
   on('prompt.submit', (_$, e: { text?: string }) => {
+    /** 送出的 prompt 文字 */
     const text = e.text ?? ''
     if (dropIf(text)) {
       return { drop: 'blocked by test hook' }
@@ -77,27 +101,68 @@ const world = (on: On, { tokens, window = 1_000_000, store = {}, agents = [], fi
   return { clock, forks, commands, submits, events, toasts, fills }
 }
 
-// 模擬 session 啟動：預設為有人在 prompt 前的 REPL；isInteractive=false 代表 -p／SDK
+/**
+ * 模擬 session 啟動：預設為有人在 prompt 前的 REPL；isInteractive=false 代表 -p／SDK。
+ * @param $ 測試的 engine
+ * @param isInteractive 是否互動 session
+ * @returns session.start 的結果
+ */
 const boot = ($: Engine, isInteractive = true) =>
   $.session.start({ cwd: '/repo', surface: isInteractive ? 'terminal' : null, isInteractive })
 
+/**
+ * 以使用者身分執行 slash 指令。
+ * @param $ 測試的 engine
+ * @param name 指令名稱（不含 /）
+ * @param args 指令參數
+ * @returns command.run 的結果
+ */
 const command = ($: Engine, name: string, args = '') =>
   $.command.run({ command: name, args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
 
+/**
+ * 執行 /handoff-resume。
+ * @param $ 測試的 engine
+ * @returns command.run 的結果
+ */
 const resume = ($: Engine) => command($, 'handoff-resume')
 
-// 模擬使用者在輸入框送出訊息（composer），回傳 hook 鏈的結果（被攔下時含 drop）
+/**
+ * 模擬使用者在輸入框送出訊息（composer）。
+ * @param $ 測試的 engine
+ * @param text 訊息內容
+ * @returns hook 鏈的結果（被攔下時含 drop）
+ */
 const userSays = ($: Engine, text: string) =>
   $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false })
 
-// 讀 /handoff-status 的輸出（測試用的 $ 沒有 store，改從狀態指令觀察離席紀錄）
+/**
+ * 讀 /handoff-status 的輸出（測試用的 $ 沒有 store，改從狀態指令觀察離席紀錄）。
+ * @param $ 測試的 engine
+ * @returns 狀態文字
+ */
 const status = async ($: Engine) => (await command($, 'handoff-status')).text
 
+/**
+ * 模擬一個主對話回合結束。
+ * @param $ 測試的 engine
+ * @param turnId 回合 id
+ * @param answer 回合最後的可見文字
+ * @param reason 結束原因
+ * @returns turn.complete 的結果
+ */
 const endTurn = ($: Engine, turnId = 't1', answer = 'ok', reason: 'answer' | 'aborted' = 'answer') =>
   $.turn.complete({ answer, durationMs: 1, isAborted: reason === 'aborted', turnId, reason })
 
-// 模擬引擎跑起 mod 送出的存檔 prompt：turn.start 帶該 prompt，結束時回覆 answer
-// prompt 為 undefined（mod 沒送出）時 turn.start 認不出標記，後續斷言會失敗
+/**
+ * 模擬引擎跑起 mod 送出的存檔 prompt：turn.start 帶該 prompt，結束時回覆 answer。
+ * prompt 為 undefined（mod 沒送出）時 turn.start 認不出標記，後續斷言會失敗。
+ * @param $ 測試的 engine
+ * @param prompt mod 送出的存檔 prompt
+ * @param answer 存檔回合最後的可見文字
+ * @param reason 存檔回合的結束原因
+ * @returns void
+ */
 const runSave = async ($: Engine, prompt: string | undefined, answer = `存好了\nHANDOFF_FILE: ${FILE}`, reason: 'answer' | 'aborted' = 'answer') => {
   await $.turn.start({ text: prompt ?? '', turnId: 'save1' })
   await endTurn($, 'save1', answer, reason)

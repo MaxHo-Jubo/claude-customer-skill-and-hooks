@@ -24,6 +24,8 @@ A Claude Code mod that hands a long conversation over to a fresh one **automatic
 
 Threshold values, idle-refresh cadence and background-work detection are as upstream; the `/handoff-*` command names are kept, with behaviour adjusted as above.
 
+**Code style scope:** functions and declarations added or rewritten here follow the fork author's conventions (JSDoc, STEP comments, commented variables, braced `if`); upstream functions left untouched (`runningWork`, `isRefreshOn`, `tool.call`, `prompt.submit`, `/handoff-refresh`) keep their original style for easy comparison with upstream.
+
 ## What it does
 
 All three paths apply to the main conversation only. Subagent turns are ignored.
