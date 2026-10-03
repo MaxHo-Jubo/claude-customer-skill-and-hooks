@@ -1,8 +1,8 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.8.2
-last_modified: 2026-08-20
+version: 1.9.0
+last_modified: 2026-10-03
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -34,6 +34,7 @@ TARGET_MCP: ~/Documents/projects/claude-customer-skill-and-hooks/mcp-servers.jso
 | `scripts/` | `scripts/` | 目錄（排除 `*.bak`） |
 | `rules/` | `rules/` | 目錄（排除 `*.bak` 與 repo 專屬 `README.md`） |
 | `harness/` | `harness/` | 目錄（排除機器專屬檔，見下方安全規則） |
+| `mods/` | `mods/` | 目錄（function hooks plugin；排除各 mod 自帶的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`，四處 rsync 逐字相同，見 STEP 01） |
 | `agents/` | `agents/` | 目錄（排除 `*.bak`） |
 | `statusline-command.sh` | `statusline/statusline-command.sh` | 檔案 |
 | `~/.claude.json` → `mcpServers` | `mcp-servers.json` | 檔案（過濾 env） |
@@ -104,6 +105,15 @@ diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'README.md' 
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/agents/" "$TARGET/agents/" || true
 # harness/ 排除機器專屬檔（harness-diagnosis.md / handover-letter.md 不列入差異）
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/" || true
+# mods/ 用 rsync dry-run 比對：diff -x 只認 basename，排不掉巢狀的 .claude-plugin/types/。
+# 排除規則與旗標（-L）和 STEP 02 實際複製逐字相同；排除規則一律寫在指令上，不放進跨區塊的 shell 變數
+# （shell 狀態不跨指令保留，變數未定義時排除規則會靜默消失，zsh 下甚至把空字串當成 cwd 來源）。
+# .git/：mod 若從上游 clone，本機保留 git 歷史供與上游比對，不進 repo；node_modules/：依賴安裝產物；
+# .claude-plugin/types/：引擎載入 mod 時自動產生的型別檔（mod 自己的 types/ 契約檔照常同步）。
+# rsync -n 有差異時仍 exit 0，失敗就是真的錯誤，不可用 || true 吞掉
+if [ -d "$SOURCE/mods" ]; then
+  rsync -aniL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.git/' --exclude='node_modules/' --exclude='.claude-plugin/types/' "$SOURCE/mods/" "$TARGET/mods/" || { echo "❌ mods 比對失敗" >&2; exit 1; }
+fi
 ```
 
 對 `diff -rq` 回報有差異的檔案，逐一執行 `diff -u` 顯示具體內容差異。
@@ -239,7 +249,13 @@ rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$SOURCE/agents/" "$TARGET/agents/"
 # harness/ 排除機器專屬檔；--exclude 同時保護 repo 側該兩檔不被 --delete 清掉
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$SOURCE/harness/" "$TARGET/harness/"
+# mods/：排除規則與 STEP 01 逐字相同（理由見 STEP 01）；本機沒有 mods/ 時略過，避免 rsync 因來源不存在報錯中斷
+if [ -d "$SOURCE/mods" ]; then
+  rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.git/' --exclude='node_modules/' --exclude='.claude-plugin/types/' "$SOURCE/mods/" "$TARGET/mods/"
+fi
 ```
+
+> **mods 規則**：`~/.claude/mods/` 放 function hooks plugin（由 `settings.json` 的 `env.CLAUDE_CODE_PLUGIN_DIRS` 載入）。repo 端 `settings.json` 會帶著這個路徑，若 mod 不跟著進 repo，換機 restore 後設定指向不存在的資料夾、mod 靜默不載入，所以兩者必須一起同步。外部來源的 mod 比照外部 skill：只同步檔案、不帶 `.git/`，出處寫在該 mod 的 README（含原 repo、基準 commit、授權），LICENSE 原樣保留。
 
 > **harness 機器專屬檔規則**：`harness-diagnosis.md`（漏水診斷數據）與 `handover-letter.md`（交接信）為**機器專屬檔案，雙向不同步**——每台機器的診斷/交接只屬於那台機器，不互相覆蓋。repo main 現存的兩檔為 M4 機器快照，維持原樣；6 個通用制度檔（README、model-dispatch、judgment-matrix、delegation-templates、knowledge-protocol、commit-review-policy）正常同步。
 
@@ -291,6 +307,7 @@ Schema：
 | Hooks 清單 | `settings.json` → `hooks` 區段 | 解析 JSON，擷取每個 hook 的 type、matcher、command |
 | Scripts 清單 | `scripts/*.{sh,cjs,ts}` | 讀取每個檔案的前 5 行註解 |
 | Agents 清單 | `agents/*.md` | 讀取每個 agent 的 frontmatter（name、description、model、version） |
+| Mods 清單 | `mods/*/.claude-plugin/plugin.json` + `mods/*/README*.md` | 讀取 name、version、description，以及 README 開頭的原出處段落（外部來源 mod 必列來源與授權） |
 | Plugins 清單 | `settings.json` → `plugins` 區段 | 解析 JSON，擷取啟用/停用狀態 |
 | StatusLine | `statusline/statusline-command.sh` | 讀取檔頭註解 |
 | MCP Servers | `mcp-servers.json` | 解析 JSON，擷取每個 server 的 type、command、args |
@@ -455,6 +472,10 @@ diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$TARGET/hooks/
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$TARGET/scripts/" "$SOURCE/scripts/" || true
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'README.md' "$TARGET/rules/" "$SOURCE/rules/" || true
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
+# mods/：排除規則與正向 STEP 01 逐字相同；失敗不吞掉
+if [ -d "$TARGET/mods" ]; then
+  rsync -aniL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.git/' --exclude='node_modules/' --exclude='.claude-plugin/types/' "$TARGET/mods/" "$SOURCE/mods/" || { echo "❌ mods 比對失敗" >&2; exit 1; }
+fi
 
 # MCP Server 比對
 # 從 repo 的 mcp-servers.json 與本機 ~/.claude.json 的 mcpServers 比對
@@ -546,6 +567,10 @@ rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='README.md' "$TARGET/rules/" "$SOURCE/rules/"
 # harness/ 還原同樣排除機器專屬檔（repo 的診斷/交接是別台機器的，不還原到本機）
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
+# mods/ 還原：排除規則與正向 STEP 01 逐字相同，本機的 .git/ 與引擎產生的 types 受排除保護不會被 --delete 刪掉
+if [ -d "$TARGET/mods" ]; then
+  rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.git/' --exclude='node_modules/' --exclude='.claude-plugin/types/' "$TARGET/mods/" "$SOURCE/mods/"
+fi
 ```
 
 ### STEP R3: Restore MCP Servers
@@ -594,6 +619,7 @@ else:
 - `settings.json` 的 `permissions` 條目經內容級過濾（私有 repo 名／組織名／內部域名／`~/Documents` 等本機專案路徑），過濾後仍有殘留則 **fail loud 中止同步**；家目錄豁免走具名 allowlist（`_ALLOWED_HOME_DIRS`），未列入者一律攔截；被過濾的條目會逐條印出以便辨識誤濾
 - `settings.json` 的 `autoMode` 區段不同步、不還原（`mask_secrets.py` 的 `LOCAL_ONLY_KEYS`）——內含公司內部域名、私有 repo 名稱、本機路徑，而本 repo 為 **public**；新增同類本機專屬頂層欄位時一併加進該常數
 - `harness/harness-diagnosis.md` 與 `harness/handover-letter.md` 為機器專屬檔案，雙向不同步（每台機器的診斷/交接不互相覆蓋）
+- `mods/` 雙向同步但排除 `.git/`、`node_modules/`、`.claude-plugin/types/`（四處 rsync 指令逐字寫出，不用跨區塊 shell 變數）；來源端沒有 `mods/` 時略過該方向，避免 rsync 因來源不存在報錯中斷
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除（`*.bak` 與 `rules/README.md` 除外，見安全規則）
 - `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）

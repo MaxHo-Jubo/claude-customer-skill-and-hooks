@@ -3,7 +3,7 @@
     "ENABLE_LSP_TOOL": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_NO_FLICKER": "1",
-    "CLAUDE_CODE_PLUGIN_DIRS": "/Users/maxhero/.claude/mods/ctx-handoff"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/ctx-handoff"
   },
   "permissions": {
     "allow": [

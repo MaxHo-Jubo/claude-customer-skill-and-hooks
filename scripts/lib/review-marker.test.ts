@@ -4,9 +4,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-/** 測試用假 HOME：MARKER_DIR 在 import 時由 homedir() 決定，必須在 import 前改掉，不污染真實 state */
-const FAKE_HOME = mkdtempSync(join(tmpdir(), 'review-marker-home-'));
-process.env.HOME = FAKE_HOME;
+/**
+ * 注意：Bun 的 homedir() 不跟隨執行中修改的 process.env.HOME（2026-10-03 實測，改完仍回傳真實家目錄），
+ * 所以 MARKER_DIR 仍指向真實的 ~/.claude/state/pending-review，recordSeenHead 會寫進去。
+ * 檔名以臨時 repo 路徑為 key，不會碰到真實 repo 的紀錄；afterAll 負責刪掉本檔寫入的那一個。
+ * 需要完全隔離的 hook 層測試在 post-commit-review.test.ts，以子行程帶入 HOME。
+ */
 const { detectNewCommit, recordSeenHead, lastSeenHeadPath, commitWindowSec } = await import('./review-marker');
 
 /** 固定時效窗（秒）：無 duration_ms 時的退路值，與 review-marker.ts 的 NEW_COMMIT_WINDOW_SEC 一致 */
@@ -37,8 +40,8 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  rmSync(lastSeenHeadPath(repo), { force: true });
   rmSync(repo, { recursive: true, force: true });
-  rmSync(FAKE_HOME, { recursive: true, force: true });
 });
 
 describe('detectNewCommit', () => {

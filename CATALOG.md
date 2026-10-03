@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-03（`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-03（新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -126,12 +126,13 @@
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
 - **依賴**：git、claude-mem MCP、auto memory、`post_tool_error.py` hook（`PostToolUseFailure` 事件，2026-09-14 前誤掛 `PostToolUse` 從未寫入，見下方 Hooks 章節）、`summarize_errors.py`
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.8.2）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.9.0）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`
+- **mods（v1.9.0）**：`mods/` 雙向同步，排除各 mod 的 `.git/`、`node_modules/`、`.claude-plugin/types/`（四處 rsync 指令逐字寫出排除規則，不用跨區塊 shell 變數——變數未定義時排除會靜默消失）；比對用 `rsync -aniL` dry-run，與實際複製旗標及排除規則相同，失敗不以 `|| true` 吞掉；來源端沒有 `mods/` 時略過，避免 rsync 因來源不存在報錯中斷
 - **功能**：
-  1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開）
+  1. Diff — 細緻比對 `~/.claude/` 與 repo 的差異（檔案用 `diff -u`，目錄用 `diff -rq` 再逐一展開；`mods/` 用 rsync dry-run）
   2. Copy — 從本機複製到 Repo（檔案用 `cp`，目錄用 `rsync -av --delete` mirror 模式）；CLAUDE.md 複製前以 `sed` 移除 `<conn>` 區段（含個人連線資訊），再儲存為日期後綴版本
   3. Generate Docs — 自動掃描 skills/hooks/scripts/plugins，重新產生 `README.md` 與 `CATALOG.md`；**STEP 03.0 載入 `skills-sources.json`**（read-only），在重新產生時自動為登錄的外部 skill 補上「來源」欄位
   4. Commit — 根據差異報告產生 commit message 並 commit（**不 push**）
@@ -487,6 +488,23 @@
 - **依賴**：git repository
 
 ---
+
+## Mods
+
+> Function hooks plugin，放在 `~/.claude/mods/`，由 `settings.json` 的 `env.CLAUDE_CODE_PLUGIN_DIRS` 全域載入；隨 `/sync-my-claude-setting` 同步（v1.9.0 起）。
+
+### ctx-handoff — 自動交接（v0.1.0）
+
+- **位置**：`~/.claude/mods/ctx-handoff/`（`hooks/register.ts`、`hooks/register.test.ts`、`README.zh-TW.md`／`README.md`、`LICENSE`）
+- **來源**：[github.com/cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（基準 commit `f871109`，MIT，原作者 cablate）；修改內容見 mod README「與原版的差異」
+- **觸發**：互動 session 的回合結束且 context ≥ min(600k, 視窗 × 80%)；或閒置 55 分鐘（先 fork 刷新快取最多 3 次，第 4 次存離席交接，不 `/clear`）
+- **流程**：送出帶 `[ctx-handoff:save]` 標記的存檔 prompt → model 執行 `save-progress` 並回報 `HANDOFF_FILE: <絕對路徑>` → 驗證檔案存在且在本次存檔後寫入 → `/clear` → 新對話讀交接紀錄、回報現況、等指示；任一驗證失敗不 `/clear`，以 toast 告知
+- **不作用**：子代理回合；`session.start` 的 `isInteractive` 為 false（`claude -p`、SDK、r15 runner）時不自動交接、不閒置刷新；有背景 shell／workflow／子代理在跑時延後
+- **指令**：`/handoff-status`、`/handoff-now yes`、`/handoff-refresh on|off`、`/handoff-resume`、`/handoff-continue`
+- **依賴**：`save-progress` skill（交接紀錄位置與格式）、`jira` skill（讀 Jira 筆記／`handoff-{branch}.md`）
+- **失敗處理**：`prompt.submit` 被攔下（`{ drop }`）視為失敗；計時器啟動的工作失敗會 log + toast；連續 2 次存檔驗證失敗暫停該 session 自動交接；`/handoff-resume`／`/handoff-continue` 成功後才刪離席紀錄
+- **測試**：`claude plugin test ~/.claude/mods/ctx-handoff`（24 個，含先 `/clear` 再送出的順序、drop、失敗上限、離席攔截）
+- **未驗證**：存檔回合在真實 session 的辨識（測試環境模擬不出 `turn.start` 對 mod 送出 prompt 的文字）、閒置刷新是否延長 1 小時快取
 
 ## Hooks
 

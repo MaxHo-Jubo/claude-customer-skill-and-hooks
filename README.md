@@ -34,6 +34,8 @@
 │   ├── statusline-command.sh
 │   └── README.md
 ├── claude-mem-customize-TC/ # claude-mem 繁體中文化客製（apply-tc.sh 套用腳本、patch、翻譯對照表）
+├── mods/                  # Function hooks plugin（mod），由 settings.json 的 env.CLAUDE_CODE_PLUGIN_DIRS 載入
+│   └── ctx-handoff/       # 自動交接 mod（修改自 cablate/ctx-handoff-mod，MIT）
 ├── harness/               # 開發 Harness 制度檔（6 通用檔隨 sync 同步；harness-diagnosis.md 與 handover-letter.md 為機器專屬檔不同步，現存為 M4 機器快照）
 ├── rules/                 # 編碼規則（common + 語言特定）
 │   ├── common/            # 語言無關規則
@@ -72,7 +74,7 @@
 | commit-review | `/commit-review [target]` | 1.4.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.8.2 | 同步本機 Claude 設定到 Repo（v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.0 | 同步本機 Claude 設定到 Repo（v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
@@ -91,6 +93,14 @@
 | pr-reviewer | `/pr-reviewer <PR>` | 2.0.0 | PR full review — 主 session 直接 orchestrate，5 面向平行審查（規則合規／shallow bug scan／git blame 歷史／過去 PR 留言／既有註解遵循）+ Haiku 信心評分 + 自動 post 到 GitHub PR（summary review + inline Suggested Change）。v2.0.0 從 subagent 改為 skill，巢狀深度 2→1（巢狀 orchestrate 實測三次三種結果，見 SKILL.md 文末）；判定標準與 lite agent 共用 `references/review-spec.md` |
 
 > **載入狀態**：`ai-md` / `humanizer-zh-tw` 設為 `user-invocable-only`（保留指令但不主動推薦）；`upgrade-to-status` / `method-refactor` / `jira-acceptance` / `claude-max-quota` / `explore-report` / `plan-and-execute` / `spec-design` / `spec-to-e2e-test` / `test-module` 設為 `off`（完全隱藏，2026-07-25 清理）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
+
+## Mods 一覽
+
+Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 `settings.json` 的 `env.CLAUDE_CODE_PLUGIN_DIRS` 全域載入。與 `settings.json` 一起同步，換機 restore 後設定與 mod 同時存在。
+
+| Mod | 版本 | 用途 | 來源 |
+|-----|------|------|------|
+| ctx-handoff | 0.1.0 | 互動 session 的 context 達 600k（或視窗 80%）時跑 `save-progress` 寫交接紀錄 → 驗證檔案寫好 → `/clear` → 新對話讀交接紀錄接續；閒置 55 分鐘刷新快取最多 3 次，之後存離席交接；`-p`／SDK 等非互動 session 不自動交接。指令 `/handoff-status`、`/handoff-now yes` 等，詳見 [`mods/ctx-handoff/README.zh-TW.md`](mods/ctx-handoff/README.zh-TW.md) | 修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（commit `f871109`，MIT） |
 
 ## Hooks 一覽
 
@@ -246,6 +256,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-03（二）: mods/ 納入同步 + ctx-handoff mod
+
+- **`sync-my-claude-setting` 1.9.0**：`mods/` 加入雙向同步清單。起因：上一筆同步讓 `settings.json` 帶著 `CLAUDE_CODE_PLUGIN_DIRS` 指向 `~/.claude/mods/ctx-handoff`，但 mod 本身不在同步範圍，換機 restore 後設定指向不存在的資料夾、mod 靜默不載入。外部來源 mod 比照外部 skill：只同步檔案、不帶 `.git/`（本機保留供與上游比對），出處寫在 mod 的 README，LICENSE 原樣保留。排除規則（`.git/`、`node_modules/`、`.claude-plugin/types/`）實測對巢狀路徑生效，mod 自己的 `types/` 契約檔不受影響，接收端被排除的檔案受 `--delete` 保護。
+- **新增 `mods/ctx-handoff`**：修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（基準 `f871109`）。交接內容改由 `save-progress` 產生並寫進 Jira 筆記／`handoff-{branch}.md`，`/clear` 前驗證檔案確實在本次存檔後寫入；`session.start` 的 `isInteractive` 為 false（`claude -p`、SDK、r15 runner）時不自動交接、不閒置刷新。`claude plugin test` 24 個全過；存檔回合在真實 session 的辨識尚未實測（見 mod README 限制段）。
+- **Tier 3 review（engine=agent，codex 額度用完改由 Claude subagent 6 面向）後修正**：sync skill 的 `MODS_EXCLUDES` 跨區塊變數在各指令區塊未定義（照原文執行時排除規則消失，restore 會刪掉本機 mod 的 `.git/`；zsh 下空字串會把 cwd 當來源）→ 改為四處逐字寫出；mod 對 `prompt.submit` 的 `{ drop }` 結果視為失敗、計時器工作加統一錯誤出口、連續失敗上限、離席紀錄成功後才刪；測試 17 → 24，7 個突變全部轉紅；`settings.json` 的 `CLAUDE_CODE_PLUGIN_DIRS` 改用 `~` 開頭，換機使用者名稱不同也能載入。
+- **`scripts/lib/review-marker.test.ts`**：Bun 的 `homedir()` 不跟隨執行中修改的 `HOME`（實測），原本的「假 HOME」無效，測試會把 `.lasthead` 寫進真實 `~/.claude/state/pending-review/`；改為 afterAll 刪除本檔寫入的紀錄並修正註解（hook 層測試以子行程帶入 HOME，本來就隔離）。
 
 ### 2026-10-03: save-progress 交接紀錄改寫進 Jira 筆記 + jira 讀 branch 交接紀錄 + post-commit-review 支援 `-q` commit + r15-r18-migrate 部署試點後修正
 
