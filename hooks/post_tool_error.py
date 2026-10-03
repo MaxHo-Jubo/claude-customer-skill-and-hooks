@@ -30,18 +30,27 @@ from pathlib import Path
 # Max characters to store from error output (keeps the log lean)
 ERROR_TRUNCATE = 500
 
-# skill 目錄路徑 pattern，用於從 tool_input 推斷 active skill
-SKILL_PATH_RE = re.compile(r"/skills/([^/]+)/")
+# skill 目錄路徑 pattern，用於從 tool_input 推斷 active skill；
+# 名稱限定字元集，避免 `cd .../skills/x && cat ...` 或 `skills/$d/` 被整串吃成 skill 名；
+# 名稱後接任何非名稱字元即結束（`skills/x && ...`、`skills/x; ...` 都要認得）；
+# 名稱不含 `.`，`skills/skill-rules.json` 這類檔案不算 skill
+SKILL_PATH_RE = re.compile(r"/skills/([\w-]+)(?![\w.-])")
 # hook/script 路徑 pattern
 HOOK_PATH_RE = re.compile(r"/(?:hooks|scripts)/([^/]+?)(?:\.\w+)?$")
 # Bash 失敗時 error 欄位開頭的 exit code 格式（如 "Exit code 42\nboom"）；其他工具沒有
 EXIT_CODE_RE = re.compile(r"^Exit code (\d+)")
 
 
-def infer_context(tool_input: dict, tool_name: str) -> str:
+def infer_context(tool_input: dict, tool_name: str, cwd: str | None) -> str:
     """
-    從 tool_input 推斷當前操作的 context（skill 名稱或檔案路徑）。
-    優先序：skill 目錄 > hook/script 名稱 > 檔案路徑摘要 > unknown
+    從 tool_input、tool 名稱與工作目錄推斷當前操作的 context（skill／hook／MCP server／檔案路徑／repo）。
+    優先序：skill 目錄 > hook/script 名稱 > MCP server > 檔案路徑摘要 > 工作目錄 > unknown
+    hook 輸入不帶「目前在哪個 skill」，所以多數 Bash/MCP 失敗只能歸到 repo 或 MCP server 層級。
+
+    @param tool_input 失敗 tool 的輸入參數
+    @param tool_name  tool 名稱（MCP 工具格式為 mcp__<server>__<tool>）
+    @param cwd        hook 輸入的工作目錄，可能缺漏（None）或為空字串
+    @returns context 字串，如 skill:x / hook:x / mcp:x / repo:x / unknown
     """
     # STEP 01: 取得可分析的路徑字串
     raw = (
@@ -62,12 +71,20 @@ def infer_context(tool_input: dict, tool_name: str) -> str:
     if m:
         return f"hook:{m.group(1)}"
 
-    # STEP 04: 有檔案路徑但不在 skill/hook 目錄，取最後兩層作為 context
+    # STEP 04: MCP 工具歸到 server 名稱
+    if tool_name.startswith("mcp__"):
+        return f"mcp:{tool_name.split('__')[1]}"
+
+    # STEP 05: 有檔案路徑但不在 skill/hook 目錄，取最後兩層作為 context
     file_path = tool_input.get("file_path") or tool_input.get("path") or ""
     if file_path:
         parts = Path(file_path).parts
         # 取最後兩層（如 "src/utils"）
         return "/".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+
+    # STEP 06: 其餘歸到工作目錄（hook 輸入帶 cwd，commit-gate-guard.ts 也這樣讀）
+    if cwd:
+        return f"repo:{Path(cwd).name}"
 
     return "unknown"
 
@@ -117,7 +134,7 @@ def main() -> None:
 
     record = {
         "ts":        datetime.now(timezone.utc).isoformat(),
-        "context":   infer_context(tool_input, tool_name),
+        "context":   infer_context(tool_input, tool_name, hook_input.get("cwd")),
         "tool":      tool_name,
         "exit_code": exit_code,
         # Best-effort: grab the command or path from the tool input

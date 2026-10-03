@@ -547,7 +547,7 @@
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| —（catch-all，所有工具呼叫失敗） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl`（輸入含 `error`／`is_interrupt`／`duration_ms`，無 `tool_response`；使用者中斷、權限/sandbox 阻擋的呼叫兩種事件都不觸發） |
+| —（catch-all，所有工具呼叫失敗） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 到 `~/.claude/.learnings/ERRORS.jsonl`（輸入含 `error`／`is_interrupt`／`duration_ms`，無 `tool_response`；使用者中斷、權限/sandbox 阻擋的呼叫兩種事件都不觸發）。hook 輸入沒有「目前在哪個 skill」，`context` 依序推斷 `skill:<name>`（指令／路徑含 `/skills/<name>`）→ `hook:<name>` → `mcp:<server>` → 檔案路徑末兩層 → `repo:<cwd 名稱>` → `unknown` |
 | —（catch-all，所有工具呼叫失敗） | `repeat-failure-detector.ts` | 同錯偵測（Jev C 掛載點，2026-09-24 新增）：新失敗與 state 中最近 3 組不同失敗比對，字面完全相同直接歸組，否則平行呼叫 Jev 語意比對（判「是」且 conf ≥0.3 才歸組）；所屬組累積次數達 3 的倍數次時以 `additionalContext` 注入 judgment-matrix.md §1 換路徑提示 |
 
 > **與 PostToolUse 的區別（2026-09-14 實測確認，Claude Code 2.1.270）**：`PostToolUse` 只在 tool **成功**時觸發，失敗走獨立的 `PostToolUseFailure` 事件。`post_tool_error.py` 原本誤掛在 `PostToolUse` 讀 `tool_response.exit_code`，因為失敗的呼叫根本不會觸發該事件而空轉——2026-08-14 那次只驗證了「PostToolUse 不觸發」就推論「用 hook 捕捉 tool 失敗從根本不可行」，沒有查是否存在其他事件；改掛 `PostToolUseFailure` 後才實際生效。詳見 `rules/common/hooks.md` `HOOK-FAILURE-BLINDSPOT`。
@@ -604,7 +604,7 @@
 | `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier ≥1 另呼叫 `lib/review-engine.ts` 的 `resolveEngine()` 決定本輪 review 引擎，Tier 2/3 寫入 pending-review marker（含 `sessionId`/`engine`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain；commit 成功判定為「輸出有確認行」或 `detectNewCommit()`（涵蓋 `-q`／`--quiet` commit；判定失敗輸出警告請手動 `/commit-review`）；`.lasthead` 於 marker 寫入與 review 指派之後才記錄，失敗附在 systemMessage |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
-| `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
+| `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N`；時間欄位相容 `ts`／`timestamp`；Bash 錯誤以「`Exit code N` \| 下一個非空行」分組（第一行固定是 exit code，只看第一行會把所有 Bash 失敗併成一組） |
 | `pr-watcher.sh` | 定期輪詢 GitHub PR，有新/更新的 PR 時發 macOS 通知，點擊觸發 review |
 | `review-pr.sh` | 本機手動觸發 PR review，結果貼到 PR comment |
 | `sync-obsidian-vault.sh` | 同步 auto memory 目錄到 Obsidian vault（symlink） |

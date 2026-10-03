@@ -76,6 +76,8 @@ EDIT-REPLACE-SCOPE:
 
 GLOBAL-MUTATION:
   rule: 移除或修改全域變數/共用常數/共用函式時，必須搜尋該檔案中所有使用點，確認全部已處理
+  read-callers: 列出位置不夠，要逐一讀每個呼叫端怎麼依賴它——對回傳值的分支、對 render 行為的假設。適用於改失敗語意（新增回 false／throw 路徑）、改共用元件的 render 邏輯、把新值加進共用 enum；共用 enum 另查是否有驗證較鬆的路徑拿它當「合法」的唯一判準，新值會自動變成那條路的合法輸入
+  why: 4 份 feedback 同一結構——只驗證自己要用的那個呼叫點，其他呼叫點的行為被悄悄改掉（return_semantics_change_read_callers / shared_component_change_blast_radius / extend_shared_component_not_bypass / shared_enum_bypasses_new_validation）
 
 LOOP-EARLY-EXIT:
   rule: `return` 在 `forEach` callback 內只跳出當次迭代，迴圈與迴圈後的程式照跑；宣稱「已中止」前先確認 `return` 所在的 scope 是 callback 還是外層函式

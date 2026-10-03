@@ -115,7 +115,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
-| PostToolUseFailure | 所有工具（catch-all）失敗時 | —（空 matcher） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl`（讀 `error`/`is_interrupt`；使用者中斷、權限/sandbox 阻擋不觸發）；2026-09-14 前誤掛在 `PostToolUse`（只在成功時觸發，空轉未寫入），改掛獨立事件後才實際生效 |
+| PostToolUseFailure | 所有工具（catch-all）失敗時 | —（空 matcher） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl`（讀 `error`/`is_interrupt`；使用者中斷、權限/sandbox 阻擋不觸發）；2026-09-14 前誤掛在 `PostToolUse`（只在成功時觸發，空轉未寫入），改掛獨立事件後才實際生效；`context` 依序推斷 `skill:`（指令／路徑含 `/skills/<name>`）→ `hook:` → `mcp:<server>` → 檔案路徑 → `repo:<cwd 名稱>` |
 | PostToolUseFailure | 所有工具失敗時 | —（空 matcher） | `repeat-failure-detector.ts` | 同錯偵測（Jev C 掛載點）：新失敗字面相同或經 Jev 判定同問題就歸組，累積達 3 的倍數次時以 `additionalContext` 注入 judgment-matrix.md §1 換路徑提示；每 session 保留最近 3 組不同失敗 |
 | PreCompact | Context 壓縮前 | — | `pre-compact-snapshot.ts` | 提醒存重要決策/糾正到 auto memory + dump TaskList 到 tasks/todo.md |
 | Stop | 回合結束前 | —（所有回合） | `stop-review-guard.ts` | pending-review 閘門的「回合結束」守門員：marker 未清時 block 回合結束，reason 以指令級注入指派 `commit-review` skill；`sessionId` 優先比對、cwd repoRoot 補位；per-session 最多攔 3 次（保險絲）、plan mode 放行、逾期自動清除、失敗 fail-open |
@@ -256,6 +256,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-03（四）: weekly-review 錯誤紀錄修補 + 兩條規則升級
+
+- **`hooks/post_tool_error.py`**：weekly-review STEP 06 發現 7 天 85 筆錯誤中 87% 的 `context` 是 `unknown`，其餘多是指令碎片（`skill:r15-r18-migrate && cat templates`、`skill:$d`）。skill regex 由 `/skills/([^/]+)/` 改為 `/skills/([\w-]+)(?![\w.-])`；新增 MCP 工具歸 `mcp:<server>`、其餘歸 `repo:<cwd 名稱>`。驗證：隔離 HOME 跑 10 情境全過；回放既有 89 筆 `skill:*` 紀錄，79 筆歸位、2 筆刻意不歸（`skills/*`、`skill-rules.json`）、8 筆因 `cmd` 欄位截斷 300 字無法回放。
+- **`scripts/summarize_errors.py`**：時間欄位相容 `ts`／`timestamp`（舊 schema 原本被當損毀行靜默跳過）；Bash 錯誤改以「`Exit code N` \| 下一個非空行」分組。真實 7 天紀錄重跑，原 45 筆 `Exit code 1` 拆開後無任何子類 ≥3 次。
+- **`rules/common/testing.md`** 新增 `FAKE-PASS`：宣告通過前要證明測試有能力變紅（mutation probe、情境只差受測維度、fake 要做出真函式的狀態轉移、自製腳本要有斷言下限與 watchdog、完整套件下跑、E2E 前置不成立回報 SKIP）。由 6 份同結構 feedback 升級。
+- **`rules/common/coding-style.md`** `GLOBAL-MUTATION` 新增 `read-callers`：改語意前要逐一讀呼叫端怎麼依賴它（回傳值分支、render 假設、共用 enum 被較鬆路徑當合法判準）。由 4 份同結構 feedback 升級。
 
 ### 2026-10-03（三）: statusline 以 pace／cache／code 取代 token 預估金額
 

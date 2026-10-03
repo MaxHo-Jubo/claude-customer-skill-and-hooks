@@ -38,6 +38,14 @@ def load_records(log_path: Path, since: datetime) -> list[dict]:
                 continue
             try:
                 rec = json.loads(line)
+                # 舊 schema 讀入時統一正規化，下游只認 ts／context：
+                # 時間欄位舊紀錄（如 save-progress 2026-09-15）用 timestamp，兩者皆無仍走 KeyError 顯性報出；
+                # context 欄位 hook 層舊紀錄用 skill
+                rec = {
+                    **rec,
+                    "ts": rec.get("ts") or rec["timestamp"],
+                    "context": rec.get("context") or rec.get("skill") or "unknown",
+                }
                 ts = datetime.fromisoformat(rec["ts"])
                 if ts >= since:
                     records.append(rec)
@@ -46,13 +54,33 @@ def load_records(log_path: Path, since: datetime) -> list[dict]:
     return records
 
 
+# 錯誤摘要每一行的截斷長度
+LINE_MAX = 120
+
+
 def first_line(text: str) -> str:
     """Return the first non-empty line of a multi-line string."""
     for line in text.splitlines():
         line = line.strip()
         if line:
-            return line[:120]
-    return text[:120]
+            return line[:LINE_MAX]
+    return text[:LINE_MAX]
+
+
+def pattern_key(text: str) -> str:
+    """
+    錯誤分組鍵。Bash 錯誤第一行固定是 'Exit code N'，只看第一行會把所有 Bash 失敗併成一組，
+    所以改用 'Exit code N | 下一個非空行'；其他錯誤沿用第一行。
+
+    @param text error 欄位原文
+    @returns 分組用字串；空字串代表 error 為空
+    """
+    # STEP 01: 取所有非空行
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    # STEP 02: Bash 錯誤帶上第二行，其餘取第一行
+    if len(lines) >= 2 and lines[0].startswith("Exit code "):
+        return f"{lines[0]} | {lines[1][:LINE_MAX]}"
+    return first_line(text)
 
 
 def summarize(records: list[dict], min_count: int) -> None:
@@ -65,11 +93,10 @@ def summarize(records: list[dict], min_count: int) -> None:
     print(f"  SKILL ERROR SUMMARY  ({total} errors total)")
     print(f"{'='*60}\n")
 
-    # --- By context (向下相容：舊記錄用 "skill"，新記錄用 "context") ---
+    # --- By context（舊 schema 的 skill 已在 load_records 正規化成 context） ---
     by_ctx: dict[str, list] = defaultdict(list)
     for r in records:
-        ctx = r.get("context") or r.get("skill", "unknown")
-        by_ctx[ctx].append(r)
+        by_ctx[r["context"]].append(r)
 
     print("## Errors by context\n")
     for ctx, recs in sorted(by_ctx.items(), key=lambda x: -len(x[1])):
@@ -93,7 +120,7 @@ def summarize(records: list[dict], min_count: int) -> None:
     EMPTY_PATTERN = "(empty error message — 多為 hook 阻擋，reason 走 stdout 未被捕獲)"
     by_pattern: dict[str, list] = defaultdict(list)
     for r in records:
-        pattern = first_line(r.get("error", "")) or EMPTY_PATTERN
+        pattern = pattern_key(r.get("error", "")) or EMPTY_PATTERN
         by_pattern[pattern].append(r)
 
     print(f"\n## Recurring error patterns (≥{min_count} occurrences)\n")
@@ -102,7 +129,7 @@ def summarize(records: list[dict], min_count: int) -> None:
         if len(recs) < min_count:
             continue
         found_any = True
-        skills_affected = sorted(set(r.get("context") or r.get("skill", "?") for r in recs))
+        skills_affected = sorted(set(r["context"] for r in recs))
         print(f"  [{len(recs)}x]  {pattern}")
         print(f"         Skills: {', '.join(skills_affected)}")
         print()
@@ -112,8 +139,8 @@ def summarize(records: list[dict], min_count: int) -> None:
     # --- Recent errors (last 5) ---
     print("## Last 5 errors\n")
     for r in records[-5:]:
-        ts = r.get("ts", "")[:19].replace("T", " ")
-        skill = r.get("context") or r.get("skill", "?")
+        ts = r["ts"][:19].replace("T", " ")
+        skill = r["context"]
         tool = r.get("tool", "?")
         # .get 的 default 只在 key 不存在時觸發；這批記錄是 key 在、值為 ""，故需再 or 一次
         error = first_line(r.get("error") or "") or "(no message)"
