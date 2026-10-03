@@ -1,7 +1,7 @@
 ---
 name: jira
 description: "Jira Issue 管理工具。從 branch 自動識別 issue、抓詳情、建開發筆記、管理 branch。當使用者提到 /jira、「看一下 issue」、「建 branch」、想從 Jira 抓資料時觸發。"
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Jira Issue 管理
@@ -78,6 +78,10 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 3. **如果是 `/jira`（無參數）**：
    - 讀取並顯示已存在的 issue 文件內容
    - 如果文件不存在，提示用戶可以用 `/jira fetch` 建立
+   - **branch 沒有 Jira 編號時**：改讀 save-progress 依 branch 命名的交接紀錄 `{CLAUDE_DIR}/handoff-{branch}.md`（`{branch}` 中的 `/` 換成 `-`，命名規則以 `~/.claude/skills/save-progress/SKILL.md` STEP 01 為準）
+     - 檔案存在 → 顯示內容，並標明「無 Jira 編號，顯示 branch 交接紀錄」
+     - 檔案不存在 → 提示可用 `/save-progress` 建立交接紀錄，或用 `/jira branch {ISSUE_ID}` 開票 branch
+     - branch 為空（detached HEAD／非 git repo）→ 照「錯誤處理」的無 issue ID 處理
 
 4. **如果是 `/jira fetch`**：
    - 使用 Atlassian MCP 工具抓取 issue 詳情：
@@ -228,7 +232,7 @@ git branch --show-current | grep -oE '[A-Z]+-[0-9]+' | head -1
 
 ## 錯誤處理
 
-- **Branch 名稱無 issue ID**：提示使用者手動輸入 issue ID，或用 `/jira branch {ISSUE_ID}` 直接指定
+- **Branch 名稱無 issue ID**：`/jira`（無參數）先走步驟 3 的 branch 交接紀錄；其餘情況提示使用者手動輸入 issue ID，或用 `/jira branch {ISSUE_ID}` 直接指定
 - **Jira API 錯誤**：顯示錯誤訊息，建議使用者檢查網路連線或 Atlassian MCP 設定
 - **`{CLAUDE_DIR}` 目錄不存在**：自動建立
 

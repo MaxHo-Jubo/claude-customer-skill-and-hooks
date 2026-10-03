@@ -18,7 +18,7 @@
 import { homedir } from 'os';
 import { join, resolve, isAbsolute } from 'path';
 import { execSync } from 'child_process';
-import { readFileSync, unlinkSync, appendFileSync } from 'fs';
+import { readFileSync, unlinkSync, appendFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import type { ReviewEngine } from './review-engine';
 
 /** marker 檔案存放目錄 */
@@ -193,6 +193,103 @@ export function readValidMarker(path: string, now: number): ReviewMarker | null 
     return null;
   }
   return marker;
+}
+
+/** 判定「剛才那次 commit」的 reflog 時效窗（秒）：harness 沒提供本次工具呼叫耗時（duration_ms）時的退路 */
+const NEW_COMMIT_WINDOW_SEC = 120;
+/** 時效窗在「本次工具呼叫耗時」之外再加的緩衝（秒）：涵蓋 hook 啟動延遲與秒數取整 */
+const COMMIT_WINDOW_SLACK_SEC = 30;
+/** 每秒的毫秒數 */
+const MS_PER_SEC = 1000;
+
+/**
+ * 依本次工具呼叫耗時算出 reflog 時效窗，讓窗口綁定「這一次指令」而不是固定秒數：
+ * `git commit -q && <超過兩分鐘的建置>` 這種指令，commit 發生在呼叫開始之後、hook 觸發之前，
+ * 固定 120 秒會漏判；改用耗時 + 緩衝後，凡是本次指令內產生的 commit 都在窗內。
+ * PostToolUse 的 duration_ms 涵蓋整條前景指令（2026-10-03 實測前景 `sleep 4` 回報 5910）。
+ * @param durationMs 本次工具呼叫耗時（毫秒）；harness 未提供時為 null
+ * @returns 時效窗（秒）
+ */
+export function commitWindowSec(durationMs: number | null): number {
+  if (durationMs === null) {
+    return NEW_COMMIT_WINDOW_SEC;
+  }
+  return Math.ceil(durationMs / MS_PER_SEC) + COMMIT_WINDOW_SLACK_SEC;
+}
+
+/**
+ * 依 repo 根目錄推導「上次已處理 HEAD」紀錄檔路徑。副檔名刻意不用 .json，
+ * stop-review-guard 以 .json 過濾 MARKER_DIR，不會把它當 marker 讀。
+ * @param repoRoot git repo 根目錄絕對路徑
+ * @returns 紀錄檔完整路徑
+ */
+export function lastSeenHeadPath(repoRoot: string): string {
+  return join(MARKER_DIR, `${repoRootToken(repoRoot)}.lasthead`);
+}
+
+/**
+ * 不看 git 輸出文字，改用 git 自身狀態判斷「這個 repo 剛剛是否新增了 commit」。
+ * 補 `git commit -q`／`--quiet` 的洞：該旗標不印 `[branch hash]` 確認行，harness 也不提供
+ * gitOperation.commit，stdout 訊號全部落空。兩個條件須同時成立：
+ * (a) HEAD 的 reflog 最新一筆是 commit 類動作（含 amend／merge）且落在時效窗內；
+ * (b) 目前 HEAD 與上次已處理的 HEAD 不同——擋掉已處理 commit 的重複觸發（例如失敗的重試 commit）。
+ * 這是「窗內有一筆尚未處理的 commit」的啟發式判定，不能證明本次指令成功：失敗的 commit 不寫 reflog，
+ * 若窗內恰有一筆 hook 沒處理過的 commit（例如手動提交），本次失敗的 commit 仍會命中那一筆。
+ * 時效窗由呼叫端以 commitWindowSec(本次工具耗時) 傳入，縮到本次指令的執行期間，降低這種誤判。
+ * git 指令失敗時直接拋出，由呼叫端決定如何回報，不在這裡吞掉。
+ * @param repoRoot git repo 根目錄絕對路徑
+ * @param windowSec reflog 時效窗（秒），預設為無耗時資訊時的退路值
+ * @param nowSec 目前時間（Unix 秒），預設取系統時間，測試時可注入
+ * @returns HEAD 是否為窗內產生且尚未處理過的 commit
+ */
+export function detectNewCommit(
+  repoRoot: string,
+  windowSec: number = NEW_COMMIT_WINDOW_SEC,
+  nowSec: number = Math.floor(Date.now() / MS_PER_SEC),
+): boolean {
+  // STEP 01: 讀 HEAD reflog 最新一筆（時間用 unix 秒，格式 `HEAD@{<秒>}<TAB><動作>: <說明>`）
+  const reflog = execSync('git reflog -1 --date=unix --format=%gd%x09%gs HEAD', {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    timeout: 5000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+  const [selector = '', action = ''] = reflog.split('\t');
+  const at = /@\{(\d+)\}/.exec(selector);
+  if (!at || !action.startsWith('commit') || nowSec - Number(at[1]) > windowSec) {
+    return false;
+  }
+
+  // STEP 02: 與上次已處理的 HEAD 比對
+  const head = execSync('git rev-parse HEAD', {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    timeout: 5000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+  const recorded = existsSync(lastSeenHeadPath(repoRoot))
+    ? readFileSync(lastSeenHeadPath(repoRoot), 'utf8').trim()
+    : '';
+  return head !== recorded;
+}
+
+/**
+ * 記錄「此 HEAD 已處理」，供 detectNewCommit 之後比對。任何路徑判定為「確實 commit 了」都要呼叫
+ * （含 stdout 確認行的主要路徑），否則同一個 commit 之後會被 -q 路徑再判一次。
+ * 呼叫時機須在 review 指派與 marker 寫入之後：先標記再上鎖，上鎖途中失敗就會留下「已處理」卻沒有 review。
+ * 寫入失敗直接拋出，由呼叫端回報。
+ * @param repoRoot git repo 根目錄絕對路徑
+ * @returns void
+ */
+export function recordSeenHead(repoRoot: string): void {
+  const head = execSync('git rev-parse HEAD', {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    timeout: 5000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+  mkdirSync(MARKER_DIR, { recursive: true });
+  writeFileSync(lastSeenHeadPath(repoRoot), head, 'utf8');
 }
 
 /**

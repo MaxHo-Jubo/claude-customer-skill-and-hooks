@@ -59,7 +59,7 @@
 
 | Skill | 指令 | 版本 | 用途 |
 |-------|------|------|------|
-| jira | `/jira` | 1.1.0 | Jira Issue 管理，自動從 branch 識別 issue |
+| jira | `/jira` | 1.2.0 | Jira Issue 管理，自動從 branch 識別 issue；v1.2.0 branch 無 Jira 編號時 `/jira` 改讀 save-progress 的 `.claude/handoff-{branch}.md` 交接紀錄 |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
 | jira-test-report | `/jira-test-report` | 2.5.5 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md`；v2.5.5 套 AI.MD v4：5 個 prose 重災區轉 structured labels（共 29 個 label blocks），token -220（-1.9%） |
@@ -81,9 +81,9 @@
 | upgrade-to-status | `/upgrade-to-status` | 1.1.0 | 將專案升級為 status.md 架構（Milestone / 北極星 / Insight / Current / Next） |
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
-| save-progress | `/save-progress` | 1.0.0 | 手動存檔工作進度（dump TaskList + session 摘要 + 未存 memory） |
+| save-progress | `/save-progress` | 1.1.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md` |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個 |
+| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
@@ -134,7 +134,7 @@
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 8 | atlassian、frontend-design、typescript-lsp、context7、pr-review-toolkit、claude-mem、playwright、mcp-outline |
+| Plugins（啟用） | 9 | atlassian、frontend-design、typescript-lsp、context7、pr-review-toolkit、claude-mem、playwright、mcp-outline、cc-plugin-you-should-know（Claude Code 內建） |
 | Plugins（停用） | 10 | github、everything-claude-code、document-skills、superpowers、claude-hud、claude-md-management、gopls-lsp、jdtls-lsp、code-simplifier、code-review |
 | MCP Servers | 3 | pr-watcher、codebase-memory-mcp、luna-web-readonly（獨立於 plugins 的 MCP Server 設定） |
 
@@ -246,6 +246,15 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-03: save-progress 交接紀錄改寫進 Jira 筆記 + jira 讀 branch 交接紀錄 + post-commit-review 支援 `-q` commit + r15-r18-migrate 部署試點後修正
+
+- **`save-progress` 1.1.0**：交接紀錄位置由 branch 決定——含 Jira 編號寫進 `{專案}/.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（只替換該段，檔案不存在時先套 jira skill 的開發筆記模板）；無編號寫 `handoff-{branch}.md`（`/` 換 `-`）；非 git repo／detached HEAD 寫 `handoff-{資料夾名}.md`。內容對齊 compact 優先序：目標、架構決策（完整保留）、已修改檔案（用 `git status`／`git diff --stat`／`git log` 觀測，不憑記憶）、驗證狀態（未跑寫「未驗證」）、任務狀態、TODO 與 rollback、下一步、待使用者回答。舊路徑 `tasks/progress-snapshot.md` 無程式消費者，直接停用。
+- **`jira` 1.2.0**：`/jira`（無參數）在 branch 無 Jira 編號時改讀 `handoff-{branch}.md`；命名規則以 save-progress STEP 01 為單一來源。
+- **`post-commit-review.ts` + `lib/review-marker.ts`**：`git commit -q`／`--quiet` 不印確認行，hook 判不出 commit 成功而靜默不上鎖（2026-10-02 某專案 repo 5 個 `-q` commit 全漏）。新增 `detectNewCommit()`：輸出沒確認時改查 reflog 且 HEAD 與上次記錄（`.lasthead`）不同；時效窗由 `commitWindowSec()` 依 PostToolUse 的 `duration_ms`（本次工具呼叫耗時）加 30 秒緩衝算出，`git commit -q && <長建置>` 不會漏判（無 `duration_ms` 時退回 120 秒）。Tier 3 review 後修正：`.lasthead` 改在 marker 寫入與 review 指派之後才記錄、寫入失敗附在 systemMessage 警告；`-q` 判定本身失敗時輸出警告請手動 `/commit-review`，不再被外層 catch 靜默吞掉。測試：`lib/review-marker.test.ts` 11 個＋新增 hook 層 `post-commit-review.test.ts` 4 個（子行程跑真的 hook），5 個突變（只看 stdout、HEAD 紀錄失敗不處理、拿掉 action 檢查、忽略時效窗、判定失敗靜默）全部轉紅。
+- **`r15-r18-migrate` 部署試點後修正**（未升版）：見 Skills 一覽該列。
+- **`settings.json`**：`env` 新增 `CLAUDE_CODE_PLUGIN_DIRS`，全域載入本機 mod `~/.claude/mods/ctx-handoff`（修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)，改用 save-progress 產生交接紀錄；mod 本身不在本 repo 同步範圍）；新增啟用 Claude Code 內建 plugin `cc-plugin-you-should-know`。本次同步依內容級過濾擋下 26 條含私有專案路徑／commit message 的 permission（逐條檢視無誤濾）。
+- **`translate-claude-code-releases`**：記錄推進到 v2.1.288。
 
 ### 2026-09-30: prompt audit 套用到 skills/rules/CLAUDE.md + r15-r18-migrate 第七批 + token-analyze 改 Opus 5.5 單價
 

@@ -43,6 +43,7 @@ import traceback
 # runner.py 以腳本執行時 sys.path[0] 就是 helpers/。依賴方向：runner → diagnostics → event_log／stream_events／session_index
 import diagnostics
 import event_log
+import rate_limit
 import session_index
 import stream_events
 
@@ -60,8 +61,6 @@ RESULT_SCHEMA_PATH = os.path.join(TEMPLATES_DIR, "result.schema.json")
 HEADLESS_RULES_PATH = os.path.join(TEMPLATES_DIR, "headless-rules.txt")
 # 通知腳本（LINE／其他通道）
 NOTIFY_SCRIPT = os.path.join(HELPERS_DIR, "notify.sh")
-# 查詢額度用量的腳本
-QUOTA_SCRIPT = os.path.join(HELPERS_DIR, "quota-usage.py")
 # 對建置產物做啟動 smoke 的腳本
 BOOT_SMOKE_SCRIPT = os.path.join(HELPERS_DIR, "boot-smoke.cjs")
 
@@ -90,8 +89,6 @@ SMOKE_TIMEOUT_SECONDS = 600
 NPM_CI_TIMEOUT_SECONDS = 3600
 # 一般 git / gh 指令逾時秒數
 GIT_TIMEOUT_SECONDS = 600
-# 查額度腳本（quota-usage.py）的逾時秒數
-QUOTA_SCRIPT_TIMEOUT_SECONDS = 60
 # 環境指紋取 CLI 版本（claude --version）的逾時秒數
 CLI_VERSION_TIMEOUT_SECONDS = 60
 # 環境指紋取 node 版本（node --version）的逾時秒數
@@ -352,8 +349,6 @@ GIT_SHA_SHORT_CHARS = 12
 GIT_SHA_BRIEF_CHARS = 10
 # 環境指紋裡 runner.py／diagnostics.py 檔案內容 sha1 的縮寫長度（檔案 hash，不是 git commit）
 FINGERPRINT_SHA1_CHARS = 12
-# 額度腳本失敗時，quota_unavailable 事件只記 stderr 開頭這麼多字元
-QUOTA_STDERR_HEAD_CHARS = 200
 # CLI 非零退出、判成 error 時，detail 只留 assistant 文字／stderr 尾端這麼多字元
 CLI_ERROR_TAIL_CHARS = 300
 # cli_outcome 事件的 detail 只記前面這麼多字元
@@ -1746,22 +1741,98 @@ def lockfile_hash(config):
 # ================================================================ 額度
 
 
-def quota_snapshot(config):
-    """呼叫 quota-usage.py 取得目前額度。
+# queue 的 runner_state 裡，記最近一次 CLI 呼叫回報的用量的欄位
+LAST_RATE_LIMIT_FIELD = "last_rate_limit"
+# CLI 呼叫結束後拿不到可用用量的事件名（保留上一輪的值、不覆寫）
+RATE_LIMIT_MISSING_EVENT = "rate_limit_missing"
+# 額度查不到的事件名，與原因代號（寫進事件 detail.reason）
+QUOTA_UNAVAILABLE_EVENT = "quota_unavailable"
+QUOTA_REASON_NO_DATA = "no_data"
+QUOTA_REASON_STALE = "stale"
+QUOTA_REASON_QUEUE_UNREADABLE = "queue_unreadable"
 
-    回傳 dict：available 為 False 代表查不到（呼叫端需視為「額度 API 不可用」）。
+
+def record_rate_limit(config, stream_path):
+    """CLI 呼叫結束後，把這次 stream 裡最後一筆有效的 rate_limit_event 存進 queue（runner_state.last_rate_limit）。
+
+    取代原本打用量端點的做法：該端點需要 `user:profile` scope，長效 token 只有 `user:inference`，一律 429；
+    stream 裡的事件則每次呼叫都有。拿不到可用資料時保留上一輪的值、記 rate_limit_missing（帶原因），
+    絕不拋例外——這是呼叫結束後的記帳，不能讓它拖垮判讀與收尾。
+
+    @param config runner 設定
+    @param stream_path 這次呼叫的 stream-json 落檔路徑
+    @return True 表示已存；False 表示沒存（原因已記事件）
     """
-    # STEP 01: 用同一個 python 直譯器跑輔助腳本
-    code, out, err = run_command([sys.executable, QUOTA_SCRIPT], timeout=QUOTA_SCRIPT_TIMEOUT_SECONDS)
-    # STEP 02: 解析輸出；解析不了就當不可用（但要留下紀錄）
+    # STEP 01: 讀 stream；整個檔讀不到（不存在、讀取失敗）時記原因、保留舊值
+    events, _bad_lines, error = stream_events.read_stream(stream_path)
+    if error is not None:
+        log_event(config, None, RATE_LIMIT_MISSING_EVENT, detail={"reason": error})
+        return False
+
+    # STEP 02: 取最後一筆有效事件；stream 被殺時尾端常是殘缺事件，純函式會退回前一筆有效的
+    latest = rate_limit.latest_rate_limit(events)
+    if latest is None:
+        log_event(config, None, RATE_LIMIT_MISSING_EVENT, detail={"reason": "stream 沒有可用的 rate_limit_event"})
+        return False
+
+    # STEP 03: 落盤；記錄何時觀察到，之後可以判斷資料多舊
+    record = dict(latest, observed_at=now_iso())
+
+    def mutator(queue):
+        """寫進 runner_state。"""
+        queue.setdefault("runner_state", {})[LAST_RATE_LIMIT_FIELD] = record
+        return record
+
     try:
-        data = json.loads(out.strip() or "{}")
-    except ValueError:
-        data = {}
-    if not data:
-        log_event(config, None, "quota_unavailable", detail={"code": code, "stderr": err.strip()[:QUOTA_STDERR_HEAD_CHARS]})
-        return {"available": False}
-    return data
+        mutate_queue(config, mutator)
+    except (OSError, ValueError) as exc:
+        log_event(config, None, RATE_LIMIT_MISSING_EVENT, detail={"reason": "無法寫入 queue: %s" % exc})
+        return False
+    return True
+
+
+def quota_snapshot(config):
+    """由 queue 內最近一次 CLI 呼叫記下的用量，組出取件前判斷用的額度快照；不呼叫任何外部指令。
+
+    格式沿用舊版（quota_blocks_start 與 judge_outcome 都吃這個）：
+    `{"available": True, "five_hour": {"utilization": 百分比整數, "resets_at": ISO}, "seven_day": {...}}`。
+    已經過了重置時間的視窗略過（換了新視窗，舊使用率不再適用；不當成 0 也不沿用舊值），所以快照可能只有一個視窗。
+
+    查不到時 available 為 False，並**記 quota_unavailable 事件（帶原因）**：舊版腳本失敗時輸出的是非空 JSON，
+    事件永遠不會觸發，額度檢查靜默失效。呼叫端仍視為「不擋」，但現在看得到。
+
+    @param config runner 設定
+    @return dict
+    """
+
+    def unavailable(reason):
+        """記事件並回不可用的快照。"""
+        log_event(config, None, QUOTA_UNAVAILABLE_EVENT, detail={"reason": reason})
+        return {"available": False, "reason": reason}
+
+    # STEP 01: 讀 queue；讀不到不能讓取件前檢查把整個 runner 帶倒
+    try:
+        queue = load_queue(config)
+    except (OSError, ValueError):
+        return unavailable(QUOTA_REASON_QUEUE_UNREADABLE)
+    recorded = (queue.get("runner_state") or {}).get(LAST_RATE_LIMIT_FIELD)
+    if not isinstance(recorded, dict):
+        return unavailable(QUOTA_REASON_NO_DATA)
+
+    # STEP 02: 逐視窗檢查有沒有過期
+    now = datetime.datetime.now(datetime.timezone.utc)
+    snapshot = {"available": True, "source": "rate_limit_event", "observed_at": recorded.get("observed_at")}
+    for name in rate_limit.WINDOW_NAMES:
+        window = recorded.get(name)
+        resets = parse_iso(window.get("resets_at")) if isinstance(window, dict) else None
+        if resets is None or resets <= now:
+            continue
+        snapshot[name] = {"utilization": window.get("utilization"), "resets_at": window.get("resets_at")}
+
+    # STEP 03: 兩個視窗都不能用，就是資料過舊
+    if not any(name in snapshot for name in rate_limit.WINDOW_NAMES):
+        return unavailable(QUOTA_REASON_STALE)
+    return snapshot
 
 
 def quota_blocks_start(config, snapshot):
@@ -5523,6 +5594,9 @@ def process_one_entry(config, entry):
     # 啟動 CLI 本身失敗（crash）也會多算一次，保守。綁 (entry, 呼叫序號)，clear_entry_context 清
     config["cli_spent"] = (entry_id, attempt)
     call_result = call_claude(config, entry, attempt, resume)
+    # 用量要在判讀之前存好：judge_outcome 遇到額度類失敗會用 quota_snapshot 決定是不是真的額度問題，
+    # 而這次呼叫自己的 stream 就是最新的資料
+    record_rate_limit(config, call_result["stream_path"])
     save_session_output(config, entry, attempt, call_result)
     outcome = judge_outcome(config, call_result)
     log_event(
@@ -6918,6 +6992,109 @@ def cmd_unblock(config, args):
     return EXIT_OK
 
 
+# mark-done 可以接手的 entry 狀態：done 已完成；running／waiting_quota 是 runner 正在處理，人工標記會與它搶
+MARKABLE_STATUSES = ("pending", "blocked", "failed")
+# 人工標記完成的事件名
+ENTRY_MARKED_DONE_EVENT = "entry_marked_done"
+
+
+def cmd_mark_done(config, args):
+    """mark-done 子命令：人工（本機）處理完的 entry，在佇列標成 done，讓依賴它的 entry 可以被取件。
+
+    用在 runner 做不了、由人處理並合進整合分支的 entry（例如 R18 已有等價實作的 Redux actions 殼）。安全條件：
+    給的 commit 必須已在**遠端**整合分支上——只在本機、只在 entry 分支、不存在的 commit 一律拒絕，
+    否則佇列說 done、下游開始取件，實際上程式碼沒進整合分支。拒絕時佇列原封不動。
+
+    這不是 runner 的一次成功：熔斷計數、CLI 後暫停計數、整合分支 tip 記錄都不動。人工合併讓遠端 tip 前進時，
+    要另外跑 `unblock --integration-tip` 對齊（本函式只提醒，不代做，因為對齊前該先確認外部 commit 沒問題）。
+
+    @param config runner 設定
+    @param args 命令列參數（entry_id、commit、note）
+    @return 退出碼
+    """
+    integration = config["integration_branch"]
+    remote_ref = "origin/%s" % integration
+
+    # STEP 01: 先做不碰 git 的檢查：entry 存在、狀態允許（拒絕時不必等網路）
+    try:
+        entry = find_entry(load_queue(config), args.entry_id)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print("錯誤：%s" % exc, file=sys.stderr)
+        return EXIT_PREFLIGHT
+    if entry is None:
+        print("錯誤：找不到 entry %s" % args.entry_id, file=sys.stderr)
+        return EXIT_USAGE
+    if entry.get("status") not in MARKABLE_STATUSES:
+        print("錯誤：%s 目前狀態是 %s，只有 %s 可以標成 done" % (args.entry_id, entry.get("status"), "／".join(MARKABLE_STATUSES)), file=sys.stderr)
+        return EXIT_USAGE
+
+    # STEP 02: 取最新的遠端狀態；連不上就沒辦法確認 commit 是否已在遠端整合分支，不能標
+    code, _out, err = git(config, "fetch", "origin")
+    if code != 0:
+        print("錯誤：git fetch origin 失敗，無法確認 commit 是否已在遠端整合分支上: %s" % stderr_excerpt(err), file=sys.stderr)
+        return EXIT_PREFLIGHT
+
+    # STEP 03: 解析 commit 成完整 sha；以 - 開頭的值會被 git 當成選項，直接拒絕
+    if args.commit.startswith("-"):
+        print("錯誤：--commit 的值不能以 - 開頭: %s" % args.commit, file=sys.stderr)
+        return EXIT_USAGE
+    code, out, _err = git(config, "rev-parse", "--verify", "--quiet", "%s^{commit}" % args.commit)
+    commit = out.strip()
+    if code != 0 or not commit:
+        print("錯誤：找不到 commit %s（本機 repo 沒有這個物件）" % args.commit, file=sys.stderr)
+        return EXIT_USAGE
+
+    # STEP 04: 必須是遠端整合分支的祖先（含它本身）；退出碼 1 是確定不是，其他非零是無法判定，兩者都不放行
+    code, _out, err = git(config, "merge-base", "--is-ancestor", commit, remote_ref)
+    if code == GIT_NOT_ANCESTOR_CODE:
+        print("錯誤：commit %s 不在遠端整合分支 %s 上（只在本機或別的分支？先合併並推送）" % (commit[:GIT_SHA_BRIEF_CHARS], remote_ref), file=sys.stderr)
+        return EXIT_USAGE
+    if code != 0:
+        print("錯誤：無法判定 commit 是否在 %s 上: %s" % (remote_ref, stderr_excerpt(err)), file=sys.stderr)
+        return EXIT_PREFLIGHT
+
+    def mutator(queue):
+        """在資料鎖下重驗狀態（讀取到寫入之間 runner 可能已改動它），再標成 done。"""
+        # STEP 01: 重新找 entry、重驗狀態
+        target = find_entry(queue, args.entry_id)
+        if target is None:
+            return None
+        if target.get("status") not in MARKABLE_STATUSES:
+            return {"error": "目前狀態是 %s，只有 %s 可以標成 done" % (target.get("status"), "／".join(MARKABLE_STATUSES))}
+        # STEP 02: 標 done、清失敗殘留、寫回 commit 與完成時間；attempts 是歷史紀錄，不改寫
+        target["status"] = "done"
+        target["blocked_reason"] = None
+        target["last_error"] = None
+        target["last_commit"] = commit
+        target["finished_at"] = now_iso()
+        return {"recorded_tip": queue.get("integration_tip_sha")}
+
+    # STEP 05: 在同一把資料鎖下修改
+    try:
+        result = mutate_queue(config, mutator)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print("錯誤：%s" % exc, file=sys.stderr)
+        return EXIT_PREFLIGHT
+    if result is None:
+        print("錯誤：找不到 entry %s" % args.entry_id, file=sys.stderr)
+        return EXIT_USAGE
+    if result.get("error"):
+        print("錯誤：%s" % result["error"], file=sys.stderr)
+        return EXIT_USAGE
+
+    # STEP 06: 事件與提示；遠端 tip 與記錄不同時提醒對齊（讀不到遠端 tip 就不提醒，事件與標記已經完成）
+    log_event(config, args.entry_id, ENTRY_MARKED_DONE_EVENT, detail={"commit": commit, "note": args.note})
+    print("已把 %s 標成 done（commit %s）" % (args.entry_id, commit[:GIT_SHA_BRIEF_CHARS]))
+    code, out, _err = git(config, "rev-parse", "--verify", "--quiet", remote_ref)
+    remote_tip = out.strip()
+    if code == 0 and remote_tip and remote_tip != result["recorded_tip"]:
+        print(
+            "注意：遠端整合分支 tip（%s）與 runner 記錄（%s）不同；確認外部 commit 沒問題後，下次啟動 runner 前先跑 `runner.py unblock --integration-tip`"
+            % (remote_tip[:GIT_SHA_BRIEF_CHARS], (result["recorded_tip"] or "無")[:GIT_SHA_BRIEF_CHARS])
+        )
+    return EXIT_OK
+
+
 def cmd_render_progress(config, args):
     """render-progress 子命令：重新產生 PROGRESS.md 或某個斷點的 PR 內文。"""
     # STEP 01: 讀 queue
@@ -7373,6 +7550,14 @@ def build_parser():
         help="改為解除 runner 級鎖定（同簽名例外兩次後的 hold）與 runner_crashed 暫停",
     )
 
+    mark_done_parser = subparsers.add_parser(
+        "mark-done",
+        help="把人工（本機）處理完的 entry 標成 done；--commit 必須已在遠端整合分支上",
+    )
+    mark_done_parser.add_argument("entry_id", help="entry id")
+    mark_done_parser.add_argument("--commit", required=True, help="人工處理的 commit（必須已合併並推上遠端整合分支）")
+    mark_done_parser.add_argument("--note", default=None, help="備註（寫進事件紀錄，例如為什麼是人工處理）")
+
     import_parser = subparsers.add_parser("import-inventory", help="把盤點 JSON 轉成 queue.json")
     import_parser.add_argument("inventory", help="盤點 JSON 檔路徑")
 
@@ -7405,6 +7590,7 @@ def main(argv):
         "status": cmd_status,
         "release": cmd_release,
         "unblock": cmd_unblock,
+        "mark-done": cmd_mark_done,
         "import-inventory": cmd_import_inventory,
         "render-progress": cmd_render_progress,
         "diagnose": cmd_diagnose,

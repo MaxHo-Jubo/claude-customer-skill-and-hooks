@@ -2,7 +2,8 @@
   "env": {
     "ENABLE_LSP_TOOL": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "CLAUDE_CODE_NO_FLICKER": "1"
+    "CLAUDE_CODE_NO_FLICKER": "1",
+    "CLAUDE_CODE_PLUGIN_DIRS": "/Users/maxhero/.claude/mods/ctx-handoff"
   },
   "permissions": {
     "allow": [
@@ -404,7 +405,8 @@
     "pr-review-toolkit@claude-plugins-official": true,
     "claude-mem@thedotmack": true,
     "playwright@claude-plugins-official": true,
-    "mcp-outline@mcp-outline": true
+    "mcp-outline@mcp-outline": true,
+    "cc-plugin-you-should-know@builtin": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {

@@ -43,7 +43,7 @@
 | 改用 R18 新式共用元件 | 例如把表格改寫成 `frontend/react_18/src/containers/Table/TableContainer`（見 §5.5）——那是重寫不是遷移。 |
 | 補「防護性 fallback」 | 對照表沒有的東西就 `blocked(no_mapping)`，不要用 `?? 預設值` 糊過去。 |
 
-**註解規則**：R15 原有註解逐字照搬（含錯字、含 `FeaturePath` 檔頭）；所有建立或修改的檔在檔頭 JSDoc 追加一行 `Modified: YYYY/MM/DD <執行者>`。
+**註解規則**：R15 原有註解逐字照搬（含錯字、含 `FeaturePath` 檔頭）；所有建立或修改的檔在檔頭 JSDoc 追加一行 `Modified: YYYY/MM/DD Claude subscribe by Max Ho`（署名固定這串）。
 
 ---
 

@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.1.2 (2026-09-23～29，第一批～第四批、第五批階段一～三與收尾修正、第六批、第七批)
+## 1.1.2 (2026-09-23～30，第一批～第四批、第五批階段一～三與收尾修正、第六批、第七批、部署試點後修正)
 
 1.1.1 收版後補做的 fresh-context stub 實跑驗收 18/18 通過，但兩個驗收 agent 各抓到一個驗收條件以外的缺陷，讀碼確認屬實。這一批只修這兩個（D1 兩層都做），加上設計紅隊在修法裡抓到、會自造新洞的三點。
 
@@ -24,6 +24,19 @@
 - CLI 之後才會發生的兩種暫停輪流出現時永遠不會鎖定（第四批 review 列入）：「同簽名連續第二次就鎖定」只比上一次的簽名，推送失敗（`integration_push_failed`）與切換整合分支失敗（`integration_diverged`、無簽名）、或推送失敗與 ff-merge 環境失敗（`ff_merge_env_failed`）輪流出現時，每一次都是新事件、每一輪都重跑一次 CLI。要環境持續不穩定才會觸發，而且每一輪都會通知，人看得到。（第七批已處理）
 - `runner.log.jsonl` 沒有輪替（第四批 review 列入，1.0 起）：只會一直長大，而去重第三層與診斷包沿用（第四批）每次暫停都整檔讀取，檔案越大越慢。（第七批已處理）
 - 本批實作時發現、未改：L1 沒過（`build_unverified`／`secret_detected`）與沒有 commit（`no_commit`）兩條路徑一直沒把這一輪 CLI 的花費記進 `cost_usd_total`（抽 helper 時刻意保持原行為）。
+
+### 部署試點後的修正與已知缺口（2026-09-30，未升版）
+
+第一個 entry 在真環境跑完（build／smoke 通過、ff-merge 已推上遠端）。前三次嘗試都卡在環境，不是遷移本身；這一段只記 skill／runner 文件與行為的落差，**前三項有改**，其餘是已知缺口。
+
+- **已改：`Modified` 署名固定為 `Claude subscribe by Max Ho`**（`SKILL.md` 的輸入契約與 `docs/api-mapping.md` 的註解規則，原本寫 `<執行者>` 佔位符，執行時由 CLI 自行決定，實際寫成了 `Claude`）。363 個測試全過；私有內容掃描沒標記這個字串。已 commit 進整合分支的第一個 entry 仍是舊署名，不改寫歷史。
+- **已加：`runner.py mark-done <entry> --commit <sha> [--note]` 子命令**。缺口：某些 entry 由人在本機處理（例如目標 repo 已有等價實作的 Redux actions 殼；前兩個試跑都 `blocked(needs_human)`），runner 沒有任何方式把它們標成 `done`，而取件只挑「依賴全部 done」的 entry，離線算出 7 個殼影響 96 個 entry 中的 45 個。做法：`git fetch` 後要求 `--commit` 是遠端整合分支的祖先（只在本機、只在 entry 分支、不存在的 commit 一律拒絕，拒絕時佇列不動），entry 須為 `pending`／`blocked`／`failed`，走既有的 `mutate_queue`（資料鎖，鎖內重驗狀態），標 `done`、清失敗殘留、寫回 `last_commit`／`finished_at`、事件 `entry_marked_done`；不動熔斷計數與 `integration_tip_sha`，遠端 tip 與記錄不同時只提醒 `unblock --integration-tip`。不驗那個 commit 是不是該 entry 的成品（由人負責）。測試 `helpers/tests/test_mark_done.py` 8 個（真的 bare 遠端＋工作 repo 拓撲）；6 個突變探針（祖先檢查恆通過、改看本機分支、狀態守衛全放行、不清 `last_error`、標記時歸零熔斷計數、不寫 commit）全部以斷言失敗殺死。用法與順序見 `docs/environment.md` 的「人工（本機）處理完的 entry」。
+- **已改：額度前置檢查改從 stream 的 `rate_limit_event` 取用量，runner 不再呼叫 `quota-usage.py`**。原因：`/api/oauth/usage` 需要 `user:profile` scope，`claude setup-token` 的長效 token 只有 `user:inference`，對它一律 429（真環境實測；Claude Code 本體只在 scopes 含 `user:profile` 時才呼叫該端點，並有內嵌字串說明長效 token 是 inference-only）；另外舊 `quota_snapshot` 在腳本失敗時輸出的是非空的 `{"available": false}`，`quota_unavailable` 事件永遠不會觸發——額度檢查**靜默失效**（今天取件 6 次、0 筆事件）。做法：新檔 `helpers/rate_limit.py`（純資料轉換：`latest_rate_limit(events)` 取最後一筆兩個視窗都有效的事件，utilization 0～1 比例 ×100 四捨五入成百分比整數，epoch 轉 UTC ISO）；`runner.py` 新增 `record_rate_limit`，在 `process_one_entry` 的 `call_claude` 之後、`judge_outcome` 之前把它存進 `queue.json` 的 `runner_state.last_rate_limit`（拿不到時保留舊值、記 `rate_limit_missing` 帶原因、不拋例外）；`quota_snapshot` 保留名稱與回傳格式，改成只讀這個值、不呼叫任何外部指令，已過重置時間的視窗略過，查不到時**記 `quota_unavailable`（原因 `no_data`／`stale`／`queue_unreadable`）**；退役 `QUOTA_SCRIPT` 等 3 個常數，`quota-usage.py` 留作參考並標已退役。單位有佐證，且 user 於 2026-09-30 以 `/usage` 畫面對照，回報大致正確（沒有逐點比對）：量級與增量，加上本體處理同一組視窗的程式（`utilization < 1` 視為未耗盡、嚴重度 `> 0.95`／`> 0.75`、顯示才 `× 100`）。限制：用量只到最近一次 CLI 呼叫為止，重啟後第一個模組沒有資料（記 `quota_unavailable`／`no_data`、不擋）。測試 `helpers/tests/test_rate_limit.py` 13 個，9 個突變（不做 ×100、過期視窗不略過、查不到不記事件、CLI 後不存用量、取第一筆、布林當數字、缺視窗也接受、`quota_snapshot` 又呼叫外部指令、讀不到 stream 不記事件）全部以斷言失敗抓到；完整套件 384 個全過（連跑兩輪）；6 個真實 stream 檔（14 筆事件）逐檔解析符合預期；Mac Studio 上用真的 `claude -p "echo ok" --output-format stream-json --verbose` 端對端跑過（`record_rate_limit` 回 True、五小時 37%／七天 42%）；測試在 Mac Studio 的非互動 `python3` 3.9.6 上通過。抓到一個測試隔離失誤：先紅階段舊 `quota_snapshot` 會在測試裡執行 `quota-usage.py`（讀本機憑證），已在測試類別 `setUp` 封死 `run_command`。
+- **已解決（見上一項）：`docs/environment.md` 說用量 API 不接受長效 token 時退回 Keychain，但 `quota-usage.py` 在環境變數有 token 時不碰 Keychain**。現在額度檢查根本不打那個端點，也不讀 Keychain，相關段落已改寫。
+- **未改：`build_env` 的定義太窄**。`SKILL.md` 步驟 5 與 blocked 原因表只寫「偵測到 vite watcher」，但實測 skill 也把「建置目錄缺 `node_modules`」「前端根目錄的依賴沒裝（共用檔往上解析不到套件）」「建置必填環境變數為空」標成 `build_env`。通知只寫原因代碼，判讀要先讀診斷包 `SUMMARY.md` 的 notes。
+- **未改：首次依賴安裝沒有人負責**。`install_deps_if_lockfile_changed` 只在 lockfile hash 與上一輪不同時才跑，且指令寫死 `npm ci`（無 `--legacy-peer-deps`、環境沒有私有套件 token）；偵測範圍只有 `frontend/react_18` 的 lockfile，不含前端根目錄。之後 lockfile 隨基準分支合進來變動時會走這條路徑並失敗。
+- **未改：blocked 後成品留在工作樹 vs 前置作業要求全乾淨**。skill 為了 `--resume` 保留未 commit 的檔案，runner 每個模組前要求 `git status --porcelain` 為空（含未追蹤檔），下次啟動必 `paused(integration_dirty)`。目前只能人工搬走成品再 `unblock --integration-tip`。
+- **未改：LINE 通知第二行的「診斷:」路徑，呼叫序號與實際目錄不一致**（實測通知寫序號 1、事件紀錄與實際目錄是序號 4），根因未查。
 
 ### 第二批：c8093cb 的 codex review（tier 3，六面向）修正
 

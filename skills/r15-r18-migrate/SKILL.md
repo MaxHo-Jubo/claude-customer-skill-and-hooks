@@ -30,7 +30,7 @@ version: 1.1.2
 - **命名沿用 R15**：action 常數 identifier 與字串、reducer 檔名與函式名、state 欄位名、action creator 函式名一律照搬，不加前綴。
 - **機制沿用 R18**：saga 基礎層（`baseSaga` / `api.js` / `actionCreator`）零改動，照 R18 既有樣板接線。
 - **註解逐字照搬**：不補 STEP 註解、不補 JSDoc、不修錯字、不重排；原本沒有註解的就沒有。
-- 所有**建立或修改**的檔案，檔頭 `Modified` 欄位加一行 `YYYY/MM/DD <執行者>`。
+- 所有**建立或修改**的檔案，檔頭 `Modified` 欄位加一行 `YYYY/MM/DD Claude subscribe by Max Ho`（署名固定這串，表示由 Max Ho 訂閱的 Claude 執行，不自行改寫）。
 - 禁止順手重構、禁止改名、禁止換套件（例如把 moment 換掉）、禁止調整與本次無關的檔案。
 - **R15 檔案一律不刪**，`frontend/react_15/routes.js` 一行都不改。回退手段是把 feature flag 關回 `false`。
 

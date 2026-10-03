@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""查詢目前帳號的用量額度，供 runner 判斷「現在該不該取下一個模組」。
+"""【已退役，runner 不再呼叫；留作參考】查詢目前帳號的用量額度。
+
+退役原因（2026-09-30）：`/api/oauth/usage` 需要 `user:profile` scope，`claude setup-token` 的長效 token 只有
+`user:inference`，對它一律 429。runner 改從 CLI stream 的 `rate_limit_event` 取用量（見 runner.py 的
+`record_rate_limit`／`quota_snapshot`）。
+
+原說明：供 runner 判斷「現在該不該取下一個模組」。
 
 輸出一律是單行 JSON 到 stdout，只含使用率與重置時間，**絕不印出 token**。
 token 來源優先序：環境變數 CLAUDE_CODE_OAUTH_TOKEN → macOS Keychain（含 hash 後綴的項目）。

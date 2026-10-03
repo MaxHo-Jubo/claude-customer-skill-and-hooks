@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-09-24（`skill-activation-hook.ts` 改用 TypeSafe Jev 語意路由；新增 `repeat-failure-detector.ts`／`stop-claim-guard.ts` 兩個 Jev hook；`r15-r18-migrate` 升至 1.1.2；前次內容更新 2026-09-18 新增三個發版/遷移 skill，見 README.md 變更紀錄）
+> 上次更新：2026-10-03（`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -33,12 +33,12 @@
 
 ### 開發流程類
 
-#### `/jira` — Jira Issue 管理（v1.1.0）
+#### `/jira` — Jira Issue 管理（v1.2.0）
 
 - **位置**：`~/.claude/skills/jira/SKILL.md`
 - **用法**：`/jira`、`/jira fetch`、`/jira branch {ISSUE_ID}`
 - **功能**：
-  - 自動從 git branch 名稱識別 Jira issue
+  - 自動從 git branch 名稱識別 Jira issue；branch 無 Jira 編號時，`/jira`（無參數）改讀 save-progress 的交接紀錄 `.claude/handoff-{branch}.md`（v1.2.0）
   - 抓取 issue 詳情（含 issuelinks，最多追蹤 2 層）
   - 建立開發筆記 `.claude/{ISSUE_ID}.md` 與原始資料 `.claude/{ISSUE_ID}-Jira.md`
   - 管理 branch 建立
@@ -371,14 +371,17 @@
   - 提供多帳號設定流程指引（CLAUDE_CONFIG_DIR + zshrc alias + statusline）
 - **依賴**：`scripts/check-quota.sh`、macOS Keychain 中的 Claude Code credentials
 
-#### save-progress — 手動存檔工作進度
+#### save-progress — 手動存檔工作進度（v1.1.0）
 
 - **位置**：`~/.claude/skills/save-progress/SKILL.md`
 - **用法**：`/save-progress`
 - **功能**：
-  - 有 TaskList 時：dump 完整任務狀態（status、描述、blockers）到 `tasks/todo.md`
-  - 無 TaskList 時：回顧 session 對話，產出工作摘要 + 未完成事項到 `tasks/todo.md`
+  - 依 branch 決定交接紀錄位置（`{CLAUDE_DIR}` = 主要工作目錄絕對路徑 + `/.claude/`，與 jira skill 同規則）：含 Jira 編號 → `{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（只替換該段）；無編號 → `handoff-{branch}.md`（`/` 換 `-`）；非 git repo／detached HEAD → `handoff-{資料夾名}.md`
+  - 交接紀錄內容：目標、架構決策（完整保留）、已修改檔案（以 `git status`／`git diff --stat`／`git log` 觀測）、驗證狀態（未跑寫「未驗證」）、任務狀態（TaskList 或 session 回顧）、TODO 與 rollback、下一步、待使用者回答
+  - 不碰 `tasks/todo.md`（GATE-2 計畫檔）
   - 檢查並保存未存的 auto memory（feedback/project/reference）
+  - 回報時附交接紀錄絕對路徑（ctx-handoff mod 依此要求最後一行輸出 `HANDOFF_FILE: <路徑>`）
+- **連動**：`/jira` 讀得到兩種交接紀錄（Jira 筆記直接讀；無編號時讀 `handoff-{branch}.md`）
 - **適用時機**：session 結束前、預感 rate limit、長時間離開前
 - **錯誤追蹤**：失敗時記錄到 `~/.claude/.learnings/ERRORS.jsonl`
 
@@ -409,6 +412,7 @@
 - **流程邊界（硬性）**：不執行 `checkout`/`switch`/`merge`/`rebase`/`push`/`reset`/`restore`/`stash`/`clean`/`cherry-pick`/`worktree`/`commit --amend`，不 `gh pr merge|close`，不 `rm -rf`；`git add` 範圍嚴格限定本 entry 路徑 + 明列的共用註冊檔
 - **v1.1.0（2026-09-18）完整錯誤回報機制**：CLI 改 `stream-json --verbose` 逐事件落檔（逾時被殺 stdout 不再是空的）；新模組 `helpers/diagnostics.py` 在判讀失敗當下自動凍結診斷包（stream/meta/子行程 log/progress/queue 快照 + 給 Claude 讀的 `SUMMARY.md`，命中 secret pattern 整行 `[REDACTED]`）；`helpers/stream_events.py` 抽出 stream-json 解析供 runner 與 diagnostics 共用；runner 未預期例外統一走 `handle_runner_crash`（寫 traceback、`enter_paused` 而非直接 raise，同簽名第二次進入 `hold` 狀態靜默退出直到手動 unblock）；新子命令 `diagnose`
 - **v1.1.2（2026-09-23～24）修復兩個 CRITICAL**：D1 舊 entry 分支重跑沒有煞車——重跑時整合分支可能已前進，發佈段 `merge --ff-only` 必敗會觸發無簽名的一般暫停，重啟後前置作業放行、同 entry 放回 pending 再燒一次模組預算且不再通知，形成無限迴圈；修法分兩層：CLI 之前 `prepare_branch` 先 `merge --ff` 追上整合分支（失敗依有無衝突分流 `blocked(git_state)`／runner 級暫停），發佈段的 ff-merge 失敗改回新結果 `entry_not_ff` 讓 entry 標 blocked 而非一般暫停。D2 被訊號中斷的呼叫序號會被下一次重用而覆寫前一次的 stream/子行程 log——`next_call_number` 改用 `O_CREAT|O_EXCL` 佔號式取號（新模組 `helpers/session_index.py`）。`helpers/tests/` 同版大量擴充（checkpoint hold/reconcile、merge-integration、call-number、process-shutdown 等單元測試）
+- **部署試點後修正（2026-09-30，未升版）**：`Modified` 署名固定為 `Claude subscribe by Max Ho`；新增 `runner.py mark-done <entry> --commit <sha> [--note]`（人工處理完的 entry 標 done，`--commit` 須為遠端整合分支的祖先）；額度前置檢查改從 stream 的 `rate_limit_event` 取用量（新模組 `helpers/rate_limit.py`，存進 `runner_state.last_rate_limit`；長效 token 打 `/api/oauth/usage` 一律 429，舊檢查靜默失效），`quota-usage.py` 退役；測試 384 個。已知未改缺口（`build_env` 定義過窄、首次依賴安裝無人負責、blocked 成品與乾淨工作樹衝突、通知診斷序號不一致）見 `CHANGELOG.md`
 - **`skill-rules.json` 未註冊**：與 `finalize-release` 一樣純手動 slash command 觸發，不會被自動建議
 - **依賴**：`helpers/runner.py`（外層 runner，不屬本 skill 執行範圍但共用同一目錄）、`helpers/diff-test/` jest harness、`helpers/boot-smoke.cjs`（Playwright）、vite build、git repository
 
@@ -573,13 +577,13 @@
 | `lib/jev-questions.ts` | 三個 Jev 掛載點的題目定義（2026-09-24 新增）— A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑 `jev-eval/run-eval.ts` |
 | `jev-eval/run-eval.ts` | Jev 離線評估 CLI（2026-09-24 新增）— 讀 `jev-eval/{a-routing,b-claims,c-repeat}.jsonl` 三份評估集直接呼叫 systemOne，輸出各題準確率／confidence 門檻表／錯誤案例／延遲，原始結果存 `results-<時間>.json`；門檻挑選規則（`MIN_PRECISION=0.9`／`MIN_COVERAGE=0.5`）事先寫死，不看結果再調 |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
-| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）、`stopBlockCounts`（per-session block 計數）與 `engine?`（本輪 review 引擎，選填以相容舊 marker）欄位 |
+| `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）、`stopBlockCounts`（per-session block 計數）與 `engine?`（本輪 review 引擎，選填以相容舊 marker）欄位；2026-10-03 新增 `detectNewCommit()`／`recordSeenHead()`／`commitWindowSec()`：`git commit -q` 沒有確認輸出時，以 reflog 最新一筆是 commit 類動作、落在時效窗內（PostToolUse `duration_ms` 換算秒數 + 30 秒緩衝；無此欄位退回 120 秒）且 HEAD 與上次記錄（`.lasthead`）不同判定為新 commit，測試在 `lib/review-marker.test.ts` 與 hook 層 `post-commit-review.test.ts` |
 | `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
 | `lib/review-engine.ts` | review 引擎決策共用 lib（v1.4.0 新增）— `resolveEngine()`：環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE` 覆寫 → 實際執行 `codex --version` 探測（非只查 binary 存在）→ 失敗降級 `agent`；`buildSkillInvocation(tier, commitHash, engine)` 集中組出 `Skill(commit-review) args: "..."` 字串，取代原本分散在 `post-commit-review.ts`/`stop-review-guard.ts` 兩處各自組字串會分歧的寫法；`LEGACY_MARKER_ENGINE` 供舊 marker（無 `engine` 欄位）向後相容推導 |
 | `lib/codex-aspects.ts` | codex review 六面向定義（v1.4.0 新增）— 對應原 Tier 3 的 5 個 subagent 面向 + Tier 2 的 lite 面向，每項含 prompt 與輸出對應的 schema key，供 `codex-review.ts` 逐一組 `codex exec` 呼叫 |
 | `codex-review.ts` | codex review 平行 runner（v1.4.0 新增）— 依 `lib/codex-aspects.ts` 平行發動多個 `codex exec` 子進程，輸出強制驗證 `schemas/codex-review-aspect.json` schema 後落檔；exit code 非 0 或輸出檔缺漏/不合 schema 一律視為該面向失敗（機械判定，不靠模型自報） |
 | `compute-tier.ts` | CLI 包裝 — `bun compute-tier.ts [target]`，輸出 `TIER=N` 與 `FILES=… LINES=… SENSITIVE=… COMMIT=…` 兩行，供 `commit-review` skill 手動模式取得 tier；ref 無效時印錯誤並 exit 1（skill 見非 0 exit 即停止，不得採用 TIER 值） |
-| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier ≥1 另呼叫 `lib/review-engine.ts` 的 `resolveEngine()` 決定本輪 review 引擎，Tier 2/3 寫入 pending-review marker（含 `sessionId`/`engine`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain |
+| `post-commit-review.ts` | PostToolUse hook — git commit 後呼叫 `lib/tier.ts` 判定 Tier（0~3），Tier ≥1 另呼叫 `lib/review-engine.ts` 的 `resolveEngine()` 決定本輪 review 引擎，Tier 2/3 寫入 pending-review marker（含 `sessionId`/`engine`）供 `commit-gate-guard.ts` 阻擋下一個 commit、`stop-review-guard.ts` 阻擋回合結束，並以 systemMessage 指派 `commit-review` skill 跑對應 chain；commit 成功判定為「輸出有確認行」或 `detectNewCommit()`（涵蓋 `-q`／`--quiet` commit；判定失敗輸出警告請手動 `/commit-review`）；`.lasthead` 於 marker 寫入與 review 指派之後才記錄，失敗附在 systemMessage |
 | `clear-pending-review.ts` | 手動清除 pending-review marker，解鎖該 repo 的 commit 閘門（Tier 2/3 review 完成、Critical 問題處理完後執行） |
 | `pre-compact-snapshot.ts` | PreCompact hook — 壓縮前提醒存記憶 + dump TaskList 到 tasks/todo.md |
 | `summarize_errors.py` | 讀取 `~/.claude/.learnings/ERRORS.jsonl`，按 skill/tool/pattern 分組統計錯誤，支援 `--days N`、`--min-count N` |
@@ -641,7 +645,7 @@
 
 > 完整說明見 [`plugins/README.md`](plugins/README.md)
 
-### 啟用的 Plugins（8）
+### 啟用的 Plugins（9）
 
 | Plugin | 來源 | 用途 |
 |--------|------|------|
@@ -653,6 +657,7 @@
 | pr-review-toolkit | claude-plugins-official | PR Code Review 工具套件（/pr-review-toolkit:review-pr） |
 | playwright | claude-plugins-official | 瀏覽器自動化（取代 agent-browser skill） |
 | mcp-outline | mcp-outline | Outline 文件搜尋/讀取/建立/管理（2026-07-25 新增） |
+| cc-plugin-you-should-know | builtin（Claude Code 內建） | 2026-10-03 啟用；用途未見文件，store 僅記錄各 session 的 `askedTurn` |
 
 ### 停用的 Plugins（10）
 
