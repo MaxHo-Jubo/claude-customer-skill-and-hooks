@@ -1,0 +1,6 @@
+{
+  "name": "tool-reminders",
+  "version": "0.1.0",
+  "description": "Write/Edit 後執行提醒類檢查腳本，把輸出經 tool.call 的 context 送給 model（取代送不到 model 的 PostToolUse stdout）",
+  "author": { "name": "Max_Ho" }
+}

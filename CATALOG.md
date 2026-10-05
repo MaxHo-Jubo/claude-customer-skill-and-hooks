@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-05（新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -506,6 +506,17 @@
 - **測試**：`claude plugin test ~/.claude/mods/ctx-handoff`（24 個，含先 `/clear` 再送出的順序、drop、失敗上限、離席攔截）
 - **未驗證**：存檔回合在真實 session 的辨識（測試環境模擬不出 `turn.start` 對 mod 送出 prompt 的文字）、閒置刷新是否延長 1 小時快取
 
+### tool-reminders — Write/Edit 提醒轉送（v0.1.0）
+
+- **位置**：`~/.claude/mods/tool-reminders/`（`hooks/register.ts`、`hooks/register.test.ts`）
+- **用途**：PostToolUse exit 0 的 plain stdout 只進 debug log，提醒類檢查的輸出原本送不到 model；改由 `tool.call` hook 在工具成功後執行腳本，把非空輸出放進 `context`（同一回合送達、只有 model 看得到，user 看不到）
+- **檢查清單**（`CHECKS` 資料表）：`inventory-drift-detector.ts`、`spec-section-validator.ts --warn-only`；路徑篩選留在腳本內，mod 只做轉接，平行以 `$.process.run` 執行（每支 10 秒逾時）
+- **不作用**：工具被 deny 或回報錯誤時不執行檢查
+- **腳本協定**：stdin 為 `{ tool_name, tool_input: { file_path } }`（PostToolUse 輸入的子集）；exit 0 = 檢查完成（stdout 非空即提醒），exit ≠ 0 = 檢查失敗（原因寫 stderr）。兩支腳本的輸入不符契約、讀檔失敗、未預期例外一律 exit 1，不用 exit 0 表示失敗
+- **失敗處理**：腳本 exit ≠ 0、逾時、bun 不存在、HOME 未設定 → `$.ui.log` 寫 transcript + toast，並在 context 告知 model「該檢查結果未知」；工具結果本身不受影響
+- **測試**：`claude plugin test ~/.claude/mods/tool-reminders`（10 個；mutation probe 11 項皆會轉紅）＋ `bun test ~/.claude/scripts/reminder-scripts.test.ts`（10 個，以 mod 的 stdin 格式 spawn 真腳本驗介面約定，含 symlink 路徑與 exit code 語意；舊版腳本跑會紅 4 個）
+- **實測（2026-10-05）**：互動 session 與 `claude -p` 皆送達；探針以只顯示在狀態列的亂數驗證 model 複述值一致、transcript 不顯示
+
 ## Hooks
 
 ### SessionStart
@@ -534,12 +545,11 @@
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Write\|Edit` | `spec-section-validator.ts` | 驗證寫入的 spec 文件區段格式是否正確 |
-| `Write\|Edit` | `inventory-drift-detector.ts` | 偵測 inventory 索引是否需要更新 |
+| `Write\|Edit` | `spec-section-validator.ts` | spec 文件缺必要區段時 `decision:block` + exit 2（空骨架警告改由 `tool-reminders` mod 以 `--warn-only` 呼叫） |
 | `Write\|Edit` | `skill-version-check.ts` | SKILL.md 被編輯時，若 version 未更新則提醒進版號 |
 | `Bash` | `post-commit-review.ts` | git commit 成功後用 `git diff --numstat` 機械判定 Tier（0~3，邏輯在 `scripts/lib/tier.ts`），Tier ≥1 另以 `lib/review-engine.ts` 的 `resolveEngine()` 探測本輪 review 引擎（`codex`/`agent`，決策見下方 `commit-review` 章節），Tier 2/3 寫入 pending-review marker 含 `sessionId`/`engine`（供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門讀取），並以 systemMessage 指派 `commit-review` skill 執行 `tier=N target=HEAD engine=<agent\|codex>` 的 chain（步驟明細在 skill，hook 不列舉） |
 
-> **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。
+> **HOOK-OUTPUT 限制**：PostToolUse 的 stdout 不注入 AI context，Claude 看不到（例外：stdout 印 `{"decision":"block","reason":...}` 並 exit 2 時，reason 以 blocking error 送達，上表 `spec-section-validator.ts` 即依此）。`systemMessage` JSON 僅顯示給使用者。需靠 CLAUDE.md 規則驅動 Claude 行為 + hook systemMessage 作為使用者端安全網。只給 model 的提醒改走 mod（見 `## Mods` 的 `tool-reminders`）。
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
 
@@ -588,8 +598,8 @@
 | `hook-error-wrapper.sh` | 包裝 hook 命令，失敗時記錄到 `ERRORS.jsonl`（所有 hook 的外層 wrapper） |
 | `detect-jira-issue.sh` | 從 git branch 解析 Jira issue key |
 | `generate-spec-mapping.ts` | 產生 `spec/file-mapping.json`（源碼↔spec 對照表） |
-| `spec-section-validator.ts` | 驗證 spec 必要區段是否存在 |
-| `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異 |
+| `spec-section-validator.ts` | 驗證 spec 必要區段是否存在；預設模式供 PostToolUse block，`--warn-only` 供 `tool-reminders` mod 只輸出空骨架警告 |
+| `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異；由 `tool-reminders` mod 呼叫（2026-10-05 起）。舊版讀從未存在的 `CLAUDE_TOOL_NAME`／`CLAUDE_TOOL_INPUT` 環境變數而整支空轉，現改讀 stdin；排除 `skills/synced/` 與 `node_modules`；移除已無讀取端的 `skill-rules.json` 比對 |
 | `skill-activation-hook.ts` | UserPromptSubmit hook — 用 TypeSafe Jev 語意模型路由 user prompt（v2，2026-09-24 全面改寫，見上方 Hooks／UserPromptSubmit 章節） |
 | `lib/jev-client.ts` | Jev（TypeSafe systemOne）HTTP client 共用 lib（2026-09-24 新增）— `callJev`（丟錯版，供離線評估用）／`askJev`（fail-open 版，供 hook 用，出錯回 `null` 並寫 log）；含逾時（`HOOK_TIMEOUT_MS=2000`）、送出前遞迴遮罩憑證（`maskSecrets`）、決策 log（`logDecision`，不含原文）、per-session state 路徑推導（`sessionStatePath`）與原子寫入（`writeJsonAtomic`）；被三個 Jev hook 與 `jev-eval/run-eval.ts` 共用 |
 | `lib/jev-questions.ts` | 三個 Jev 掛載點的題目定義（2026-09-24 新增）— A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑 `jev-eval/run-eval.ts` |

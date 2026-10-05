@@ -3,7 +3,7 @@
     "ENABLE_LSP_TOOL": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_CODE_NO_FLICKER": "1",
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/ctx-handoff"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/ctx-handoff:~/.claude/mods/tool-reminders"
   },
   "permissions": {
     "allow": [
@@ -246,12 +246,6 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/spec-section-validator.ts",
             "timeout": 3000,
             "statusMessage": "Validating spec sections..."
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/inventory-drift-detector.ts",
-            "timeout": 5000,
-            "statusMessage": "Checking inventory drift..."
           },
           {
             "type": "command",

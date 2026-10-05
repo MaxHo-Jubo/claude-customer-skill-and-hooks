@@ -100,6 +100,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 
 | Mod | 版本 | 用途 | 來源 |
 |-----|------|------|------|
+| tool-reminders | 0.1.0 | Write/Edit 成功後平行執行提醒類腳本（`inventory-drift-detector.ts`、`spec-section-validator.ts --warn-only`），非空輸出經 `tool.call` 的 `context` 送給 model（同回合送達、user 看不到）；取代送不到 model 的 PostToolUse stdout。腳本失敗時寫 transcript、跳 toast，並告知 model 結果未知 | 自寫 |
 | ctx-handoff | 0.1.0 | 互動 session 的 context 達 600k（或視窗 80%）時跑 `save-progress` 寫交接紀錄 → 驗證檔案寫好 → `/clear` → 新對話讀交接紀錄接續；閒置 55 分鐘刷新快取最多 3 次，之後存離席交接；`-p`／SDK 等非互動 session 不自動交接。指令 `/handoff-status`、`/handoff-now yes` 等，詳見 [`mods/ctx-handoff/README.zh-TW.md`](mods/ctx-handoff/README.zh-TW.md) | 修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（commit `f871109`，MIT） |
 
 ## Hooks 一覽
@@ -111,8 +112,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行 |
-| PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | 驗證 spec 區段格式 |
-| PostToolUse | 寫入/編輯後 | Write\|Edit | `inventory-drift-detector.ts` | 偵測 inventory 漂移 |
+| PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | spec 缺必要區段時 block（空骨架警告改由 `tool-reminders` mod 處理） |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
 | PostToolUseFailure | 所有工具（catch-all）失敗時 | —（空 matcher） | `post_tool_error.py` | tool 呼叫失敗時自動記錄 JSONL 至 `~/.claude/.learnings/ERRORS.jsonl`（讀 `error`/`is_interrupt`；使用者中斷、權限/sandbox 阻擋不觸發）；2026-09-14 前誤掛在 `PostToolUse`（只在成功時觸發，空轉未寫入），改掛獨立事件後才實際生效；`context` 依序推斷 `skill:`（指令／路徑含 `/skills/<name>`）→ `hook:` → `mcp:<server>` → 檔案路徑 → `repo:<cwd 名稱>` |
@@ -256,6 +256,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-05: tool-reminders mod — Write/Edit 提醒改經 `tool.call` context 送達 model
+
+- **起因**：盤點「mod 能改善什麼」時發現 PostToolUse 提醒有兩支送不到 model。`inventory-drift-detector.ts` 讀 `CLAUDE_TOOL_NAME`／`CLAUDE_TOOL_INPUT` 環境變數，2.1.289 執行檔內 0 次出現（對照組 `CLAUDE_PROJECT_DIR` 33 次），實跑確認只給 stdin 無輸出、補環境變數才有輸出 → 整支從未運作；`spec-section-validator.ts` 的空骨架警告是 PostToolUse exit 0 plain stdout，只進 debug log。
+- **Phase 0 探針**：dev-mods 寫 probe mod，`tool.call` 回傳 `{ ...ran, context: [亂數] }`，亂數只顯示在狀態列。互動 session 同回合送達且 user 確認狀態列值與 model 複述一致、transcript 不顯示；與 shell PostToolUse block 並存；`claude -p --plugin-dir` 送達，未載入 mod 的對照組回 `NONE`。
+- **`mods/tool-reminders`（新增）**：`CHECKS` 資料表 + `$.process.run` 平行執行；工具 deny／isError 不跑；失敗走 log + toast + context「結果未知」，不靜默。5 個測試，mutation probe 4 項（拿掉 context／isError 防護／toast／忽略 exit code）皆轉紅；`tsc -p` 抓到 3 個 `noUncheckedIndexedAccess` 已修。
+- **`scripts/inventory-drift-detector.ts`**：改讀 stdin、非法 JSON exit 1；排除 `skills/synced/`（claude.ai 同步 skill）與 `node_modules`（playwright-core 附帶的 `trace`／`skill` SKILL.md 造成重複）；移除 `skill-rules.json` 比對（skill-activation-hook 改 Jev 版後已無讀取端，修好後每次會吐 25 行雜訊）。輸出由 ~40 行降為 1 筆真實 drift（`r15-r18-migrate` 未入 inventory，已補）。
+- **`scripts/spec-section-validator.ts`**：新增 `--warn-only`（只輸出空骨架警告、不 block，供 mod 呼叫）；預設模式維持 block，拿掉送不到的空骨架 console.log。
+- **`settings.json`**：移除 inventory-drift PostToolUse 項目；`CLAUDE_CODE_PLUGIN_DIRS` 加入 `~/.claude/mods/tool-reminders`。新 `claude -p` session 實測經環境變數載入並送達，debug log 確認 ctx-handoff 與 tool-reminders 兩者皆 loaded。
+- **Tier 3 review（codex 額度用完，經同意改 agent 引擎 6 面向）修正**：spec-section-validator 外層 catch／stdin 逾時／讀檔失敗原本一律 exit 0，mod 無從分辨「沒有提醒」與「檢查壞掉」→ 改 stderr + exit 1（兩種模式）；inventory-drift-detector 改以實體路徑比對（多帳號 `~/.claude-max-2/*` symlink 路徑原本 0 筆 drift）、前綴比對加路徑分隔符、欄位缺漏／HOME 為空／inventory.md 讀不到／skills 掃描失敗改 exit 1；mod 的 HOME 缺失改走統一失敗出口、stderr 空時改帶 stdout 摘錄；mod 測試 5 → 10（deny、保留下層 context、工具篩選、Edit、逾時、HOME），mutation 11 項皆紅；新增 `scripts/reminder-scripts.test.ts` 以 mod stdin 格式 spawn 真腳本驗介面約定（舊版腳本跑紅 4 個）。
+- **附帶發現（未處理）**：Notification hook 的 `$CLAUDE_NOTIFICATION_MESSAGE` 同樣 0 次出現，通知內文可能一直是空字串。
 
 ### 2026-10-03（四）: weekly-review 錯誤紀錄修補 + 兩條規則升級
 
