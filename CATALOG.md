@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-05（新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-05（新增 mod `review-band`：唯讀顯示 pending-review marker；三支 PreToolUse guard 擋下時寫 `DENIALS.jsonl`；`weekly-review` 1.9.0 加擋下統計；新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -110,7 +110,7 @@
 - **不觸碰的範圍**：iOS/Android 正式發布一律使用者自己到 App Store Connect／Google Play Console 網頁手動點擊；曾規劃過的 fastlane lane（`release_pending_ios_version`／`release_pending_android_version`）已於 2026-09-04 全部放棄
 - **依賴**：`gh` CLI（PR 查詢/merge）、`jira-release-sync` skill（STEP 04 直接呼叫其完整流程，含它自己的候選清單確認 gate，不跳過）
 
-#### `/weekly-review` — 每週工作回顧（v1.8.0）
+#### `/weekly-review` — 每週工作回顧（v1.9.0）
 
 - **位置**：`~/.claude/skills/weekly-review/SKILL.md`
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
@@ -120,7 +120,7 @@
   3. Auto Memory 變動掃描
   4. 週報彙整與模式提取（含 Skill/Subagent/MCP Server 建議；MCP Server 建議判斷依據：ERRORS.jsonl 中跨 skill 的重複 API call pattern、觀察記錄中「每次都要重新查」的模式）
   5. 記憶整理（過期/重複/升級建議，需使用者確認）
-  6. Skill 錯誤 Pattern 分析（Subagent A，與 STEP 08 平行）— 執行 `summarize_errors.py`，提取高頻 pattern（≥3 次）
+  6. Skill 錯誤 Pattern 分析（Subagent A，與 STEP 08 平行）— 執行 `summarize_errors.py`，提取高頻 pattern（≥3 次）；**v1.9.0 起**另統計 `DENIALS.jsonl`（guard × 擋下次數、同 guard × target ≥3 次列為「反覆擋下」）
   7. Skill 修補建議（依賴 STEP 06）— 讀取 SKILL.md，產出 before/after 建議，不自動修改
   8. Amendment 成效追蹤（Subagent B，與 STEP 06 平行）— 比對 `AMENDMENTS.md` 修補前後錯誤頻率
 - **快捷觸發**：「整理記憶」→ 只執行 STEP 05；「review skill errors」→ 直接執行 STEP 06~08
@@ -517,6 +517,16 @@
 - **測試**：`claude plugin test ~/.claude/mods/tool-reminders`（10 個；mutation probe 11 項皆會轉紅）＋ `bun test ~/.claude/scripts/reminder-scripts.test.ts`（10 個，以 mod 的 stdin 格式 spawn 真腳本驗介面約定，含 symlink 路徑與 exit code 語意；舊版腳本跑會紅 4 個）
 - **實測（2026-10-05）**：互動 session 與 `claude -p` 皆送達；探針以只顯示在狀態列的亂數驗證 model 複述值一致、transcript 不顯示
 
+### review-band — pending-review 狀態列（v0.1.0）
+
+- **位置**：`~/.claude/mods/review-band/`（`hooks/register.tsx`、`hooks/register.test.tsx`、`types/index.d.ts` state 契約）
+- **用途**：在輸入框上方唯讀顯示目前有效的 pending-review marker，例如 `🔒 pending-review：<repo> Tier 3（abc1234）· codex · 應跑 6 個面向 · 12 分鐘前 · 本 session`，讓 Stop 閘門擋下時看得到卡在哪
+- **範圍**：只讀不寫；上鎖、擋 commit、Stop 閘門、commit-review skill 全不經過它。mod 沒載入只是看不到 band，閘門照常
+- **資料來源**：`scripts/list-pending-review.ts`，有效性與閘門一致（`readMarkerRaw` + `isMarkerExpired`，兩者都是閘門用的同一份函式；刻意不用會刪逾期 marker 並寫 audit log 的 `readValidMarker`）。格式不完整但未逾期的 marker 照樣顯示並註明「閘門仍會擋」；只有解析失敗的檔標為「閘門視為無 marker 放行」。輸出契約 `PendingReview`／`PendingReviewListing` 只定義在 mod 的 `types/index.d.ts`，腳本以 type-only import 引用；mod 端再以 `parseListing` 驗證形狀。marker 目錄沒有 `.json` 時不 spawn
+- **刷新時機**：`session.start`、`turn.complete`、Bash 的 `tool.call` 結束後（commit 與解鎖都走 Bash）
+- **失敗處理**：HOME 未設定、目錄列舉失敗、腳本 exit ≠ 0、輸出形狀不符，全部在同一個 try 內走 `ok:false` 快照 → band 顯示「pending-review 狀態讀取失敗：<原因>」，不會停在舊快照；經過分鐘數在 render 時以 `$.clock.now()` 即時計算
+- **測試**：`claude plugin test ~/.claude/mods/review-band`（8 個，含有→無狀態轉移、session.start／turn.complete 觸發、刷新晚於 Bash、四種讀取失敗、格式不完整顯示）＋ `bun test ~/.claude/scripts/list-pending-review.test.ts`（5 個，含逾期 marker 跑完仍在、與 `readValidMarker` 判準一致的契約測試）
+
 ## Hooks
 
 ### SessionStart
@@ -537,9 +547,9 @@
 
 | Matcher | 腳本 | 用途 |
 |---------|------|------|
-| `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例 |
-| `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷 |
-| `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open |
+| `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
+| `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
+| `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
 
 ### PostToolUse
 
@@ -605,6 +615,9 @@
 | `lib/jev-questions.ts` | 三個 Jev 掛載點的題目定義（2026-09-24 新增）— A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑 `jev-eval/run-eval.ts` |
 | `jev-eval/run-eval.ts` | Jev 離線評估 CLI（2026-09-24 新增）— 讀 `jev-eval/{a-routing,b-claims,c-repeat}.jsonl` 三份評估集直接呼叫 systemOne，輸出各題準確率／confidence 門檻表／錯誤案例／延遲，原始結果存 `results-<時間>.json`；門檻挑選規則（`MIN_PRECISION=0.9`／`MIN_COVERAGE=0.5`）事先寫死，不看結果再調 |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
+| `lib/denial-log.ts` | guard 擋下紀錄的格式唯一定義處（2026-10-05 新增）— `DenialRow`（`ts/kind/guard/tool/target/cwd_name/session/reason`，target 與 reason 寫入前遮罩憑證）；`logDenial()`（寫入 `~/.claude/.learnings/DENIALS.jsonl`，輸入逐欄驗型別，失敗拋錯）／`tryLogDenial()`（給 guard 用，失敗時另寫一筆 `context: hook:denial-log` 到 ERRORS.jsonl 並回傳附註字串，不影響 deny）；被 `commit-gate-guard.ts`、`r15-syntax-guard.ts` 於擋下當下動態 `import()`（不放檔頭：模組壞掉時 guard 仍要能擋），測試 `lib/denial-log.test.ts` |
+| `log-denial.ts` | `lib/denial-log.ts` 的 CLI 包裝，給 bash guard（`big-read-guard.sh`）用；輸入不合法或寫入失敗 → stderr + exit 1；三支 guard 的回歸測試在 `hooks/denial-guards.test.ts` |
+| `list-pending-review.ts` | 唯讀列出未逾期的 pending-review marker（JSON），給 `review-band` mod 顯示；判準與閘門一致（`readMarkerRaw` + `isMarkerExpired`），不呼叫 `readValidMarker`（避免顯示時刪檔），測試 `list-pending-review.test.ts` |
 | `lib/review-marker.ts` | pending-review marker 共用 lib — marker 路徑推導、`git -C`/`cd` 跨 repo 目標解析、`isGitCommitCommand` 指令偵測；被 `post-commit-review.ts`、`commit-gate-guard.ts`、`stop-review-guard.ts`、`subagent-review-clear.ts`、`clear-pending-review.ts` 共用；marker 另含 `sessionId`（Stop gate 第一比對鍵）、`stopBlockCounts`（per-session block 計數）與 `engine?`（本輪 review 引擎，選填以相容舊 marker）欄位；2026-10-03 新增 `detectNewCommit()`／`recordSeenHead()`／`commitWindowSec()`：`git commit -q` 沒有確認輸出時，以 reflog 最新一筆是 commit 類動作、落在時效窗內（PostToolUse `duration_ms` 換算秒數 + 30 秒緩衝；無此欄位退回 120 秒）且 HEAD 與上次記錄（`.lasthead`）不同判定為新 commit，測試在 `lib/review-marker.test.ts` 與 hook 層 `post-commit-review.test.ts` |
 | `lib/tier.ts` | Tier 判定共用 lib — Tier 0 副檔名清單、日期後綴剝除 regex、Tier 1/2 行數與檔數門檻、敏感路徑 regex（`models`/`lib`/`shared`/`routes/middlewares`/`base(controller\|bean\|model)`）；主函式 `getTierStats(repoRoot, ref)` 回傳完整統計，`computeTier` 為只取 tier 數字的薄封裝。被 `post-commit-review.ts`（被動）與 `compute-tier.ts`（手動）共用，確保兩條路徑判定不分歧。查詢用 `git diff --numstat --no-renames`（不加 `--no-renames` 會漏判「搬檔進 `lib/`」這類高風險 rename） |
 | `lib/review-engine.ts` | review 引擎決策共用 lib（v1.4.0 新增）— `resolveEngine()`：環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE` 覆寫 → 實際執行 `codex --version` 探測（非只查 binary 存在）→ 失敗降級 `agent`；`buildSkillInvocation(tier, commitHash, engine)` 集中組出 `Skill(commit-review) args: "..."` 字串，取代原本分散在 `post-commit-review.ts`/`stop-review-guard.ts` 兩處各自組字串會分歧的寫法；`LEGACY_MARKER_ENGINE` 供舊 marker（無 `engine` 欄位）向後相容推導 |

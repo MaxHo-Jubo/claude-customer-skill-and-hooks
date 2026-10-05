@@ -6,7 +6,7 @@
  * 寫進去會在 build 時噴 SyntaxError，比執行期 review 早攔下。
  *
  * 觸發條件：Write / Edit / MultiEdit 寫入路徑含 react_15/ 的 .js/.jsx/.ts/.tsx 檔案。
- * 行為：偵測到禁用語法 → 回傳 deny decision，附上正確寫法範例。
+ * 行為：偵測到禁用語法 → 回傳 deny decision，附上正確寫法範例；擋下時寫一筆到 DENIALS.jsonl（記錄模組於擋下當下才動態載入，壞掉不影響 deny）。
  */
 
 let input = '';
@@ -15,7 +15,7 @@ process.stdin.setEncoding('utf8');
 const stdinTimeout = setTimeout(() => { process.exit(0); }, 2000);
 
 process.stdin.on('data', (chunk: string) => { input += chunk; });
-process.stdin.on('end', () => {
+process.stdin.on('end', async () => {
   clearTimeout(stdinTimeout);
   try {
     const data = JSON.parse(input);
@@ -69,7 +69,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 06: 違規 → 回傳 deny decision
+    // STEP 06: 違規 → 組出 deny 原因
     const unique = Array.from(new Set(violations));
     const reason = [
       `🚫 R15 不支援 ${unique.join(' / ')}`,
@@ -85,11 +85,19 @@ process.stdin.on('end', () => {
       '若該檔在 react_18/ 路徑下，請確認 file_path 是否寫錯。',
     ].join('\n');
 
+    // STEP 07: 記錄這次擋下（失敗時附註隨 deny 原因送出，不影響 deny）
+    //   記錄模組在這一步才動態載入：放在檔頭 import 會先於本檔的 try 執行，模組壞掉時整支 guard 失效、改成全部放行
+    /** 記錄失敗（含模組載入失敗）時的附註；成功為空字串 */
+    const logNote = await import('../scripts/lib/denial-log')
+      .then(m => m.tryLogDenial({ guard: 'r15-syntax-guard', tool_name: tool, tool_input: data.tool_input, reason, session_id: data.session_id, cwd: data.cwd }))
+      .catch((err: unknown) => `\n\n（附註：擋下紀錄模組載入失敗，本次未記錄：${err instanceof Error ? err.message : String(err)}）`);
+
+    // STEP 08: 回傳 deny decision
     console.log(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
-        permissionDecisionReason: reason,
+        permissionDecisionReason: reason + logNote,
       },
     }));
     process.exit(0);

@@ -73,7 +73,7 @@
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
 | commit-review | `/commit-review [target]` | 1.4.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.8.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
+| weekly-review | `/weekly-review` | 1.9.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.0 | 同步本機 Claude 設定到 Repo（v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
@@ -100,6 +100,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 
 | Mod | 版本 | 用途 | 來源 |
 |-----|------|------|------|
+| review-band | 0.1.0 | 輸入框上方唯讀顯示有效的 pending-review marker（repo／Tier／commit／引擎／面向數／已過多久／是否本 session）；沒有 marker 不佔位，讀取失敗顯示原因；閘門與 commit-review 不經過它 | 自寫 |
 | tool-reminders | 0.1.0 | Write/Edit 成功後平行執行提醒類腳本（`inventory-drift-detector.ts`、`spec-section-validator.ts --warn-only`），非空輸出經 `tool.call` 的 `context` 送給 model（同回合送達、user 看不到）；取代送不到 model 的 PostToolUse stdout。腳本失敗時寫 transcript、跳 toast，並告知 model 結果未知 | 自寫 |
 | ctx-handoff | 0.1.0 | 互動 session 的 context 達 600k（或視窗 80%）時跑 `save-progress` 寫交接紀錄 → 驗證檔案寫好 → `/clear` → 新對話讀交接紀錄接續；閒置 55 分鐘刷新快取最多 3 次，之後存離席交接；`-p`／SDK 等非互動 session 不自動交接。指令 `/handoff-status`、`/handoff-now yes` 等，詳見 [`mods/ctx-handoff/README.zh-TW.md`](mods/ctx-handoff/README.zh-TW.md) | 修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（commit `f871109`，MIT） |
 
@@ -109,9 +110,9 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 |-----------|----------|---------|------|------|
 | SessionStart | 啟動 session | — | `detect-jira-issue.sh` | 自動偵測 branch 的 Jira issue |
 | UserPromptSubmit | 使用者送出訊息 | — | `skill-activation-hook.ts` | 以 TypeSafe Jev（systemOne，第三方語意判斷 API）一次問三題（該用哪個 skill／是否在糾正 Claude／任務類型），達門檻時以 stdout 注入提示；取代舊版關鍵字比對（讀取的 `CLAUDE_USER_CONTENT` 環境變數從未存在，舊版形同虛設，見下方說明） |
-| PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援） |
-| PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次 |
-| PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行 |
+| PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援）；擋下時寫 `DENIALS.jsonl` |
+| PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次；擋下時寫 `DENIALS.jsonl` |
+| PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行；擋下時寫 `DENIALS.jsonl` |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | spec 缺必要區段時 block（空骨架警告改由 `tool-reminders` mod 處理） |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
@@ -256,6 +257,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-05（二）: guard 擋下紀錄（DENIALS.jsonl）+ review-band mod
+
+- **起因（#2）**：被 PreToolUse guard 擋下的呼叫不觸發 PostToolUseFailure，ERRORS.jsonl 記不到。Phase 0 探針實測：big-read-guard 擋下時 ERRORS.jsonl 無變化；user 拒絕權限同樣記不到；mod 的 `tool.call` 只看得到 `isError` + 引擎文字（`PreToolUse:<tool> hook error:`、「The user doesn't want to proceed…」），`classic.PreToolUse` 被內建 `cc-plugin-sec-default` 對 user 層 mod 跳過（debug log 原文），`classic.PermissionDenied` 未觸發；auto 分類器拒絕在指令無害前提下觸發不了，未驗。比對引擎文字會在改字時靜默失效，故不做 mod，改由 guard 自己記錄；user 拒絕不記
+- **`scripts/lib/denial-log.ts`（新增）＋ `scripts/log-denial.ts`（CLI）**：紀錄格式唯一定義處；`commit-gate-guard.ts`／`r15-syntax-guard.ts` 直接 import，`big-read-guard.sh` 走 CLI（路徑以腳本目錄推導）。寫入失敗不靜默也不削弱 guard：deny 照常，原因後附「（附註：擋下紀錄寫入失敗：…）」
+- **驗證**：`hooks/denial-guards.test.ts`（三支 guard × 正常擋下／紀錄檔唯讀）、`scripts/lib/denial-log.test.ts`；舊版 guard 跑新測試 2/2 紅、三支 guard 各拿掉記錄呼叫皆紅；r15-syntax-guard、big-read-guard 正常擋下時 deny 輸出與舊版一字不差；實機擋下一次 → DENIALS.jsonl 一筆、欄位正確
+- **`weekly-review` 1.8.0 → 1.9.0**：STEP 06 加 DENIALS 統計（guard × 次數、反覆擋下 ≥3 次）；jq 指令先以已知資料驗過
+- **`mods/review-band`（新增，#1）**：輸入框上方唯讀顯示 pending-review marker。範圍沿用先前結論——強制力留在 shell hook、commit-review skill 不改，mod 只讀；資料來源 `scripts/list-pending-review.ts`（不呼叫會刪逾期 marker 的 `readValidMarker`）。測試 6＋4 個、mutation 7 項皆紅；實機以指向假 repo＋假 session 的暫時 marker 驗證（不觸發閘門），user 確認顯示與格式
+- **`settings.json`**：`CLAUDE_CODE_PLUGIN_DIRS` 加入 `review-band`；新 `claude -p` session 的 debug log 顯示 ctx-handoff／tool-reminders／review-band 三者皆 loaded
+- **Tier 3 review（codex 額度仍用完，經同意改 agent 引擎 6 面向＋simplify 2 面向）修正**：(1) band 與閘門判定分歧（4 個面向都指出）：list-pending-review 原本另立 shape 檢查，缺欄位但未逾期的 marker 會被標成「閘門放行」，實際閘門照擋 → 逾期判斷抽成 `review-marker.ts` 的 `isMarkerExpired`（閘門與顯示共用、運算式與抽出前逐字相同），只有解析失敗才算 invalid，格式不完整者照樣顯示並註明「閘門仍會擋」；新增與 `readValidMarker` 對照的契約測試。(2) review-band 的 fs 呼叫在 try 外、腳本輸出未驗證 → 全部讀取步驟收進同一個 try 走 `ok:false`，加 `parseListing`；Snapshot 改判別聯合、「沒東西顯示」只剩 null；經過分鐘數改 render 時即時算；`PendingReview` 契約只留 mod 的 `types/index.d.ts` 一份（引擎要求契約檔自足，腳本以 type-only import 引用）。(3) 記錄失敗另寫 ERRORS.jsonl（`hook:denial-log`），DENIALS 的「0 筆」分得出沒擋過與記錄壞了；`repo` 欄位改名 `cwd_name`（實際是 cwd 資料夾名）；target／reason 寫入前遮罩憑證；輸入逐欄驗型別；big-read-guard 組 JSON 與寫入分兩步，jq 錯誤不再被蓋掉；兩支 TS guard 改在擋下當下才動態 `import()` 記錄模組（原本檔頭 import 先於 guard 的 try 執行，模組不存在時整支 guard 失效、改成全部放行；由側邊 agent 與 silent-failure 面向指出，補「記錄模組不存在仍 deny」回歸測試，檔頭 import 的 mutation 會轉紅）。(4) 測試補缺：guard 每支各自一組、斷言 target／cwd_name、放行不寫紀錄、失敗原因內容、ERRORS 留痕，清掉 /tmp 殘留；band 補狀態轉移／觸發點／刷新順序／讀取失敗。mutation 18 項皆紅。(5) weekly-review 統計改 `fromjson?` 容忍壞行並計數、`awk '$1>=3'` 取代 `head -5`、統計記錄失敗次數（user 看過 diff 後同意）
+- **未處理（範圍外）**：settings.json 的 hook `timeout` 寫 3000／5000，官方單位是秒，看起來原意是毫秒；集中由 hook-error-wrapper 記錄（取捨：附註無法回灌 deny 原因）；Bash 後同步等待 band 刷新（有 marker 時約 16ms）
 
 ### 2026-10-05: tool-reminders mod — Write/Edit 提醒改經 `tool.call` context 送達 model
 

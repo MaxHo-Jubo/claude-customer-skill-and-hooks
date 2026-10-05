@@ -172,3 +172,108 @@
 
 - function hooks API 還在 early access：改版之後 mod 可能載入失敗。這組提醒沒有強制力，失敗的代價是退回現狀（現狀本來就看不到），可以接受
 - 回滾：從 `CLAUDE_CODE_PLUGIN_DIRS` 拿掉 mod 路徑，再用 git 還原 settings.json 的 hook 項目
+
+---
+
+# #2 補上「工具呼叫被擋下」的記錄盲區 — 2026-10-05（原計畫用 mod，P0 後改為 guard 自己記錄）
+
+**目標**：補上 `ERRORS.jsonl` 目前記錄不到的那類工具失敗：工具呼叫被擋下、根本沒執行的情況。
+
+## 現況（已查證）與範圍修正
+
+最早提 #2 的理由是「`post_tool_error.py` 掛錯事件空轉一個月」，但這在 2026-09-14 已經修好，改掛 `PostToolUseFailure` 並經實測確認。所以 #2 的價值比當初說的**窄**，要重新界定：
+
+| 失敗類型 | 現在記錄得到嗎 | 依據 |
+|---|---|---|
+| 工具執行後失敗（Bash exit≠0、Read 檔案不存在、MCP 錯誤） | ✅ `post_tool_error.py`（ERRORS.jsonl 已累積 Bash 347 筆、Read 19 筆、MCP 數十筆） | `post_tool_error.py` 檔頭，2026-09-14 實測 |
+| 同一個錯誤重複發生 | ✅ `repeat-failure-detector.ts`，達門檻時用 additionalContext 注入提示 | 檔頭；已知限制：平行失敗會搶寫 state 檔，可能少算一次 |
+| **被權限擋下**（auto mode 分類器拒絕、user 拒絕） | ❌ 兩種事件都不觸發 | `post_tool_error.py` 檔頭：「Permission/sandbox-blocked calls fire neither event」 |
+| **被 PreToolUse hook 擋下**（commit-gate-guard、big-read-guard、r15-syntax-guard） | ❓ 待確認 | — |
+
+- `permissions.defaultMode` 是 `auto`、`deny` 規則是空的，所以「被權限擋下」幾乎都來自 auto mode 分類器或 user 拒絕。這類資料正好可以回答「哪些指令常被擋、值不值得加進 allowlist」（`/fewer-permission-prompts`），以及 guard hook 實際擋了多少次
+- **不在範圍內**：把 `post_tool_error.py`／`repeat-failure-detector.ts` 改寫進 mod。這兩支已經能用；改寫只能消掉 state 檔的搶寫問題，卻得把 Jev client（帶 API key 的 HTTP 呼叫）搬進 mod，成本大於收益
+
+## Phase 0：探針（決策閘門）
+
+在 dev-mods 寫 probe mod：`tool.call` 攔所有工具，`await next(e)` 後用 `$.fs.write` 把 `{ tool, deny?, isError?, text 前 200 字 }` 附加到 scratchpad 的 jsonl；同時記下 ERRORS.jsonl 的行數，用來對照 `PostToolUseFailure` 有沒有觸發。
+
+- [x] P0.1 對照組：Bash `exit 3` → 預期 probe 記到 `isError`，ERRORS.jsonl 也 +1（兩邊都看得到，所以 mod **不該**重複記這一類）
+- [x] P0.2 PreToolUse hook 擋下：用 Read 整檔讀一個 ≥800 行的檔案，觸發 big-read-guard deny → probe 看到的是 `deny`、`isError` 還是什麼都沒看到？ERRORS.jsonl 有沒有 +1？
+- [x] P0.3 auto mode 分類器拒絕：需要你配合。我送一個會被分類器擋的指令（例如寫到 repo 外的系統路徑），記錄 probe 看到什麼
+- [x] P0.4 user 拒絕：需要你配合。在權限提示時按拒絕，記錄 probe 看到什麼
+
+**P0 進度（2026-10-05）**
+- P0.1：探針看到 `isError: true`；ERRORS.jsonl 477 → 478 → 兩邊都記錄得到，mod 不該重複記
+- P0.2：探針看到 `isError: true`，text 是 `PreToolUse:Read hook error: …`（**不是** `deny`）；ERRORS.jsonl 維持 478 → `PostToolUseFailure` 沒觸發，**盲區確認存在，且 mod 看得到**。但在 `tool.call` 層只能靠 text 前綴和一般失敗區分，太脆弱
+- 新發現（`claude-code.d.ts`）：(1) plugin 可以掛 `classic.PreToolUse`，`await next(e)` 拿到結構化的 `allow/ask/deny` 決策，不必解析 text；(2) 有原生的 `PermissionDenied` hook 事件（輸入含 `tool_name`、`tool_input`、`reason`），**settings.json 的 shell hook 就能掛**——如果它涵蓋 auto 分類器／user 拒絕，P0.3／P0.4 這兩類根本不需要 mod。觸發範圍型別文件沒寫，需實測
+- 探針已擴充：加掛 `classic.PreToolUse`（記 deny）與 `classic.PermissionDenied`
+
+**閘門**：
+- P0.2～P0.4 都看不到（hook 在權限檢查之前或之外就被略過）→ mod 補不了這個盲區，#2 **放棄**，記錄結論後結束
+- 看得到，但跟 P0.1 一樣也觸發 `PostToolUseFailure` → 本來就記錄得到，盲區不存在，#2 **放棄**
+- 看得到，而且 `PostToolUseFailure` 沒觸發 → 進 Phase 1，只補看得到的那幾類
+
+**P0.3／P0.4 結果（2026-10-05）**
+- P0.3：在指令無害的前提下觸發不了 auto 分類器拒絕（`sudo -n true`、`curl … | bash -n` 都被放行）。不往真正危險的指令升級，**未驗證**
+- P0.4（暫切 default 模式由 user 拒絕）：探針看到 `isError: true`，text 為引擎字串「The user doesn't want to proceed with this tool use…」；ERRORS.jsonl 沒有這兩筆 → 盲區確認存在。`classic.PermissionDenied` 沒觸發（0 筆）
+- `classic.PreToolUse`：debug log 寫 `denial-probe: classic.PreToolUse bypassed by cc-plugin-sec-default (tier user)`，user 層 mod 拿不到結構化決策
+
+**結論**：mod 只能靠比對引擎文字辨識「被擋下」，引擎改字就會靜默停止記錄、而且自己無從得知。user 決定（2026-10-05）：**不做 mod，改由三支 guard 在擋下時自己記錄**；user 拒絕這類不記（auto 模式下很少出現權限提示）。探針 mod 與紀錄檔已刪除
+
+## 決策點
+
+- [x] D1 寫到哪？（user 選 (a) 另開 DENIALS.jsonl，2026-10-05）(a) 另開 `~/.claude/.learnings/DENIALS.jsonl`：現有 ERRORS 讀取端完全不受影響，但目前沒有任何讀取端，要另外決定誰讀（例如 weekly-review 加一段統計）；(b) 寫進 ERRORS.jsonl 並加 `kind: "denied"`：weekly-review 現成就會讀到，但 `summarize_errors.py` 要改成把 denied 分開統計，否則 big-read-guard 的減速丘會灌大 Read 的錯誤數
+
+## Phase 1：實作
+
+- [x] 1.1 新增 `scripts/log-denial.ts`：唯一定義紀錄格式的地方。CLI：stdin 為 `{ guard, tool_name, tool_input, reason, session_id, cwd }`，附加一行到 D1 選定的檔案（**實作與計畫不同**：函式放在 `scripts/lib/denial-log.ts`；欄位最終為 `{ ts, kind, guard, tool, target, cwd_name, session, reason }`，沒有 `context`，review 後 `repo` 改名 `cwd_name`）。寫入失敗 → stderr + exit 1。另 export `logDenial()` 給 TS guard 直接 import
+- [x] 1.2 `commit-gate-guard.ts`、`r15-syntax-guard.ts`：在送出 deny 的那一步之前呼叫 `logDenial()`。記錄失敗**不能**影響 deny 本身：catch 後寫 stderr，deny 照常送出（guard 是強制機制，紀錄只是附帶）
+- [x] 1.3 `big-read-guard.sh`：在 STEP 09 deny 前呼叫 `bun ~/.claude/scripts/log-denial.ts`，同樣不影響 deny；不在 bash 裡另寫一份格式
+- [x] 1.4 依 D1：(a) 在 weekly-review 加一段 DENIALS 統計（guard × 次數、同 guard × cwd × target ≥3 次）；(b) `summarize_errors.py` 把 `kind: denied` 分開統計
+
+## Phase 2：驗證
+
+- [x] 2.1 `log-denial` 單元測試：寫入假 HOME、欄位正確、寫入失敗時 exit 1
+- [x] 2.2 三支 guard 的回歸測試：餵會被擋的 stdin → deny 輸出跟改動前**一字不差**，並多一筆紀錄；把紀錄檔設成不可寫 → deny 照常送出（記錄失敗不影響強制力）
+- [x] 2.3 mutation probe：拿掉 logDenial 呼叫 → 測試要紅
+- [x] 2.4 實機：觸發 big-read-guard（整檔 Read 一個 ≥800 行的檔），確認紀錄出現在 D1 選定的檔案，讀取端（weekly-review 統計或 summarize_errors）讀得出來
+
+**Phase 1～2 實作紀錄（2026-10-05）**
+- 格式只定義在 `scripts/lib/denial-log.ts`（`logDenial` 寫入失敗會拋錯、`tryLogDenial` 失敗時回傳附註）；bash guard 走 `scripts/log-denial.ts` CLI，路徑以腳本所在目錄推導（不依賴 HOME，測試的假 HOME 下也找得到）
+- 記錄失敗不靜默也不削弱 guard：deny 照常送出，原因後面加「（附註：擋下紀錄寫入失敗：…）」，讓 model 看得到
+- 測試：`hooks/denial-guards.test.ts`（2 個，三支 guard 各跑：正常擋下＋紀錄檔唯讀）、`scripts/lib/denial-log.test.ts`（3 個）；舊版 guard 跑新測試 2/2 紅，三支 guard 各拿掉記錄呼叫皆紅。踩坑：只把目錄設成唯讀擋不住對既有檔案的 append，要鎖檔案本身
+- 新舊版比對：r15-syntax-guard、big-read-guard 正常擋下時的 deny 輸出一字不差（commit-gate-guard 需要 repo＋marker，由回歸測試涵蓋）
+- 1.4：weekly-review 1.8.0 → 1.9.0（黃區，user 看過 diff 後同意；備份 `SKILL.md.bak-20261005`）；jq 統計先用已知資料驗過（7 天外排除、null repo 顯示 `-`）
+- 2.4 實機：本 session Read `jira-test-report/SKILL.md`（857 行）被擋 → DENIALS.jsonl 一筆、欄位正確，weekly-review 的統計指令讀得出來
+
+## Phase 3：收尾
+
+- [x] 3.1 更新 inventory.md、CATALOG.md、README.md（hooks 表的三支 guard 補上「擋下時記錄」）
+- [ ] 3.2 `/sync-my-claude-setting` → commit → commit-review
+
+## 風險／回滾
+
+- 最大風險是記錄邏輯害 guard 失效：由 1.2／1.3 的「catch 後照常 deny」加上 2.2 的不可寫測試把關
+- 回滾：把三支 guard 的 logDenial 呼叫拿掉即可，紀錄檔可以直接刪
+
+---
+
+# #1 pending-review 狀態 band（唯讀 mod）— 2026-10-05
+
+**目標**：在輸入框上方顯示目前有效的 pending-review marker（repo、Tier、commit、引擎、應跑面向數、已過多久、是否為本 session），讓 Stop 閘門擋下時 user 看得到卡在哪。
+
+**範圍（沿用稍早結論）**：只讀不寫。上鎖、擋 commit、Stop 閘門、commit-review skill 全部不動；mod 沒載入只是看不到 band，閘門照常運作。
+
+## 設計
+
+- marker「有效」的定義只在 `scripts/lib/review-marker.ts`。新增唯讀 CLI `scripts/list-pending-review.ts`：用 `readMarkerRaw` 與 `MARKER_MAX_AGE_MS` 列出未逾期 marker 的 JSON。**不得呼叫 `readValidMarker`**：它會就地刪除逾期 marker 並寫 audit log，顯示用的讀取不能有副作用
+- mod `review-band`：在 `session.start`、`turn.complete`、Bash 的 `tool.call` 結束後刷新（commit 與解鎖都走 Bash）；marker 目錄沒有 `.json` 時不 spawn。結果存在 `$.state` atom，由 `ui.render` 的 `AbovePrompt` 讀出；沒有 marker 就 `next(e)` 不佔位
+- 讀取失敗不靜默：band 顯示「pending-review 狀態讀取失敗：<原因>」
+
+## 步驟
+
+- [x] 1 `scripts/list-pending-review.ts` + 測試（假 HOME：有效、逾期、壞檔、非 marker 檔、目錄不存在；確認逾期 marker 跑完後**仍在**，也就是沒有副作用）
+- [x] 2 mod `review-band`（dev-mods 熱重載）+ `claude plugin test`（沒 marker 不畫、有 marker 的內容、本 session 標記、讀取失敗顯示、Bash 以外的工具不刷新）+ mutation probe + tsc
+  - 紀錄：CLI 測試 4 個（含「逾期 marker 跑完仍在」）；mod 測試 6 個、mutation 7 項皆紅、tsc 0。測試坑：plugin 不畫時，測試裡要有模擬引擎的 `ui.render` 接手，而且必須回傳元素（回 `null` 不算接手）；`find({ key })` 找不到 Text，要用文字查
+- [x] 3 實機（user 確認 band 出現、格式可以；暫時 marker 指向假 repo＋假 session，不觸發閘門，驗完已刪）：建一顆暫時 marker → band 出現；刪掉 → band 消失（第 1 輪呈現 70-80%，格式依 user 截圖回饋調整）
+- [x] 4 移到 `~/.claude/mods/review-band`、加進 `CLAUDE_CODE_PLUGIN_DIRS`（已完成：新 `claude -p` session 的 debug log 顯示 ctx-handoff／tool-reminders／review-band 三個都 loaded；dev-mods 副本已刪；首次 tsc 因 extends 解析失敗誤輸出的 register.js／register.test.js 已刪）；文件與 #2 的 Phase 3 一起收尾（inventory／CATALOG／README → sync → commit → commit-review，見下方 #2／#1 共同收尾）

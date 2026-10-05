@@ -5,6 +5,7 @@
 #       deny 這次呼叫並提示先用 smart_outline。每個檔案每 session 只攔一次
 #       （重新送出同一個 Read 即放行，等於一個減速丘）。
 # 失敗時 fail-open（exit 0），絕不阻斷正常的 Read。
+# 擋下時經 scripts/log-denial.ts 寫一筆到 DENIALS.jsonl；寫入失敗只在 deny 原因後加附註，不影響 deny。
 #
 # 排除規則（2026-08-14 加入）：門檻只對「進得了 context 的原始碼」有意義。
 #   實測一週 26 次攔截中 20 次是誤傷——圖片（PNG 的 wc -l 可達七千行）、
@@ -50,8 +51,23 @@ SEEN="/tmp/claude-bigread-${SESSION}"
 grep -qxF "$FILE" "$SEEN" 2>/dev/null && exit 0
 echo "$FILE" >> "$SEEN"
 
-# STEP 09: deny 這次呼叫，把原因回饋給 Claude
+# STEP 09: 組出 deny 原因
 REASON="$(basename "$FILE") 有 ${LINES} 行（>= ${THRESHOLD}）。若只需其中一段，請先用 smart_outline 取得結構與行號、再用 offset/limit 精準 Read，避免整檔進 context。若確實要看全檔（這是要修的 bug 檔、或要編輯它），直接重新送出同一個 Read 即放行——本 hook 對每個檔案只攔一次。"
+
+# STEP 10: 記錄這次擋下（紀錄格式只定義在 scripts/lib/denial-log.ts）；失敗時附註隨 deny 原因送出，不影響 deny
+#   組 JSON 與寫入分兩步，兩步的錯誤訊息都帶進附註（不讓 jq 的錯誤被 bun 的「收到空 stdin」蓋掉）
+if PAYLOAD=$(jq -cn --arg r "$REASON" --argjson in "$INPUT" '{guard: "big-read-guard", tool_name: "Read", tool_input: {file_path: $in.tool_input.file_path}, reason: $r, session_id: $in.session_id, cwd: $in.cwd}' 2>&1); then
+  LOG_ERR=$(printf '%s' "$PAYLOAD" | bun "$(cd "$(dirname "$0")" && pwd)/../scripts/log-denial.ts" 2>&1 >/dev/null) \
+    || REASON="${REASON}
+
+（附註：擋下紀錄寫入失敗：${LOG_ERR}）"
+else
+  REASON="${REASON}
+
+（附註：擋下紀錄組裝失敗：${PAYLOAD}）"
+fi
+
+# STEP 11: deny 這次呼叫，把原因回饋給 Claude
 jq -cn --arg r "$REASON" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",

@@ -14,6 +14,7 @@
  * - 無 marker、或 marker 已逾期（逾期自動清除後放行，避免永久 brick）
  *
  * 失敗一律 fail-open（exit 0），絕不因 hook 自身錯誤而擋掉正常 commit。
+ * 擋下時寫一筆到 DENIALS.jsonl（scripts/lib/denial-log.ts，於擋下當下才動態載入）；記錄模組載入或寫入失敗只在 deny 原因後加附註，不影響 deny。
  */
 import { existsSync } from 'fs';
 import { markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, readValidMarker, aspectsForTier } from '../scripts/lib/review-marker';
@@ -24,7 +25,7 @@ process.stdin.setEncoding('utf8');
 const stdinTimeout = setTimeout(() => { process.exit(0); }, 2000);
 
 process.stdin.on('data', (chunk: string) => { input += chunk; });
-process.stdin.on('end', () => {
+process.stdin.on('end', async () => {
   clearTimeout(stdinTimeout);
   try {
     const data = JSON.parse(input);
@@ -78,7 +79,8 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 07: marker 有效 → deny 這次新 commit
+    // STEP 07: marker 有效 → 組出 deny 原因
+    /** deny 原因（送給 model） */
     const reason = [
       `🔒 pending-review 閘門：Tier ${marker.tier} commit ${(marker.commitHash || '').slice(0, 10)} 的 review 尚未完成，禁止開新 commit。`,
       '',
@@ -90,11 +92,19 @@ process.stdin.on('end', () => {
       '若這個 commit 確實不需要 review，在 commit message 加上 [skip-review] 即可略過本閘門。',
     ].join('\n');
 
+    // STEP 08: 記錄這次擋下（失敗時附註隨 deny 原因送出，不影響 deny）
+    //   記錄模組在這一步才動態載入：放在檔頭 import 會先於本檔的 try 執行，模組壞掉時整支 guard 失效、改成全部放行
+    /** 記錄失敗（含模組載入失敗）時的附註；成功為空字串 */
+    const logNote = await import('../scripts/lib/denial-log')
+      .then(m => m.tryLogDenial({ guard: 'commit-gate-guard', tool_name: data.tool_name, tool_input: data.tool_input, reason, session_id: data.session_id, cwd: data.cwd }))
+      .catch((err: unknown) => `\n\n（附註：擋下紀錄模組載入失敗，本次未記錄：${err instanceof Error ? err.message : String(err)}）`);
+
+    // STEP 09: deny 這次新 commit
     console.log(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
-        permissionDecisionReason: reason,
+        permissionDecisionReason: reason + logNote,
       },
     }));
     process.exit(0);

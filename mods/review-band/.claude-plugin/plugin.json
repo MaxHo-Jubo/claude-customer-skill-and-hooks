@@ -1,0 +1,7 @@
+{
+  "name": "review-band",
+  "version": "0.1.0",
+  "description": "在輸入框上方唯讀顯示目前有效的 pending-review marker（Tier／commit／引擎／面向數／已過多久），閘門與 commit-review 不受影響",
+  "author": { "name": "Max_Ho" },
+  "types": "./types/index.d.ts"
+}

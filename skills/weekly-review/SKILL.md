@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.8.0
+version: 1.9.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -387,6 +387,27 @@ fi
    - 出現 ≥3 次的 recurring pattern
    - 最近 5 筆錯誤
 3. 如果 `ERRORS.jsonl` 不存在或為空，回報「無錯誤記錄」並跳過 STEP 07
+4. guard 擋下統計（**無論 ERRORS.jsonl 有無都要執行**，第 3 項的「跳過」只指 STEP 07）。被 PreToolUse guard 擋下的呼叫不會進 ERRORS.jsonl，由 guard 自己寫入 `~/.claude/.learnings/DENIALS.jsonl`（2026-10-05 起）：
+   ```bash
+   SINCE=$(date -u -v-{days}d +%Y-%m-%dT%H:%M:%SZ)
+   F=~/.claude/.learnings/DENIALS.jsonl
+   E=~/.claude/.learnings/ERRORS.jsonl
+   if [ ! -f "$F" ]; then echo "無擋下紀錄（DENIALS.jsonl 不存在）"; else
+     # guard × 次數（fromjson? 跳過壞行，壞行之後的資料照常計入）
+     jq -rR --arg s "$SINCE" 'fromjson? | select(.ts >= $s) | .guard' "$F" | sort | uniq -c | sort -rn
+     # 反覆擋下：同一 guard × cwd × target ≥3 次（不用 head 截斷）
+     jq -rR --arg s "$SINCE" 'fromjson? | select(.ts >= $s) | [.guard, (.cwd_name // "-"), .target] | @tsv' "$F" | sort | uniq -c | sort -rn | awk '$1 >= 3'
+     # 無法解析的行數
+     jq -R 'fromjson? // "BAD"' "$F" | grep -c '^"BAD"$'
+   fi
+   # 記錄失敗次數（寫 DENIALS.jsonl 失敗時，guard 會在 ERRORS.jsonl 留一筆 hook:denial-log）
+   [ -f "$E" ] && jq -rR --arg s "$SINCE" 'fromjson? | select((.ts // .timestamp // "") >= $s and .context == "hook:denial-log") | .tool' "$E" | sort | uniq -c
+   ```
+   - 檔案不存在 → 回報「無擋下紀錄」（不是「沒擋過」）；期間內 0 筆 → 回報「本期無擋下」
+   - 無法解析的行數 > 0 → 在週報標明（統計可能少算）
+   - 記錄失敗次數 > 0 → 在週報標明（DENIALS 的次數偏低，不是沒擋）
+   - 同一 guard × cwd × target ≥3 次 → 列為「反覆擋下」：可能是 guard 誤傷，或工作習慣該調整
+   - `cwd_name` 是 session 工作目錄的資料夾名，不一定是被擋目標所在的 repo
 
 輸出格式：
 
@@ -407,6 +428,15 @@ Context 格式：skill:{name} / hook:{name} / {file-path} / unknown
 
 ### 最近 5 筆錯誤
 - {timestamp} [{context}] {tool}: {error first line}
+
+### guard 擋下統計
+| Guard | 次數 |
+|-------|------|
+
+反覆擋下（≥3 次）：
+- {guard} [{cwd_name}] {target}（N 次）
+
+記錄失敗：{guard} N 次；無法解析：N 行（皆為 0 時省略）
 ```
 
 ---

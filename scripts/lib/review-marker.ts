@@ -155,6 +155,18 @@ export function markerPathForRepo(repoRoot: string): string {
 }
 
 /**
+ * marker 是否逾期（純判斷、無副作用）。逾期判準的唯一定義處：閘門（readValidMarker）與
+ * 唯讀顯示（list-pending-review.ts）共用，避免兩邊對同一顆 marker 判定分歧。
+ * 運算式與抽出前的閘門逐字相同（createdAt 缺漏 → 0 → 逾期），不改變閘門判定。
+ * @param marker readMarkerRaw 解析出的 marker
+ * @param now 現在時間（epoch ms）
+ * @returns 是否逾期
+ */
+export function isMarkerExpired(marker: ReviewMarker, now: number): boolean {
+  return now - (marker.createdAt || 0) > MARKER_MAX_AGE_MS;
+}
+
+/**
  * 讀取單一 marker 檔並驗證有效性（可解析且未逾期）。
  * marker「有效性」的唯一定義處——commit-gate-guard（PreToolUse）與 stop-review-guard（Stop）
  * 共用此函式，避免兩個閘門對同一顆 marker 判定分歧。
@@ -170,7 +182,7 @@ export function readValidMarker(path: string, now: number): ReviewMarker | null 
   }
 
   // STEP 02: 逾期 marker 就地清除後視為無效，避免殘留 marker 永久 brick 閘門
-  if (now - (marker.createdAt || 0) > MARKER_MAX_AGE_MS) {
+  if (isMarkerExpired(marker, now)) {
     // 逾期自動清除是「不經 clear 腳本」的解鎖路徑，必須留痕——否則 unlock-audit.log 裡
     // 「沒有 FORCE 紀錄」會被誤讀成「沒有未審放行」（同 CLAUDE.md HOOK-FAILURE-BLINDSPOT
     // 的「0 筆 = 沒有錯誤 vs 沒有記錄」陷阱）
