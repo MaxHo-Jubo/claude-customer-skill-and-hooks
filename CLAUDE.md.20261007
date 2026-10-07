@@ -63,6 +63,8 @@ why-output-layering: 實測 4 個開發 session（142 個提問／13 萬字輸�
 <lang>
 
 think: English | output: 繁體中文 | docs: 正體中文 | README+commit: 繁體中文
+side-request: Claude Code 的 side request（"You should know" 等 side agent 的提醒、explain 改寫）即使指令與範例是英文，輸出一樣用繁體中文
+why-side-request: 2.1.289 的 You should know 以 model.fork 沿用主 session context，但尾端接整段英文指令＋英文範例且未要求跟隨使用者語言，實測同設定下有的 session 出中文、有的出英文（luna FE）
 
 </lang>
 

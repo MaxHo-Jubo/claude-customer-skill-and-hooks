@@ -1,8 +1,8 @@
 ---
 name: pr-reviewer
 description: "PR full review — 5 個面向平行審查 + 信心評分 + 自動 post 到 GitHub PR（summary review + inline Suggested Change）。逐條比對 CODE-REVIEW-RULE.md。當使用者提到 /pr-reviewer、「review 這個 PR」、「full review」、「審 PR 1234」、想對某個 PR 做完整審查並貼回 GitHub 時觸發。不適用於：commit 後的分級 review（用 /commit-review，內部走 lite agent）、通用品質審查（用 /pr-review-toolkit:review-pr）。"
-version: 2.0.0
-last_modified: 2026-08-13
+version: 2.1.0
+last_modified: 2026-10-07
 ---
 
 # pr-reviewer（full 模式）
@@ -87,7 +87,7 @@ wc -l "$DIFF_FILE"
 
 ## STEP 04: 平行 Review（5 個 agent，同一則訊息）
 
-在**同一則訊息**內發出 5 個 Agent call，**都不帶 `name`**。每個 prompt 都必須含：
+在**同一則訊息**內發出 5 個 Agent call，**都不帶 `name`**，**都必須帶 `effort: "high"`**——不帶時 sub-agent 吃 `settings.json` 的 `modelSettings["<該 agent 自己的 model>"].effortLevel`，不繼承主 session（2.1.292 實測），review 深度會被為了別的理由調整的 `modelSettings` 悄悄改掉；值與 `/commit-review` 兩條引擎路徑一致（該 skill §1.1）。每個 prompt 都必須含：
 
 - repo 絕對路徑
 - `$DIFF_FILE` 絕對路徑（要求 agent 自己 Read）
@@ -130,6 +130,7 @@ wc -l "$DIFF_FILE"
 
 - 每個 agent 批次評 3-5 個 issue，多個 agent 放同一則訊息平行發出
 - 同樣**不得帶 `name`**
+- **不帶 `effort`**：Haiku 4.5 的 transcript 沒有 effort 欄位（2.1.292 實測，推測不支援），帶了沒有可觀測的效果
 - issue 少於 3 個時單次評完即可
 
 ## STEP 06: 分類與品質評分

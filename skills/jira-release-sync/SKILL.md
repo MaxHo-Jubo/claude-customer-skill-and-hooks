@@ -1,7 +1,7 @@
 ---
 name: jira-release-sync
-description: "掃描一段期間內的 git commit，找出已隨版本 merge 進 master（已上架）的 Jira issue，於 Jira 留言告知版本與修正/上線狀態，並將狀態轉為 Resolved、附上結案日。當使用者提到 /jira-release-sync、「掃描已上架的commit留言jira」、「同步發版狀態到jira」、「把上架的issue結案」時觸發。"
-version: 1.5.0
+description: "掃描一段期間內的 git commit，找出已隨版本 merge 進 master（已上架）的 Jira issue，於 Jira 留言告知版本與修正/上線狀態，並將狀態轉為 Resolved、附上結案日；結案前檢查 Teams 上有無未同步到 Jira 的討論。當使用者提到 /jira-release-sync、「掃描已上架的commit留言jira」、「同步發版狀態到jira」、「把上架的issue結案」時觸發。"
+version: 1.6.0
 ---
 
 # Jira Release Sync — 發版狀態同步
@@ -167,6 +167,7 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
   - `app-store` 模式 = `{APP_NAME} 版本 {release_version} 已{動作詞}`
   - `luna` 模式 = `{release_version} 已{動作詞}`（不含 APP_NAME）
 - 結案日待寫入值 = `release_date`
+- **Teams 未同步訊息數**：照 `~/.claude/skills/jira/SKILL.md`「Teams 同步流程」只跑 T1～T3，記下 `SINCE` 之後的新訊息數 M（流程只定義在那裡，不在此複製）。只計數、不產草稿，避免對每筆候選都打一輪 Teams API。T1 失敗 → 整欄標「未檢查：{原因}」；單筆搜尋失敗 → 該筆標「失敗：{原因}」。兩者都不擋發版同步
 
 ### STEP 04: 輸出候選清單，等待使用者確認
 
@@ -175,9 +176,9 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 ```
 ## Jira 發版同步 — 候選清單（{起始日}~{今日}，共 N 筆）
 
-| Issue | 目前狀態 | 動作 | 留言內容 | 結案日 |
-|-------|---------|------|---------|--------|
-| LVB-8340 | In Review | 修正 | 居服App 版本 1.50.33 已修正 | 2026-08-31 |
+| Issue | 目前狀態 | 動作 | 留言內容 | 結案日 | Teams 未同步 |
+|-------|---------|------|---------|--------|-------------|
+| LVB-8340 | In Review | 修正 | 居服App 版本 1.50.33 已修正 | 2026-08-31 | 2 則 |
 
 ### 已跳過（已是 Resolved，不重複處理）
 - LVB-8213（目前狀態：Resolved）
@@ -187,6 +188,7 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 （每筆留言結尾將一律標註：@許少宇 @andyzeng @weihuang @Yenwen Chen 陳妍妏）
 
 請確認是否執行以上 N 筆的 Jira 留言 + 轉 Resolved？可回覆「確認」全部執行，或列出要排除的 issue 編號。
+「Teams 未同步」> 0 的票，可另外列出要先同步的 issue 編號（例：「teams LVB-8340」），結案前先產草稿給你確認。
 ```
 
 **以下兩段僅 `luna` 模式、且 STEP 01 有回傳非空內容時才輸出**（`app-store` 模式沒有這兩個概念，不要輸出空段落）：
@@ -207,6 +209,8 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 ### STEP 05: 執行寫入（使用者確認後，逐筆處理）
 
 對每筆確認要處理的候選，依序：
+
+（使用者有指定要先同步 Teams 的票時，該筆在下方 1. 之前先跑「Teams 同步流程」T4～T5：出草稿 → 使用者確認 → 貼留言，讓討論結論排在結案留言之前。使用者不確認就跳過同步，繼續發版同步。）
 
 1. **留言**：組裝 HTML body（主文 + 固定標註人員，見上方「留言標註人員」章節），呼叫 `addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<HTML 字串>, contentFormat="html")`
 2. **找 Resolved 轉換**：`executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey})`（`cloudId` 是 `executeRead` 的頂層參數，不要塞進 `inputs`），在回傳的 `transitions` 中找 `name` 完全等於或包含 `"Resolved"`（或中文「已解決」）者，取其 `id`

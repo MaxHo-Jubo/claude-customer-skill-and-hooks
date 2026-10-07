@@ -33,16 +33,18 @@
 
 ### 開發流程類
 
-#### `/jira` — Jira Issue 管理（v1.2.0）
+#### `/jira` — Jira Issue 管理（v1.3.0）
 
 - **位置**：`~/.claude/skills/jira/SKILL.md`
-- **用法**：`/jira`、`/jira fetch`、`/jira branch {ISSUE_ID}`
+- **用法**：`/jira`、`/jira fetch`、`/jira branch {ISSUE_ID}`、`/jira teams [ISSUE_ID]`
 - **功能**：
   - 自動從 git branch 名稱識別 Jira issue；branch 無 Jira 編號時，`/jira`（無參數）改讀 save-progress 的交接紀錄 `.claude/handoff-{branch}.md`（v1.2.0）
   - 抓取 issue 詳情（含 issuelinks，最多追蹤 2 層）
   - 建立開發筆記 `.claude/{ISSUE_ID}.md` 與原始資料 `.claude/{ISSUE_ID}-Jira.md`
   - 管理 branch 建立
-- **依賴**：Atlassian MCP、`JIRA_CLOUD_ID`、`JIRA_USERNAME`（設定於 `~/.claude/CLAUDE.md`）
+  - **Teams 同步流程（v1.3.0）**：經 Microsoft 365 connector 搜 Teams 上追蹤該票的討論 → 整理成「結論／決策／後續」草稿 → 使用者確認後貼 Jira 留言（署名「由 Claude Code skill 整理」）。同步點 = 最後一則以 `【Teams 討論結論同步】` 開頭的留言時間（不建本機狀態檔）。只用讀取類 M365 工具。`/jira fetch`・`branch` 跑唯讀部分寫進 `{ID}-Jira.md` 的 `## Teams 討論`；`save-progress`、`jira-release-sync` 引用同一章節
+  - **已知限制**：tenant 未授權 `Team.ReadBasic.All` → 列不出討論串回覆，回覆只拿得到搜尋摘要（約 500 字）、同 channel 其他串可能混入 → 一律草稿＋人工確認
+- **依賴**：Atlassian MCP、Microsoft 365 connector（`/jira teams` 與 Teams 同步）、`JIRA_CLOUD_ID`、`JIRA_USERNAME`（設定於 `~/.claude/CLAUDE.md`）
 - **連動**：完成 fetch 或 branch 建立後，提示使用者呼叫 `/linus-requirements-analysis`
 
 #### `/linus-requirements-analysis` — Linus Style 需求分析（v1.0.0）
@@ -86,7 +88,7 @@
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
-#### `/jira-release-sync` — 發版狀態同步（v1.5.0）
+#### `/jira-release-sync` — 發版狀態同步（v1.6.0）
 
 - **位置**：`~/.claude/skills/jira-release-sync/SKILL.md`（含 `scan_commits.py`、`scan_commits_luna.py`、`tests/test_scan_commits_luna.py`）
 - **測試（2026-09-24 新增）**：`tests/test_scan_commits_luna.py` 用真實臨時 git repo（bare origin + 工作 repo，不 mock git）驗證 luna 模式——release fast-forward、`max[_ ]?ho` 作者過濾、frontend/backend 依路徑判定、`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD` tag ancestry、跨 component 完成度判斷、路徑判不出 component 進 `manual_review`
@@ -96,7 +98,7 @@
   - **`app-store` 模式**（`HomeCareStaffRN`／`DayCareStaff`／`FamilyMember`）：只掃 master/main 祖先歷史；「已上架」用 `git merge-base --is-ancestor` 判斷，**不用日期比較**——commit 自己的 committer date 不等於它真正併入 master 的時間（實測邊界案例：LVB-8340 fix commit 的 committer date 晚於某版號 commit 的 committer date，但透過 PR 實際更早併入 master，日期比較會誤判成沒搭上該版、ancestry 判斷才正確）；版本 merge commit 定義為 subject 符合 `Merge pull request #N from {org}/{X.Y.Z}`（分支名純版本號）；不限作者（目的是同步「這個 App 版本上架了什麼」）
   - **`luna` 模式**（`luna_web`）：只掃 `release` 分支（不是 master，luna_web 的 master 是開發分支、早已與 release 分岔）；**限 author 為 Max_Ho**（`max[_ ]?ho` 大小寫不敏感 pattern，需要 `--extended-regexp` 因為 `git log --author` 預設 BRE 不解析 `?` 量詞）；版本釋出點是 release 分支上精確格式的 git tag（`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD`，排除 `-test`／`-2`／舊無點格式）；frontend／backend 分開部署，同一 issue 橫跨兩者時**兩邊都要各自上架才算完成**，只有一邊上架列進「尚未完全上架」不當候選；腳本每次執行先 `git fetch origin release:release`（fast-forward only），本地落後會直接中止讓人工排查（2026-09-17 實測踩過本地落後 158 個 commit、漏掉一次 master merge 導致整批 issue 完全不出現在任何清單）
 - **留言格式**：HTML mention（`contentFormat: "html"`，`<span data-type="mention" data-user-id="...">`）固定標註 4 人（許少宇／andyzeng／weihuang／Yenwen Chen 陳妍妏）；2026-09-17 實測修正：`contentFormat` 只接受 `"markdown"`/`"html"`，原文件寫的 `"adf"` 是錯的會被參數驗證擋掉
-- **執行流程**（7 步）：STEP 00 前置檢查（Atlassian MCP 連線、判定 REPO_MODE/APP_NAME）→ STEP 01 掃描候選（呼叫對應腳本）→ STEP 02 查現況去重（已 Resolved 直接跳過）→ STEP 03 組裝候選（動作詞：LVB=修正／ERPD=上線）→ STEP 04 輸出候選清單等待確認（**寫入類 Jira 工具在確認前一律不得呼叫**）→ STEP 05 逐筆執行寫入（留言 + 找 Resolved 轉換 + 執行轉換 + best-effort 回填結案日：系統欄位唯讀多數會失敗，退回專案自訂「結案日」欄位，LVB 有（`customfield_10502`，僅該專案驗證過不可寫死當全域常數）、ERPD 沒有）→ STEP 06 輸出最終結果表
+- **執行流程**（7 步）：STEP 00 前置檢查（Atlassian MCP 連線、判定 REPO_MODE/APP_NAME）→ STEP 01 掃描候選（呼叫對應腳本）→ STEP 02 查現況去重（已 Resolved 直接跳過）→ STEP 03 組裝候選（動作詞：LVB=修正／ERPD=上線；v1.6.0 加計每筆「Teams 未同步」訊息數，引用 jira skill「Teams 同步流程」T1～T3）→ STEP 04 輸出候選清單等待確認（**寫入類 Jira 工具在確認前一律不得呼叫**）→ STEP 05 逐筆執行寫入（使用者指定的票先同步 Teams 結論 + 留言 + 找 Resolved 轉換 + 執行轉換 + best-effort 回填結案日：系統欄位唯讀多數會失敗，退回專案自訂「結案日」欄位，LVB 有（`customfield_10502`，僅該專案驗證過不可寫死當全域常數）、ERPD 沒有）→ STEP 06 輸出最終結果表
 - **已知限制**：Jira `resolutiondate` 系統欄位多數專案唯讀，只能轉態當下自動蓋今天日期，不保證回填成功為真正的 release_date；沒有「結案日」自訂欄位的專案（如 ERPD）結案日只能停在留言文字裡
 - **依賴**：Atlassian MCP、git repository、`scan_commits.py`（app-store）/`scan_commits_luna.py`（luna）
 
@@ -293,7 +295,7 @@
 - **特性**：`disable-model-invocation: true`（不會被自動觸發，僅手動執行）
 - **依賴**：無外部依賴
 
-#### `/commit-review [target]` — Commit 後分級 review chain（v1.4.0）
+#### `/commit-review [target]` — Commit 後分級 review chain（v1.5.0）
 
 - **位置**：`~/.claude/skills/commit-review/SKILL.md`
 - **用法**：
@@ -303,6 +305,7 @@
   - `engine=agent`（原有路徑，降級與人工覆寫用）：Tier 2/3 面向由 Claude subagent（`Agent()`）逐一 spawn，結果經 task-notification 整份回流主 session；面向是否收齊靠 §3.1 fail loud 條款自律回報
   - `engine=codex`（**預設**）：面向由 `scripts/codex-review.ts` 平行發動 `codex exec` 子進程執行（六面向定義在 `scripts/lib/codex-aspects.ts`），輸出強制走 `scripts/schemas/codex-review-aspect.json` schema 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT；面向失敗用 exit code + 輸出檔非空 + schema shape guard 機械判定，不靠模型自律
   - 引擎由 `scripts/lib/review-engine.ts` 的 `resolveEngine()` 在 post-commit hook **上鎖當下**決定一次、寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重探測（同一輪 review 不換引擎）。決策順序：環境變數 `CLAUDE_COMMIT_REVIEW_ENGINE` 覆寫 → 實際執行 `codex --version` 探測（非只查 binary 是否存在，踩過 `which` 找得到但執行 ENOENT）→ 探測失敗降級 `agent` 並在 systemMessage 印出實際錯誤，不靜默改道
+- **推理強度（v1.5.0）**：agent 路徑每個 `Agent()` 一律帶 `effort: "high"`，與 codex runner 預設同值；不帶時 sub-agent 吃 `modelSettings[該 agent model].effortLevel`、不繼承主 session（2.1.292 實測）
 - **定位**：整套 pending-review 機制的**執行層**。分級判定由 hook 負責、強制力由 `commit-gate-guard.ts`（PreToolUse deny）提供，本 skill 只負責「跑對應 Tier 的步驟」
 - **判準權威**：`~/.claude/harness/commit-review-policy.md`（分級判定表、免跑條件、Blast Radius 節、禁止事項）。skill 不重複判定表，只定義每個 Tier 的執行步驟——兩者職責切開，避免同一份步驟寫在 hook 字串／skill／policy 三處而分歧
 - **Tier 對應 chain**：
@@ -319,11 +322,11 @@
 
 ---
 
-#### `/pr-reviewer <PR>` — PR full review（v2.0.0）
+#### `/pr-reviewer <PR>` — PR full review（v2.1.0）
 
 - **位置**：`~/.claude/skills/pr-reviewer/SKILL.md`；共用規範 `references/review-spec.md`
 - **用法**：`/pr-reviewer 1134`、`/pr-reviewer <PR URL>`；亦可由 `~/.claude/scripts/review-pr.sh <PR>` 觸發
-- **拓撲**：**主 session 直接 orchestrate**，不再包一層 pr-reviewer subagent（巢狀深度 2→1）。STEP 01/02/03/07 直接跑 Bash，STEP 04 在同一則訊息 spawn 5 個面向 agent，STEP 05 spawn 1-2 個 Haiku 批次評分 agent
+- **拓撲**：**主 session 直接 orchestrate**，不再包一層 pr-reviewer subagent（巢狀深度 2→1）。STEP 01/02/03/07 直接跑 Bash，STEP 04 在同一則訊息 spawn 5 個面向 agent，STEP 05 spawn 1-2 個 Haiku 批次評分 agent；v2.1.0 起五面向 agent 必帶 `effort: "high"`，Haiku 評分 agent 不帶（transcript 無 effort 欄位）
 - **5 個面向**：① CODE-REVIEW-RULE.md 逐條合規（17 條 + 慣例優先原則 + 新增檔案例外）② Shallow Bug Scan（只看 diff，聚焦邏輯錯誤／null／race／安全）③ Git Blame 歷史脈絡（`git log --follow -p`，找被移除的邏輯）④ 過去 PR 留言（`gh pr list --state merged --search`）⑤ 既有程式碼註解遵循（TODO/FIXME/HACK 指引）
 - **兩條硬規則**：（1）所有 Agent call **不得帶 `name`**（帶了結果不回流，只能用 `description` 區分用途）（2）平行 = 多個 Agent call 放同一則訊息，發完該輪立即結束等 task-notification；**收齊全部結果前禁止產出報告**
 - **fail loud**：有面向沒回來時，禁止自己重做後照常輸出，必須在報告**最開頭**標「Full 模式降級：N/5 個面向未回傳」
@@ -372,7 +375,7 @@
   - 提供多帳號設定流程指引（CLAUDE_CONFIG_DIR + zshrc alias + statusline）
 - **依賴**：`scripts/check-quota.sh`、macOS Keychain 中的 Claude Code credentials
 
-#### save-progress — 手動存檔工作進度（v1.1.0）
+#### save-progress — 手動存檔工作進度（v1.2.0）
 
 - **位置**：`~/.claude/skills/save-progress/SKILL.md`
 - **用法**：`/save-progress`
@@ -380,6 +383,7 @@
   - 依 branch 決定交接紀錄位置（`{CLAUDE_DIR}` = 主要工作目錄絕對路徑 + `/.claude/`，與 jira skill 同規則）：含 Jira 編號 → `{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（只替換該段）；無編號 → `handoff-{branch}.md`（`/` 換 `-`）；非 git repo／detached HEAD → `handoff-{資料夾名}.md`
   - 交接紀錄內容：目標、架構決策（完整保留）、已修改檔案（以 `git status`／`git diff --stat`／`git log` 觀測）、驗證狀態（未跑寫「未驗證」）、任務狀態（TaskList 或 session 回顧）、TODO 與 rollback、下一步、待使用者回答
   - 不碰 `tasks/todo.md`（GATE-2 計畫檔）
+  - **Teams 同步檢查（v1.2.0，STEP 03）**：branch 含 Jira 編號時跑 jira skill「Teams 同步流程」T1～T4，有新討論就出草稿問要不要貼；失敗不影響已寫好的交接紀錄
   - 檢查並保存未存的 auto memory（feedback/project/reference）
   - 回報時附交接紀錄絕對路徑（ctx-handoff mod 依此要求最後一行輸出 `HANDOFF_FILE: <路徑>`）
 - **連動**：`/jira` 讀得到兩種交接紀錄（Jira 筆記直接讀；無編號時讀 `handoff-{branch}.md`）

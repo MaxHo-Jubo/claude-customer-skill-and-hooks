@@ -61,17 +61,17 @@
 
 | Skill | 指令 | 版本 | 用途 |
 |-------|------|------|------|
-| jira | `/jira` | 1.2.0 | Jira Issue 管理，自動從 branch 識別 issue；v1.2.0 branch 無 Jira 編號時 `/jira` 改讀 save-progress 的 `.claude/handoff-{branch}.md` 交接紀錄 |
+| jira | `/jira`、`/jira teams [ID]` | 1.3.0 | Jira Issue 管理，自動從 branch 識別 issue；v1.2.0 branch 無 Jira 編號時 `/jira` 改讀 save-progress 的 `.claude/handoff-{branch}.md` 交接紀錄；v1.3.0 新增「Teams 同步流程」：經 Microsoft 365 connector 搜 Teams 上追蹤該票的討論，整理成結論草稿、確認後貼 Jira 留言（`/jira fetch`・`branch` 唯讀附上 Teams 討論） |
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
 | jira-test-report | `/jira-test-report` | 2.5.5 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md`；v2.5.5 套 AI.MD v4：5 個 prose 重災區轉 structured labels（共 29 個 label blocks），token -220（-1.9%） |
-| jira-release-sync | `/jira-release-sync`、`/jira-release-sync --weeks 3` | 1.5.0 | 掃描一段期間內的 git commit，找出已隨版本上架的 Jira issue，留言告知版本/狀態並轉 Resolved、附結案日；支援 `app-store`（居服/日照/家屬 App，master ancestry 判版）與 `luna`（luna_web release 分支 tag 判版，frontend/backend 分開判定，限 Max_Ho 作者）兩套規則，不寫入 Fix Version |
+| jira-release-sync | `/jira-release-sync`、`/jira-release-sync --weeks 3` | 1.6.0 | 掃描一段期間內的 git commit，找出已隨版本上架的 Jira issue，留言告知版本/狀態並轉 Resolved、附結案日；支援 `app-store`（居服/日照/家屬 App，master ancestry 判版）與 `luna`（luna_web release 分支 tag 判版，frontend/backend 分開判定，限 Max_Ho 作者）兩套規則，不寫入 Fix Version；v1.6.0 候選表加「Teams 未同步」欄，可指定先同步 Teams 結論再結案 |
 | finalize-release | `/finalize-release` | 2.0.0 | 手動觸發發版最後兩步驟：merge 版號 PR → 執行 `jira-release-sync`；App Store/Google Play 正式發布仍由使用者手動處理；僅支援居服App、日照App（家屬App 無 GitHub Actions） |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
-| commit-review | `/commit-review [target]` | 1.4.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent |
+| commit-review | `/commit-review [target]` | 1.5.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent；v1.5.0 agent 路徑每個 `Agent()` 明寫 `effort: "high"`（不帶時吃 `modelSettings`、不繼承主 session） |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.9.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.0 | 同步本機 Claude 設定到 Repo（v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
@@ -83,14 +83,14 @@
 | upgrade-to-status | `/upgrade-to-status` | 1.1.0 | 將專案升級為 status.md 架構（Milestone / 北極星 / Insight / Current / Next） |
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
-| save-progress | `/save-progress` | 1.1.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md` |
+| save-progress | `/save-progress` | 1.2.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md`；v1.2.0 新增 STEP 03 檢查 Teams 上有無未同步到 Jira 的討論 |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
 | r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
 | ai-case-report | `/ai-case-report` | — | 引導工程師透過對話式訪談逐步填寫 AI 效益案例填報表；Outline MCP 已連線→直接發佈至對應團隊子文件集，未連線→產出 `.md` 檔案供手動上傳 |
-| pr-reviewer | `/pr-reviewer <PR>` | 2.0.0 | PR full review — 主 session 直接 orchestrate，5 面向平行審查（規則合規／shallow bug scan／git blame 歷史／過去 PR 留言／既有註解遵循）+ Haiku 信心評分 + 自動 post 到 GitHub PR（summary review + inline Suggested Change）。v2.0.0 從 subagent 改為 skill，巢狀深度 2→1（巢狀 orchestrate 實測三次三種結果，見 SKILL.md 文末）；判定標準與 lite agent 共用 `references/review-spec.md` |
+| pr-reviewer | `/pr-reviewer <PR>` | 2.1.0 | PR full review — 主 session 直接 orchestrate，5 面向平行審查（規則合規／shallow bug scan／git blame 歷史／過去 PR 留言／既有註解遵循）+ Haiku 信心評分 + 自動 post 到 GitHub PR（summary review + inline Suggested Change）。v2.0.0 從 subagent 改為 skill，巢狀深度 2→1（巢狀 orchestrate 實測三次三種結果，見 SKILL.md 文末）；判定標準與 lite agent 共用 `references/review-spec.md`；v2.1.0 五面向 agent 明寫 `effort: "high"`，Haiku 評分 agent 不帶 |
 
 > **載入狀態**：`ai-md` / `humanizer-zh-tw` 設為 `user-invocable-only`（保留指令但不主動推薦）；`upgrade-to-status` / `method-refactor` / `jira-acceptance` / `claude-max-quota` / `explore-report` / `plan-and-execute` / `spec-design` / `spec-to-e2e-test` / `test-module` 設為 `off`（完全隱藏，2026-07-25 清理）。詳見 [CATALOG.md](CATALOG.md) Skill 載入狀態總覽。
 
@@ -257,6 +257,17 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-07: Teams 討論 → Jira 結論同步 + review agent 明寫 effort
+
+- **起因**：同事在 Teams 開對話追蹤 Jira 票，結論常只留在 Teams、忘記貼回 Jira。以 <TICKET> 做 PoC（搜尋 → 讀 root → 產草稿 → 確認後貼 Jira）走通後併入既有工作流
+- **`jira` 1.3.0**：新增 `/jira teams [ID]` 與「Teams 同步流程」章節（T1～T5，三個觸發點唯一的流程定義）。同步點存在 Jira 本身：最後一則以 `【Teams 討論結論同步】` 開頭的留言時間；留言署名固定為「由 Claude Code skill 整理」。`/jira fetch`・`branch` 唯讀附上 Teams 討論到 `{ID}-Jira.md`
+- **`save-progress` 1.2.0**：新增 STEP 03 Teams 同步檢查（原 03／04 順延），失敗不影響已寫好的交接紀錄
+- **`jira-release-sync` 1.6.0**：候選表加「Teams 未同步」欄（只計數），使用者指定的票才產草稿，並排在結案留言之前
+- **實測限制（寫在 skill「已知限制」）**：tenant 未授權 `Team.ReadBasic.All` → 列不出討論串回覆，只能關鍵字搜尋拿約 500 字摘要；搜尋 `"<TICKET>"` 0 筆、`<數字>` 才命中（KQL 連字號斷詞）；搜尋結果的 teamId 不是 group id。故一律「草稿＋人工確認」
+- **`commit-review` 1.5.0／`pr-reviewer` 2.1.0**：review 用 `Agent()` 一律明寫 `effort: "high"`（2.1.292 實測：不帶時 sub-agent 吃 `modelSettings[該 agent model].effortLevel`，不繼承主 session）；Haiku 評分 agent 不帶（transcript 無 effort 欄位）
+- **CLAUDE.md**：`<lang>` 新增 side-request 輸出語言規則
+- 驗證：<TICKET> 對照組（認出 comment <commentId> 為同步點、同步點後 0 則新訊息；同 query 改從同步點前起搜可命中既有回覆，證明 0 筆是過濾生效）、不存在票號回「0 個討論串」；「Teams 有討論未同步」的票未找到，未驗
 
 ### 2026-10-05（二）: guard 擋下紀錄（DENIALS.jsonl）+ review-band mod
 

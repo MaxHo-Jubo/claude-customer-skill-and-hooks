@@ -1,8 +1,8 @@
 ---
 name: commit-review
 description: "Commit 後分級 review chain（Tier 0~3）。被動由 post-commit hook 指派，也可手動 /commit-review [target] 對任意 commit 補跑。當使用者提到 /commit-review、「跑 review」、「補跑 review」、「review 這個 commit」、「push 前 review」時觸發。不適用於：PR 級完整審查（用 /pr-reviewer <PR>）、需求驗收（用 /jira-acceptance）。"
-version: 1.4.1
-last_modified: 2026-08-24
+version: 1.5.0
+last_modified: 2026-10-07
 ---
 
 # Commit Review
@@ -50,6 +50,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 | 面向數保證 | 由本 skill 逐一列出並 spawn | 由 runner 的迴圈長度保證，缺檔即失敗 |
 | 結果交回 | subagent 回覆全文經 task-notification 回流，**整份進主 session context** | schema 強制成 JSON 落檔，主 session 只讀 runner 彙整的 CRITICAL/IMPORTANT |
 | 面向失敗判定 | 靠有沒有收到回流（§3.1，只能自律） | exit code + 輸出檔非空 + schema shape guard，**機械判定** |
+| 推理強度 | 每個 `Agent()` 一律帶 `effort: "high"` | runner `--effort`，預設 `DEFAULT_EFFORT = 'high'`（`scripts/codex-review.ts`） |
 
 **預設為 `codex`**，但「預設」指的是 `resolveEngine()`（`scripts/lib/review-engine.ts`）探測通過時的結果，不是不探測就假設可用。決策順序：
 
@@ -60,6 +61,8 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 兩種觸發模式共用同一份 `resolveEngine()`，差別只在探測時間點與傳遞方式：
 - **被動**：post-commit hook 在**上鎖當下**探測一次，寫入 marker 的 `engine` 欄位，Stop gate 之後只讀不重新探測——同一輪 review 不得換引擎。
 - **手動**：未帶 `engine=` 時，於**本次呼叫當下**執行 `bun ~/.claude/scripts/resolve-engine.ts` 探測（見 §1）；要略過探測、直接指定就明寫 `engine=agent` 或 `engine=codex`。
+
+**agent 路徑必須明寫 `effort`，與 codex 預設同值**：`Agent()` 不帶 `effort` 時，sub-agent 吃的是 `settings.json` 的 `modelSettings["<該 agent 自己的 model>"].effortLevel`，不繼承主 session（2.1.292 實測，headless 全新程序 + 三值互異對照）。不明寫的話，review 深度會被為了別的理由調整的 `modelSettings` 悄悄改掉，且降級成 agent 路徑時與 codex 路徑深度不一致。改 runner 的 `DEFAULT_EFFORT` 時本節與 §3 的 `effort` 值一併改。
 
 ### 2. 免跑條件（任一成立 → 只跑 §7 通知）
 對照 commit-review-policy.md 免跑條件：commit and push 的一部分 / 空 commit / commit 失敗 / amend 既有 commit 且新增 diff < 10 行。
@@ -79,7 +82,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 
 1. eslint（同上規則）。
 2. `/simplify`（對本次變更）。
-3. pr-reviewer **agent**（lite 模式）：`Agent(subagent_type: "pr-reviewer")`，不帶 `name` 參數（帶了結果不回流）。
+3. pr-reviewer **agent**（lite 模式）：`Agent(subagent_type: "pr-reviewer", effort: "high")`，不帶 `name` 參數（帶了結果不回流）；`effort` 理由見 §1.1。
    注意：同名的 `/pr-reviewer` **skill** 是 PR full review，本步驟不要用它。
 4. 依 §3.1 確認 lite agent 結果已回流（沒回流不得往下走，也不得自己重做後當作跑過）。
 5. 修 CRITICAL 問題 → `git commit --amend`（不另開新 commit）。
@@ -92,7 +95,7 @@ Tier 2/3 時 hook 已一併帶入 `engine=`（決策方式見 §1.1，實際值�
 
 > **不得改用 `/pr-review-toolkit:review-pr` 委派**。該 command 有自己的 "Determine Applicable Reviews" 篩選（`commands/review-pr.md:36-43`），**傳五個 aspect 參數不等於跑五個面向**，決定權在被委派方（實測出現過只 spawn 3 個面向，連該 command 標記 Always applicable 的 code-reviewer 都缺）；且該 command 的 workflow 明定用於 commit **之前**，預設 scope 是 `git diff`（未 commit 變更），在 commit 後跑會是空的。故本節逐一明列、由本 skill 直接 spawn。
 
-1. **五個面向 agent 放在同一則訊息內平行發出**，全部**不得帶 `name` 參數**（帶 `name` 的 agent 結果不會自動回流，實測對照表見 `~/.claude/agents/pr-reviewer.md` §Agent 執行約定）。需要區分用途用 `description`：
+1. **五個面向 agent 放在同一則訊息內平行發出**，全部**不得帶 `name` 參數**（帶 `name` 的 agent 結果不會自動回流，實測對照表見 `~/.claude/agents/pr-reviewer.md` §Agent 執行約定），全部**必須帶 `effort: "high"`**（理由見 §1.1）。需要區分用途用 `description`：
 
    | subagent_type | description |
    |---|---|

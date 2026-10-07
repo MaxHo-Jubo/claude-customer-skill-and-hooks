@@ -1,7 +1,7 @@
 ---
 name: save-progress
-description: 手動存檔當前工作進度，寫成可交接給新 session 的交接紀錄（有 Jira 票寫進 Jira 開發筆記、沒有就依 branch 名稱另存），並把未存的記憶寫入磁碟，適合在 session 結束前、預感 rate limit、或長時間離開前使用
-version: 1.1.0
+description: 手動存檔當前工作進度，寫成可交接給新 session 的交接紀錄（有 Jira 票寫進 Jira 開發筆記、沒有就依 branch 名稱另存），檢查 Teams 上有無未同步到 Jira 的討論，並把未存的記憶寫入磁碟，適合在 session 結束前、預感 rate limit、或長時間離開前使用
+version: 1.2.0
 ---
 
 # Save Progress — 手動存檔工作進度
@@ -22,7 +22,7 @@ version: 1.1.0
    |---|---|---|
    | branch 含 Jira 編號 | `{CLAUDE_DIR}/{ISSUE_ID}.md`（`/jira` 直接讀得到） | 只替換檔案中的 `## 交接紀錄` 段落（從該標題到下一個 `## ` 或檔尾），不動其他段落；沒有這段就加在檔尾。檔案不存在 → 先依 jira skill 的「開發筆記模板」建立，再加這段 |
    | 有 branch、但沒有 Jira 編號 | `{CLAUDE_DIR}/handoff-{branch}.md`，`{branch}` 中的 `/` 換成 `-`（例：`chore/sync-setting` → `handoff-chore-sync-setting.md`） | 整檔覆寫 |
-   | 不是 git repo，或 detached HEAD（branch 為空） | `{CLAUDE_DIR}/handoff-{主要工作目錄的資料夾名稱}.md` | 整檔覆寫，並在 STEP 04 回報時說明走了 fallback |
+   | 不是 git repo，或 detached HEAD（branch 為空） | `{CLAUDE_DIR}/handoff-{主要工作目錄的資料夾名稱}.md` | 整檔覆寫，並在 STEP 05 回報時說明走了 fallback |
 
    `handoff-{branch}.md` 的命名規則同時被 `~/.claude/skills/jira/SKILL.md` 步驟 3 引用來讀檔，改這裡要一起改那裡。
 
@@ -69,7 +69,14 @@ version: 1.1.0
    - …
    ```
 
-## STEP 03: 保存未存的記憶
+## STEP 03: Teams 討論同步檢查（僅 branch 含 Jira 編號時）
+
+1. branch 沒有 Jira 編號 → 跳過，STEP 05 回報「Teams 同步：跳過（無 Jira 編號）」
+2. 有 → 照 `~/.claude/skills/jira/SKILL.md`「Teams 同步流程」跑 T1～T4（流程只定義在那裡，不在此複製）
+3. 有 `SINCE` 之後的新訊息 → 顯示草稿，問使用者要不要貼到 Jira；確認才進 T5，不確認就跳過
+4. 本步驟失敗（M365 未授權、搜尋錯誤）不影響已寫好的交接紀錄，照 T4 錯誤出口記下原因，STEP 05 一併回報，然後繼續 STEP 04
+
+## STEP 04: 保存未存的記憶
 
 檢查本次 session 中是否有以下資訊尚未存到 auto memory：
 
@@ -86,9 +93,11 @@ version: 1.1.0
 {"timestamp":"ISO8601","skill":"save-progress","step":"STEP XX","error":"錯誤描述","context":"觸發情境"}
 ```
 
-## STEP 04: 回報
+## STEP 05: 回報
 
 用一句話告知存檔結果，**附上交接紀錄的絕對路徑**，例如：
 - 「已存檔到 `/…/.claude/<TICKET>.md` 的交接紀錄：3 個進行中任務 + 1 筆 feedback memory」
 - 「已存檔到 `/…/.claude/handoff-chore-sync-setting.md`（無 Jira 編號，依 branch 命名）」
 - 「已存檔到 `/…/.claude/handoff-<資料夾名>.md`（非 git repo／detached HEAD，走 fallback）」
+
+另起一行回報 STEP 03 結果：已貼留言（附 commentId）／使用者略過／已同步到最新／無命中／跳過（無 Jira 編號）／失敗（附原因），用 T4 的對應措辭。

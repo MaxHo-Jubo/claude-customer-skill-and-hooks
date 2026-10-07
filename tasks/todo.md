@@ -277,3 +277,43 @@
   - 紀錄：CLI 測試 4 個（含「逾期 marker 跑完仍在」）；mod 測試 6 個、mutation 7 項皆紅、tsc 0。測試坑：plugin 不畫時，測試裡要有模擬引擎的 `ui.render` 接手，而且必須回傳元素（回 `null` 不算接手）；`find({ key })` 找不到 Text，要用文字查
 - [x] 3 實機（user 確認 band 出現、格式可以；暫時 marker 指向假 repo＋假 session，不觸發閘門，驗完已刪）：建一顆暫時 marker → band 出現；刪掉 → band 消失（第 1 輪呈現 70-80%，格式依 user 截圖回饋調整）
 - [x] 4 移到 `~/.claude/mods/review-band`、加進 `CLAUDE_CODE_PLUGIN_DIRS`（已完成：新 `claude -p` session 的 debug log 顯示 ctx-handoff／tool-reminders／review-band 三個都 loaded；dev-mods 副本已刪；首次 tsc 因 extends 解析失敗誤輸出的 register.js／register.test.js 已刪）；文件與 #2 的 Phase 3 一起收尾（inventory／CATALOG／README → sync → commit → commit-review，見下方 #2／#1 共同收尾）
+
+---
+
+# #3 Teams 討論 → Jira 結論同步（jira skill 擴充）— 2026-10-07
+
+**目標**：Teams 上追蹤 Jira 票的討論結論，在既有工作流的固定時間點產草稿、user 確認後貼到 Jira，避免結論只留在 Teams。
+
+**PoC 已驗（<TICKET>，comment <commentId>）**：搜尋→讀 root→產草稿→貼 Jira 走通。
+
+## 已知限制與 gotcha（PoC 實測，寫進 skill）
+
+- 搜尋 `"<TICKET>"` 0 筆、`<數字>` 才命中（KQL 連字號斷詞）→ 搜數字，再用完整 key 過濾
+- tenant 未授權 `Team.ReadBasic.All`：`teams_list_teams` 403；搜尋結果裡的 teamId 拿去 `teams_list_channel_messages` 回 404 → **列不出討論串回覆**
+- root 可讀全文：`read_resource("teams:///chats/{channel thread id}/messages/{rootId}")`；reply 走此路由回 400、加 `/replies/{id}` 會被忽略並回 root → **reply 只拿得到搜尋摘要（約 500 字，會截斷）**
+- 搜尋結果無 `replyToId` → 同 channel 其他討論串會混入
+- 三種失真（遺漏／截斷／串錯）→ 一律「草稿＋人工確認」，禁止全自動貼
+- M365 connector 有 write-gated 寫入工具（`teams_send_*`），skill 限定只用讀取類
+
+## 設計
+
+- **同步流程只定義一次**：寫在 `jira/SKILL.md` 的「Teams 同步流程」章節；三個觸發點引用章節，不複製步驟（EXTRACT-SHARED-HELPER）
+- **同步狀態存在 Jira 本身**：最後一則以標題 `【Teams 討論結論同步】` 開頭的留言時間 = 上次同步點；沒有就用 issue 建立時間。不建本機狀態檔（標題是同步點哨兵，改字要一起改偵測邏輯）
+- 署名固定為 `由 Claude Code skill 整理`（2026-10-07 user 定案；作者欄已是本人帳號，不另署名；署名為各 skill 共用格式，不當哨兵）
+- 找串：seed 搜尋範圍從 issue 建立時間起（root 可能早於上次同步點）；新訊息才用同步點過濾
+- 草稿格式：結論／決策／待辦＋來源清單（發話者、時間、全文 or 摘要）＋「可能遺漏」提示＋署名
+- 0 筆時明講「找到 N 個討論串、同步點後 0 則新訊息」；搜尋/授權失敗另走錯誤出口，不可混成「沒有新討論」
+- user 確認前不呼叫任何 Jira 寫入工具
+
+## 步驟
+
+- [x] 1 `jira/SKILL.md`：新增子指令 `/jira teams [ISSUE_ID]` + 「Teams 同步流程」章節（前置檢查 → 同步點 → 搜串 → 草稿 → 確認後寫入）+ gotcha 段；version 1.2.0 → 1.3.0
+- [x] 2 `jira/SKILL.md` 觸發點 A：`/jira fetch`・`/jira branch` 跑流程的唯讀部分，把 Teams 討論摘要寫進 `{ISSUE_ID}-Jira.md` 的「Teams 討論」段；有同步點後新內容 → 提示跑 `/jira teams`
+- [x] 3 `save-progress/SKILL.md` 觸發點 B：有 Jira 編號時檢查同步點後的新討論，有就產草稿問要不要貼；插在 STEP 02 後（新 STEP 03，原 03/04 往後 +1）；version 1.1.0 → 1.2.0
+- [x] 4 `jira-release-sync/SKILL.md` 觸發點 C：STEP 03 對每筆候選查「同步點後新 Teams 訊息數」，STEP 04 表格加一欄；user 指定的才產草稿（不對全部候選逐一產草稿，控制呼叫量）；version 1.5.0 → 1.6.0
+- [x] 5 驗證（a、c 已過；b 擱置——2026-10-07 user 決定等實際使用遇到問題再調整；d 未驗）：(a) `/jira teams <TICKET>` 應偵測 <commentId> 為同步點並回報新訊息數（已知答案對照組）(b) 另找一張有 Teams 討論、未同步的票跑完整流程 (c) 故意給不存在的票號 → 應回報「0 個討論串」而非錯誤 (d) 撤授權情境以 `get_granted_scopes` 失敗路徑檢查訊息
+- [ ] 6 `/sync-my-claude-setting` → commit → commit-review
+
+## 待決（不阻擋開工）
+
+- 是否請 IT 對 Claude M365 connector 補 `Team.ReadBasic.All` admin consent（補了可讀完整討論串，三種失真消失；skill 屆時改用 `teams_list_channel_messages(parentMessageId)`）
