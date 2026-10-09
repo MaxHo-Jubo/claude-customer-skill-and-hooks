@@ -88,7 +88,7 @@
 - **與既有 skill 區隔**：對既有 test-plan 跑測試並上 Jira；`cup-build-test` 是從零產 test-plan + 自我驗證
 - **依賴**：Atlassian MCP、Playwright MCP、git repository
 
-#### `/jira-release-sync` — 發版狀態同步（v1.6.0）
+#### `/jira-release-sync` — 發版狀態同步（v1.6.2）
 
 - **位置**：`~/.claude/skills/jira-release-sync/SKILL.md`（含 `scan_commits.py`、`scan_commits_luna.py`、`tests/test_scan_commits_luna.py`）
 - **測試（2026-09-24 新增）**：`tests/test_scan_commits_luna.py` 用真實臨時 git repo（bare origin + 工作 repo，不 mock git）驗證 luna 模式——release fast-forward、`max[_ ]?ho` 作者過濾、frontend/backend 依路徑判定、`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD` tag ancestry、跨 component 完成度判斷、路徑判不出 component 進 `manual_review`
@@ -99,8 +99,18 @@
   - **`luna` 模式**（`luna_web`）：只掃 `release` 分支（不是 master，luna_web 的 master 是開發分支、早已與 release 分岔）；**限 author 為 Max_Ho**（`max[_ ]?ho` 大小寫不敏感 pattern，需要 `--extended-regexp` 因為 `git log --author` 預設 BRE 不解析 `?` 量詞）；版本釋出點是 release 分支上精確格式的 git tag（`frontend-vYYYY.MM.DD`／`backend-vYYYY.MM.DD`，排除 `-test`／`-2`／舊無點格式）；frontend／backend 分開部署，同一 issue 橫跨兩者時**兩邊都要各自上架才算完成**，只有一邊上架列進「尚未完全上架」不當候選；腳本每次執行先 `git fetch origin release:release`（fast-forward only），本地落後會直接中止讓人工排查（2026-09-17 實測踩過本地落後 158 個 commit、漏掉一次 master merge 導致整批 issue 完全不出現在任何清單）
 - **留言格式**：HTML mention（`contentFormat: "html"`，`<span data-type="mention" data-user-id="...">`）固定標註 4 人（許少宇／andyzeng／weihuang／Yenwen Chen 陳妍妏）；2026-09-17 實測修正：`contentFormat` 只接受 `"markdown"`/`"html"`，原文件寫的 `"adf"` 是錯的會被參數驗證擋掉
 - **執行流程**（7 步）：STEP 00 前置檢查（Atlassian MCP 連線、判定 REPO_MODE/APP_NAME）→ STEP 01 掃描候選（呼叫對應腳本）→ STEP 02 查現況去重（已 Resolved 直接跳過）→ STEP 03 組裝候選（動作詞：LVB=修正／ERPD=上線；v1.6.0 加計每筆「Teams 未同步」訊息數，引用 jira skill「Teams 同步流程」T1～T3）→ STEP 04 輸出候選清單等待確認（**寫入類 Jira 工具在確認前一律不得呼叫**）→ STEP 05 逐筆執行寫入（使用者指定的票先同步 Teams 結論 + 留言 + 找 Resolved 轉換 + 執行轉換 + best-effort 回填結案日：系統欄位唯讀多數會失敗，退回專案自訂「結案日」欄位，LVB 有（`customfield_10502`，僅該專案驗證過不可寫死當全域常數）、ERPD 沒有）→ STEP 06 輸出最終結果表
+- **留言去重（v1.6.2）**：已 Resolved 的 issue 跳過；尚未 Resolved 的以「issue＋版本」為 key 去重——STEP 03 用 `listJiraIssueComments` 檢查是否已有含本次留言整句的留言（整句前一字元非數字／`.`，避免 `1.50.3` 命中 `1.50.33`），有就略過留言、只補轉態與結案日；版本不同照常留言；檢查失敗標「留言檢查失敗」交使用者決定。候選表多一欄「留言」（新增／已存在（略過））
 - **已知限制**：Jira `resolutiondate` 系統欄位多數專案唯讀，只能轉態當下自動蓋今天日期，不保證回填成功為真正的 release_date；沒有「結案日」自訂欄位的專案（如 ERPD）結案日只能停在留言文字裡
 - **依賴**：Atlassian MCP、git repository、`scan_commits.py`（app-store）/`scan_commits_luna.py`（luna）
+
+#### `/android-verify-build` — 本機驗證用 release APK 建置安裝（v1.0.0）
+
+- **位置**：`~/.claude/skills/android-verify-build/SKILL.md`
+- **用法**：`/android-verify-build [home|day|family]`（可附裝置序號）、「建 release APK 裝到手機」、「用正式版 build 驗證」
+- **功能**：把指定 App 建成簽章的 release APK 並安裝到已連線的 Android 實機，讓使用者在接近正式環境的 build 上驗證（release build 沒有 Metro、JS bundle 內嵌）。**不是發版**：不改版號、不 commit、不上傳；發版走 fastlane `release_android`／GitHub Actions
+- **流程**：STEP 01 決定 App 與裝置（專案目錄名取自本機 `PROJECT-MAP`、用 `find` 解析；裝置用 `adb devices`，0 台就停、不自己啟動模擬器、不寫死機型）→ STEP 02 檢查簽章（只驗 4 個 key 在不在與 keystore 檔存在，不印值）→ STEP 03 `assembleRelease`（不帶 `clean`，遇 `.cxx` 快取錯誤才清 `.cxx` 與 `app/build` 重建）→ STEP 04 安裝（以 gradle exit code 0 為前提，建置失敗時不得裝目錄裡的舊 APK；不以 APK 修改時間判斷，因 gradle UP-TO-DATE 時修改時間不更新）→ STEP 05 回報（版本以 `aapt2 dump badging` 的產物為準）
+- **限制**：簽章與裝置上已裝版本不符（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）時只回報、不自動解除安裝（會清 App 資料）；不改裝置系統設定
+- **依賴**：Android SDK（`adb`、`aapt2`）、各 App 的 `android/gradle.properties` 簽章設定
 
 #### `/finalize-release` — 發版最後兩步驟一鍵觸發（v2.0.0）
 
@@ -554,6 +564,7 @@
 | `Write\|Edit\|MultiEdit` | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援 ES2020 語法），違規回傳 deny + 範例；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
 | `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
 | `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
+| `Bash` | `credential-commit-guard.ts` | git commit 前憑證掃描（2026-10-09 新增）——只在指令含 `git commit` 時觸發（不對每個 Bash 掃，否則暫存區有命中時連修復指令也被擋成死鎖）；只掃**新增行**（暫存區；`-a`／`--all` 另掃未暫存的已追蹤變更；指定 pathspec 另掃該些路徑的工作目錄內容），清理憑證的 commit 不會被擋；pattern 與 `rules/common/security.md` pre-commit-scan 相同（測試檢查逐字一致）；命中 deny 且只列檔名；commit 指令含 `[skip-credential-scan]` 放行；hook 自身錯誤不擋 commit 但 exit 1 交 `hook-error-wrapper` 記錄；擋下寫 `DENIALS.jsonl`；同一指令串內先 add 再 commit 時掃不到剛 add 的檔 |
 
 ### PostToolUse
 

@@ -341,6 +341,12 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/commit-gate-guard.ts",
             "timeout": 5000,
             "statusMessage": "Checking pending-review gate..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/credential-commit-guard.ts",
+            "timeout": 5000,
+            "statusMessage": "Scanning staged changes for credentials..."
           }
         ]
       }

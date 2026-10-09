@@ -1,7 +1,7 @@
 ---
 name: jira-release-sync
 description: "掃描一段期間內的 git commit，找出已隨版本 merge 進 master（已上架）的 Jira issue，於 Jira 留言告知版本與修正/上線狀態，並將狀態轉為 Resolved、附上結案日；結案前檢查 Teams 上有無未同步到 Jira 的討論。當使用者提到 /jira-release-sync、「掃描已上架的commit留言jira」、「同步發版狀態到jira」、「把上架的issue結案」時觸發。"
-version: 1.6.0
+version: 1.6.2
 ---
 
 # Jira Release Sync — 發版狀態同步
@@ -97,7 +97,7 @@ HTML body 結構：主文一個 `<p>`，標註人員另起一個 `<p>`、每人�
 3. **「已上架」判定用 ancestry，不用日期比較**：一個 `[ISSUE-ID]` commit 若是某個版本 merge commit 的祖先（`git merge-base --is-ancestor`），即視為已上架；取「時間序上最早」符合此條件的版本 merge commit 為其釋出版本。**不可**改回單純比較 commit 日期早晚——commit 自己的 committer date 不等於它真正併入 master 的時間，會誤判上架版本（本 repo 實測案例：`[LVB-8340]` fix commit 的 committer date 是 2026-08-31T10:51，晚於 `update version to 1.50.33` 這個版號 commit 自己的 committer date 2026-08-28T11:32；但 LVB-8340 是透過 PR #1143 在 2026-08-31T17:47 併入 master，早於 1.50.33 真正 merge 進 master 的 PR #1144（2026-08-31T17:59），所以正確答案是有搭上 1.50.33。單純比較「commit 日期 vs 版號 commit 自己的日期」會誤判成沒搭上、掉到下一版 1.50.34；改用 ancestry 判斷 commit 是否為 1.50.33 那個 merge commit 的祖先，才會正確給出 1.50.33）。
 4. **同一 issue 對應多個 commit**：取版本 merge 時間最晚的一筆（代表該 issue 最終完整修正被包進去的版本；例如同一 issue 先有一次修正搭上某版本，後又補一個 amendment commit、剛好卡在下一個版本 cut 之後，就以較晚版本為準）。
 5. **結案日 = 該 issue 最終被包進去的那個版本 merge commit 的 committer date**（不是留言/執行當下的日期，也不是 Jira transition 自動蓋上的日期，見 STEP 06 的已知限制）。
-6. **去重規則**：已是 Resolved（或 statusCategory=done）的 issue 直接跳過，不重複處理；尚未 Resolved 的則不管先前是否已留言過，一律照跑（留言不去重）。
+6. **去重規則**：已是 Resolved（或 statusCategory=done）的 issue 直接跳過，不重複處理；尚未 Resolved 的照跑轉態與結案日，但**留言以「issue＋版本」為 key 去重**：該 issue 已有含本次「留言內容」整句的留言（偵測方式見 STEP 03「留言去重檢查」）就不再留言，只補轉態與結案日；同一 issue 搭上不同版本時整句不同，照常留言。（2026-10-09 使用者指示由「留言不去重」改為此規則：留言成功但轉態失敗後重跑，舊規則會重複留言。）
 
 ## 核心判定規則（`luna` 模式，2026-09-04 與使用者確認，跟上面 `app-store` 規則不共用）
 
@@ -107,7 +107,7 @@ HTML body 結構：主文一個 `<p>`，標註人員另起一個 `<p>`、每人�
 4. **frontend 與 backend 分開部署，不同步上架**（實測 2026-08-19 只打 frontend tag、2026-08-20 只打 backend tag）：一個 commit 依改動檔案的頂層目錄（`frontend/` 或 `backend/`）判斷屬於哪個 component，比對 commit message 的 `(FE)`/`(BE)` 標籤更可靠——不是每筆 commit 都有標（例如 `[LVB-8296] fix pr issues` 這種 follow-up commit 常常沒標，但改動路徑仍能判斷出是 frontend）。再對該 component 自己的 tag 序列做 ancestry 判斷（同 `app-store` 規則 3 的 ancestry 原則，只是 tag 序列換成該 component 專屬的）。
 5. **同一 Jira issue 若橫跨 frontend 與 backend 兩個 component**（同一筆 commit 同時動兩邊路徑，或分成兩筆 commit 各自只動一邊——後者是實際樣本裡真的會發生的型態），**兩邊都要各自找到自己 component 的 tag 才算「已上架」，日期取兩邊較晚者**；只要有一邊還沒 tag，整個 issue 這輪都先不當候選，改列進「尚未完全上架」給使用者看目前卡在哪個 component（不要在只有一半上架時就留言/轉 Resolved）。
 6. **commit 改動路徑完全沒有落在 `frontend/` 或 `backend/` 底下** → 無法判定 component，列進「需人工確認」，不自動處理、不亂猜。
-7. **去重規則**：跟 `app-store` 規則 6 相同——已 Resolved 的 issue 跳過，其餘不管留言過沒有一律照跑。
+7. **去重規則**：跟 `app-store` 規則 6 相同——已 Resolved 的 issue 跳過；其餘照跑轉態與結案日，留言以「issue＋版本」為 key 去重（`luna` 模式的留言整句是 `{release_version} 已{動作詞}`，偵測方式見 STEP 03「留言去重檢查」）。
 
 ## 執行步驟
 
@@ -167,6 +167,11 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
   - `app-store` 模式 = `{APP_NAME} 版本 {release_version} 已{動作詞}`
   - `luna` 模式 = `{release_version} 已{動作詞}`（不含 APP_NAME）
 - 結案日待寫入值 = `release_date`
+- **留言去重檢查**（以 issue＋版本為 key）：用 `executeRead(name="listJiraIssueComments", cloudId, inputs={issueIdOrKey, orderBy:"-created", maxResults:100})` 取留言（`total` 超過 100 時依 `isLast` 翻頁，`cloudId` 放頂層），逐則檢查內文是否含本筆「留言內容」整句，且整句前一個字元不是數字或 `.`（避免 `1.50.3` 命中 `1.50.33`、`2026.09.03` 命中 `12026.09.03`）。回傳內文可能是 HTML（含 @mention 的留言會自動回 HTML，`appliedContentFormat` 會標示），整句在 `<p>` 內是連續字串，直接做子字串比對即可，不需轉格式（2026-10-09 對 LVB-8340 實測：同一句出現在 HTML 與純 `<p>` 兩種內文，都能命中）。
+  - 命中 → 該筆標「留言已存在」，STEP 05 略過留言。
+  - 未命中 → 標「新增」。同一 issue 搭上不同版本時整句不同，不會命中，照常留言。
+  - 不限制留言作者（使用者手動貼了同一句也算已存在）。
+  - 呼叫失敗 → 標「留言檢查失敗：{原因}」並視為未留言，在 STEP 04 讓使用者看見，由使用者決定是否排除該筆（寧可讓使用者決定，不靜默放行也不靜默略過）。
 - **Teams 未同步訊息數**：照 `~/.claude/skills/jira/SKILL.md`「Teams 同步流程」只跑 T1～T3，記下 `SINCE` 之後的新訊息數 M（流程只定義在那裡，不在此複製）。只計數、不產草稿，避免對每筆候選都打一輪 Teams API。T1 失敗 → 整欄標「未檢查：{原因}」；單筆搜尋失敗 → 該筆標「失敗：{原因}」。兩者都不擋發版同步
 
 ### STEP 04: 輸出候選清單，等待使用者確認
@@ -176,9 +181,10 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 ```
 ## Jira 發版同步 — 候選清單（{起始日}~{今日}，共 N 筆）
 
-| Issue | 目前狀態 | 動作 | 留言內容 | 結案日 | Teams 未同步 |
-|-------|---------|------|---------|--------|-------------|
-| LVB-8340 | In Review | 修正 | 居服App 版本 1.50.33 已修正 | 2026-08-31 | 2 則 |
+| Issue | 目前狀態 | 動作 | 留言內容 | 留言 | 結案日 | Teams 未同步 |
+|-------|---------|------|---------|------|--------|-------------|
+| LVB-8340 | In Review | 修正 | 居服App 版本 1.50.33 已修正 | 新增 | 2026-08-31 | 2 則 |
+| LVB-8369 | In Review | 修正 | 居服App 版本 1.50.33 已修正 | 已存在（略過） | 2026-08-31 | 0 則 |
 
 ### 已跳過（已是 Resolved，不重複處理）
 - LVB-8213（目前狀態：Resolved）
@@ -212,7 +218,7 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 
 （使用者有指定要先同步 Teams 的票時，該筆在下方 1. 之前先跑「Teams 同步流程」T4～T5：出草稿 → 使用者確認 → 貼留言，讓討論結論排在結案留言之前。使用者不確認就跳過同步，繼續發版同步。）
 
-1. **留言**：組裝 HTML body（主文 + 固定標註人員，見上方「留言標註人員」章節），呼叫 `addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<HTML 字串>, contentFormat="html")`
+1. **留言**：STEP 03 標「留言已存在」的筆數**略過本步**（不呼叫 `addOrEditJiraIssueComment`），STEP 06 的「留言內容」欄填「（已存在，略過）」，直接進 2；其餘筆數：組裝 HTML body（主文 + 固定標註人員，見上方「留言標註人員」章節），呼叫 `addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<HTML 字串>, contentFormat="html")`
 2. **找 Resolved 轉換**：`executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey})`（`cloudId` 是 `executeRead` 的頂層參數，不要塞進 `inputs`），在回傳的 `transitions` 中找 `name` 完全等於或包含 `"Resolved"`（或中文「已解決」）者，取其 `id`
    - 找不到 → 記錄失敗「目前狀態無可直接轉換至 Resolved 的路徑，可用轉換：{列出所有 name}，需人工處理」，跳過此筆剩餘步驟
 3. **執行轉換**：`transitionJiraIssue(cloudId, issueIdOrKey, transitionId="<上一步取得的 id>", fields={"resolutiondate": "{release_date}T00:00:00.000+0800"})`
@@ -220,7 +226,7 @@ getJiraIssue(cloudId, issueIdOrKey=jira_id, fields=["status", "summary", "resolu
 4. **回填結案日（best-effort，僅在 STEP 05.3 未成功帶入時才需要）**，依序嘗試兩層：
    a. **系統欄位**：`editJiraIssue(cloudId, issueIdOrKey, fields={"resolutiondate": "{release_date}T00:00:00.000+0800"})`
       - 多數 Jira 專案會失敗，錯誤是 `Field 'resolutiondate' cannot be set. It is not on the appropriate screen, or unknown.`（系統欄位唯讀，轉態當下自動蓋今天日期）→ 進 b
-   b. **專案自訂「結案日」欄位（2026-09-03 實測發現，非所有專案都有）**：原設計是 a 失敗時從錯誤回應的 `problems[0].settableFields` 動態找欄位 ID；**2026-09-17 實測發現這層 MCP 包裝的錯誤格式只有 `{error, message}`，不會帶 `problems[0].settableFields`**（不是 Jira REST 原始錯誤格式，這支工具吞掉了那個欄位），所以這個自動探測管道目前對這支工具不可行。退回人工判斷：已知 LVB 專案有「結案日」自訂欄位（`customfield_10502`，只在 LVB 驗證過）、ERPD 專案沒有（2026-09-03 起多次實測一致）；遇到不在這兩個已知專案清單內的專案，如果需要精確結案日，才值得另外呼叫 `getJiraIssueTypeMetaWithFields` 或問使用者，不要假設一定能自動探測到：
+   b. **專案自訂「結案日」欄位（2026-09-03 實測發現，非所有專案都有）**：原設計是 a 失敗時從錯誤回應的 `problems[0].settableFields` 動態找欄位 ID；**2026-09-17 實測發現這層 MCP 包裝的錯誤格式只有 `{error, message}`，不會帶 `problems[0].settableFields`**（不是 Jira REST 原始錯誤格式，這支工具吞掉了那個欄位），所以這個自動探測管道目前對這支工具不可行。退回人工判斷：已知 LVB 專案有「結案日」自訂欄位（`customfield_10502`，只在 LVB 驗證過）、ERPD 專案沒有（2026-09-03 起多次實測一致）；遇到不在這兩個已知專案清單內的專案，如果需要精確結案日，才值得另外呼叫 `getJiraIssueTypeMetaWithFields` 或問使用者，不要假設一定能自動探測到。**呼叫 `getJiraIssueTypeMetaWithFields` 必須帶 `requiredFieldsOnly: false`**（2026-10-09 對 LVB 實測：預設 `true` 只回必填的 3 個欄位，選填的「結案日」不會出現；帶 `false` 回 26 個欄位、約 7 萬字元，會超出輸出上限而被存成檔案，用 python／jq 從存檔挑 `name == "結案日"` 的 `fieldId`）。`issueTypeId` 先用 `listJiraProjectIssueTypesMetadata` 取（LVB 的「漏洞」= `10004`）：
       - 找到 → `editJiraIssue(cloudId, issueIdOrKey, fields={"<那個 id>": "{release_date}"})`，**純日期字串 `YYYY-MM-DD`，不要用 datetime ISO 格式**（此自訂欄位是 date 型別不是 datetime，實測帶完整 ISO 字串格式不符會被拒）
         - 成功 → 這筆視為完全成功
         - 失敗 → 記錄實際錯誤，標記部分成功

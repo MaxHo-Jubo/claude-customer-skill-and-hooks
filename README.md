@@ -55,7 +55,7 @@
 
 ---
 
-## Skills 一覽（30 個自訂 skill）
+## Skills 一覽（31 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -65,8 +65,9 @@
 | linus-requirements-analysis | `/linus-requirements-analysis` | 1.0.0 | Linus Style 需求分析，6 步結構化審查 + Jira 回寫 |
 | jira-acceptance | `/jira-acceptance` | 1.0.0 | 比對 Jira 需求與 git diff，驗收實作完成度 |
 | jira-test-report | `/jira-test-report` | 2.5.5 | 對 Jira issue 跑 Playwright E2E 測試，自動截圖 inline 上傳到 issue comment；v2.4.0 落實「斷言截圖三合一規範」；v2.5.x 大規模結構重整：SKILL.md -42%（1415→821 行），抽出 `docs/`（troubleshooting/wiki-markup/comment-template）與 `templates/`（env.local.example/progress.template/skeleton.cjs），新增 `CHANGELOG.md`；v2.5.5 套 AI.MD v4：5 個 prose 重災區轉 structured labels（共 29 個 label blocks），token -220（-1.9%） |
-| jira-release-sync | `/jira-release-sync`、`/jira-release-sync --weeks 3` | 1.6.0 | 掃描一段期間內的 git commit，找出已隨版本上架的 Jira issue，留言告知版本/狀態並轉 Resolved、附結案日；支援 `app-store`（居服/日照/家屬 App，master ancestry 判版）與 `luna`（luna_web release 分支 tag 判版，frontend/backend 分開判定，限 Max_Ho 作者）兩套規則，不寫入 Fix Version；v1.6.0 候選表加「Teams 未同步」欄，可指定先同步 Teams 結論再結案 |
+| jira-release-sync | `/jira-release-sync`、`/jira-release-sync --weeks 3` | 1.6.2 | 掃描一段期間內的 git commit，找出已隨版本上架的 Jira issue，留言告知版本/狀態並轉 Resolved、附結案日；支援 `app-store`（居服/日照/家屬 App，master ancestry 判版）與 `luna`（luna_web release 分支 tag 判版，frontend/backend 分開判定，限 Max_Ho 作者）兩套規則，不寫入 Fix Version；v1.6.0 候選表加「Teams 未同步」欄，可指定先同步 Teams 結論再結案；v1.6.2 留言以「issue＋版本」為 key 去重（已有同句留言就略過留言、只補轉態與結案日），結案日欄位查詢補 `requiredFieldsOnly: false` |
 | finalize-release | `/finalize-release` | 2.0.0 | 手動觸發發版最後兩步驟：merge 版號 PR → 執行 `jira-release-sync`；App Store/Google Play 正式發布仍由使用者手動處理；僅支援居服App、日照App（家屬App 無 GitHub Actions） |
+| android-verify-build | `/android-verify-build [home\|day\|family]` | 1.0.0 | 建簽章 release APK 並安裝到已連線的 Android 實機，**本機驗證用、非發版**（發版走 fastlane／GitHub Actions）；專案目錄依本機 `PROJECT-MAP` 解析、裝置用 `adb devices` 找不寫死機型；只檢查簽章 key 在不在不印值；以 gradle exit code 0 為安裝前提（避免建置失敗時誤裝舊 APK）；版本以 `aapt2 dump badging` 產物為準；簽章不符時不自動解除安裝 |
 | spec-module | `/spec-module <path>` | 1.0.0 | 探索模組並產出結構化 spec 文件 |
 | test-module | `/test-module <path>` | 2.0.0 | 掃描可測試函式，產出單元測試，經 4 輪平行 review 迭代驗證（框架無關） |
 | spec-to-e2e-test | `/spec-to-e2e-test <spec>` | 1.2.0 | 從 spec 文件產出 E2E 整合測試，經 4 輪平行 review 迭代驗證 |
@@ -113,6 +114,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 | PreToolUse | 工具執行前 | Write\|Edit\|MultiEdit | `r15-syntax-guard.ts` | 擋下 luna_web `react_15/` 內 `?.` 與 `??`（babel 6 不支援）；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行；擋下時寫 `DENIALS.jsonl` |
+| PreToolUse | 工具執行前 | Bash | `credential-commit-guard.ts` | git commit 前憑證掃描：只在指令含 `git commit` 時觸發，只掃**新增行**（暫存區；`-a`／`--all` 另掃未暫存的已追蹤變更；指定 pathspec 另掃該些路徑的工作目錄內容），移除或替換憑證的清理 commit 不會被擋；pattern 與 `rules/common/security.md` 的 pre-commit-scan 相同（測試機械檢查三處逐字一致）；命中即 deny、reason 只列檔名不印內容；commit 指令含 `[skip-credential-scan]` 放行（測試 fixture 假憑證用）；hook 自身錯誤（無效 JSON、欄位型別不符、git 掃描失敗）不擋 commit 但 exit 1 + stderr 交 `hook-error-wrapper` 記錄；擋下寫 `DENIALS.jsonl`。限制：同一個 Bash 指令內先 add 再 commit 時掃不到剛 add 的檔；指令解析是 shell 的近似 |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | spec 缺必要區段時 block（空骨架警告改由 `tool-reminders` mod 處理） |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
@@ -257,6 +259,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-09（二）: commit 前憑證掃描 hook + android-verify-build skill + jira-release-sync 留言去重
+
+- **`hooks/credential-commit-guard.ts`（新增，PreToolUse Bash）**：把 `security.md` 的 pre-commit-scan 從自律變成機械強制。只在指令含 `git commit` 時掃，不對每個 Bash 呼叫掃——對照實測：每個 Bash 都掃的作法，暫存區一有 `api_key` 字樣就連 `git restore --staged` 也被擋（死鎖），且漏掉 `ghp_`／`sk-`／`AIza`／PEM 私鑰。25 項測試（臨時 git repo、假憑證執行期拼接、假 HOME，六種憑證形態各自驗證）＋ 11 個突變探針全數讓測試變紅，還原後位元相同。Tier 3 review（6 面向）揪出並已修正：`git diff -G` 會把「被刪除的憑證行」也算命中，導致清理外洩的 commit 自己被擋 → 改為只掃新增行；`-a` 偵測對 `-m "fix; x" -a` 這類引號內分號誤判 → 先去除引號與 heredoc 再解析；指定 pathspec 時 git 提交工作目錄版本卻只掃暫存區 → 加掃 pathspec；JSON 解析失敗／欄位型別不符／stdin 逾時原本靜默 exit 0 → 一律 exit 1 + stderr；pattern 三份副本改由測試機械檢查一致。
+- **`skills/android-verify-build`（新增 1.0.0）**：本機驗證用的 release APK 建置安裝流程，非發版。review 揪出「以 APK 修改時間判斷是否為本次建置」會在 gradle 判定 UP-TO-DATE 時誤擋成功建置 → 改以 gradle exit code 0 為前提。
+- **`jira-release-sync` 1.6.2**：(1) 留言改以「issue＋版本」為 key 去重，起因是實測某票已有兩則完全相同的「版本 已修正」留言（留言成功、轉態失敗後重跑會重複留言）；整句前一字元非數字／`.`，避免 `1.50.3` 命中 `1.50.33`。(2) 結案日自訂欄位是選填，`getJiraIssueTypeMetaWithFields` 預設只回必填欄位，必須帶 `requiredFieldsOnly: false`。(3) `luna` 模式規則 7 原本仍寫「一律照跑」，與改後的 app-store 規則 6 矛盾（review 揪出），已同步。
+- **`rules/common/security.md`**：pre-commit-scan 說明由「唯一防線」改為已由 hook 機械執行，並註明同指令串的限制與 `[skip-credential-scan]`。
+- **同步範圍**：本機 `skills/.trash/` 仍以命令列 `--exclude='.trash'` 排除，sync skill 本身未改。
 
 ### 2026-10-09: weekly-review 記憶整理後的規則同步 + advisorModel
 
