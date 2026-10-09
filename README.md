@@ -260,6 +260,15 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-10-09（四）: credential-commit-guard 第二輪 review 修正 + hook `timeout` 單位修正
+
+- **第二輪 review**（獨立 agent，不帶第一輪結論；16 項：CRITICAL 1／IMPORTANT 5／MINOR 10）。CRITICAL：`git commit -m x > /dev/null` 的重導向目標被當成 pathspec，`git diff HEAD -- /dev/null` 回 exit 128，catch 區塊不看已累積的命中就 exit 1，commit 照樣進去。
+- **本次修**（範圍選 A）：(1) `parseCommit` 切 token 前去掉重導向與背景符號；(2) 掃描改為每個各自 try，已確認的命中優先 deny（附註另有掃描失敗），沒命中但有掃描失敗才 exit 1；(3) 一個指令含多個 `git commit` 時各段合併，不再只看第一段；(4) timeout 註解補單位與最壞總時間。
+- **不修、寫進檔頭「已知限制」**：pathspec 加引號漏掃、子目錄相對 pathspec／`~/` 漏掃、只認開頭 `cd`／第一個 `-C`、`VAR=1 git commit`／alias／`bash -c` 不觸發、binary 不掃、初始 commit 帶 pathspec 只掃暫存區。根因是用「去引號再切空白」近似 shell 解析，根治要寫 tokenizer，本次不做。
+- **驗證**：測試 33 → 42 項；9 個突變探針（重導向、`&`、多段、命中被失敗吃掉、失敗被吞、長選項表、短選項表、heredoc、逐檔定位）各讓對應測試變紅。review 指出原本改壞仍全綠的 4 個缺口（長選項表、短選項表、heredoc、逐檔定位）已補測試；其中 heredoc 第一版測試仍測不到（內文在別的換行段），改成內含 `git commit -am` 的案例後才變紅。
+- **settings.json hook `timeout` 單位**：官方單位是秒（原文 "Seconds before canceling"，預設 600），本機原本寫 3000／5000／60000 是當毫秒寫的，實際等於 50 分鐘到 16.7 小時、等於沒設。改為 10 秒（一般 hook）、30 秒（credential-commit-guard；程式內單次 git／grep 子行程各 3 秒，整體沒有固定上限，一般 1 秒內完成，30 秒是整體保險）、60 秒（post-commit-review）、5 秒（Notification）。風險：PreToolUse guard 逾時會放行；觀察 `ERRORS.jsonl`。
+- **Notification hook**：官方文件沒有 `CLAUDE_NOTIFICATION_MESSAGE`，通知文字在 stdin JSON 的 `.message`。改成用 `jq` 讀 `.message`，無內文時顯示 `(no message)`。
+
 ### 2026-10-09（三）: 憑證掃描 pattern 收斂（降低誤擋）
 
 - **起因**：側邊提醒指出 `sk-` 規則前面沒有限制，`task-management-dashboard-widget`、`disk-encryption-configuration` 這類長名稱會被當成金鑰。實測屬實（兩者都命中），但在 4 個 repo 各 300 個 commit 的新增行裡 `sk-` 這條命中數是 0；實測看到的誤擋是另一條：CI workflow 裡 `x-access-token:${TOKEN}@` 形式的 URL 內嵌帳密（規則把 `${變數}` 當明文），居服 App repo 近 300 個 commit 有 2 行。

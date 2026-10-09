@@ -245,13 +245,13 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/spec-section-validator.ts",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Validating spec sections..."
           },
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/skill-version-check.ts",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Checking skill version..."
           }
         ]
@@ -262,7 +262,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PostToolUse bun /Users/maxhero/.claude/scripts/post-commit-review.ts",
-            "timeout": 60000,
+            "timeout": 60,
             "statusMessage": "Checking post-commit review..."
           }
         ]
@@ -292,7 +292,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreCompact bun /Users/maxhero/.claude/scripts/pre-compact-snapshot.ts",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Preparing compact..."
           }
         ]
@@ -304,8 +304,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '\\e]9;Claude Code: %s\\a' \"$CLAUDE_NOTIFICATION_MESSAGE\"",
-            "timeout": 3000
+            "command": "msg=$(jq -r '.message // \"(no message)\"'); printf '\\e]9;Claude Code: %s\\a' \"$msg\"",
+            "timeout": 5
           }
         ]
       }
@@ -317,7 +317,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/r15-syntax-guard.ts",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Checking R15 syntax compatibility..."
           }
         ]
@@ -328,7 +328,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bash /Users/maxhero/.claude/hooks/big-read-guard.sh",
-            "timeout": 3000,
+            "timeout": 10,
             "statusMessage": "Checking large-file read..."
           }
         ]
@@ -339,13 +339,13 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/commit-gate-guard.ts",
-            "timeout": 5000,
+            "timeout": 10,
             "statusMessage": "Checking pending-review gate..."
           },
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/credential-commit-guard.ts",
-            "timeout": 5000,
+            "timeout": 30,
             "statusMessage": "Scanning staged changes for credentials..."
           }
         ]
@@ -377,7 +377,7 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh SubagentStop bun /Users/maxhero/.claude/hooks/subagent-review-clear.ts",
-            "timeout": 5000,
+            "timeout": 10,
             "statusMessage": "Logging subagent type..."
           }
         ]

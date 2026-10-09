@@ -192,6 +192,27 @@ describe('parseCommit', () => {
     expect(parseCommit('git commit -am "x"').paths).toEqual([]);
     expect(parseCommit('git commit --message foo --author "A <a@b>" f.txt').paths).toEqual(['f.txt']);
   });
+  test('shell 重導向與背景符號不是 pathspec（重導向目標被當路徑會讓 git diff 報錯、整個掃描失敗）', () => {
+    expect(parseCommit('git commit -m x > /dev/null').paths).toEqual([]);
+    expect(parseCommit('git commit -m x >/dev/null 2>&1').paths).toEqual([]);
+    expect(parseCommit('git commit -m x 2> err.log').paths).toEqual([]);
+    expect(parseCommit('git commit -m x > out.log 2>&1 &').paths).toEqual([]);
+    expect(parseCommit('git commit -am x > /dev/null').all).toBe(true);
+    expect(parseCommit('git commit -m x f.txt > /dev/null').paths).toEqual(['f.txt']);
+  });
+  test('一個指令含多個 git commit：各段的 -a 與 pathspec 合併', () => {
+    expect(parseCommit('git commit -m a --allow-empty && git commit -am b').all).toBe(true);
+    expect(parseCommit('git commit -m a x.txt; git commit -m b y.txt').paths).toEqual(['x.txt', 'y.txt']);
+  });
+  test('帶值選項（未加引號）連值一起跳過：--author、-F、-C', () => {
+    expect(parseCommit('git commit --author Bob -m x f.txt').paths).toEqual(['f.txt']);
+    expect(parseCommit('git commit -F msg.txt f.txt').paths).toEqual(['f.txt']);
+    expect(parseCommit('git commit -C HEAD f.txt').paths).toEqual(['f.txt']);
+  });
+  test('未被雙引號包住的 heredoc 內容先去除：內文裡的 git commit -am 不算一個 commit 段', () => {
+    expect(parseCommit("cat > notes.md <<'EOF'\ngit commit -am x\nEOF")).toEqual({ all: false, paths: [] });
+    expect(parseCommit("git commit -m real <<'EOF'\ngit commit -am x\nEOF").all).toBe(false);
+  });
 });
 
 describe('credential-commit-guard 擋下', () => {
@@ -237,6 +258,47 @@ describe('credential-commit-guard 擋下', () => {
     /** 執行前的 DENIALS 列數 */
     const before = denialRows().length;
     expectPass(runGuard('git commit -m "x"', repo), before);
+  });
+
+  test('帶重導向（> /dev/null、2>&1、&）的 commit 照樣擋：重導向目標不是 pathspec', () => {
+    reset(repo);
+    writeFileSync(join(repo, 'leak.env'), `${FAKE_TOKEN}\n`);
+    git(repo, 'add', 'leak.env');
+    for (const cmd of ['git commit -m x > /dev/null', 'git commit -m x > /tmp/c.log 2>&1', 'git commit -m x 2> /dev/null', 'git commit -m x &']) {
+      /** 本指令的執行結果 */
+      const r = runGuard(cmd, repo);
+      expect(r.code).toBe(0);
+      expect(r.reason).toContain('leak.env');
+      expect(r.reason).not.toContain('掃描失敗');
+    }
+  });
+
+  test('一個指令含兩個 git commit：第二個的 -a 會帶入未暫存變更 → deny', () => {
+    reset(repo);
+    writeFileSync(join(repo, 'base.txt'), `base\n${FAKE_TOKEN}\n`);
+    expect(runGuard('git commit -m a --allow-empty && git commit -am b', repo).reason).toContain('base.txt');
+  });
+
+  test('已確認的命中不被後續掃描失敗吃掉：pathspec 指到 repo 外使第三個掃描失敗，仍 deny 並附註', () => {
+    reset(repo);
+    writeFileSync(join(repo, 'leak.env'), `${FAKE_TOKEN}\n`);
+    git(repo, 'add', 'leak.env');
+    /** 執行結果 */
+    const r = runGuard('git commit -m x -- /nonexistent-outside-repo', repo);
+    expect(r.code).toBe(0);
+    expect(r.reason).toContain('leak.env');
+    expect(r.reason).toContain('另有掃描失敗');
+  });
+
+  test('多檔只有一檔命中：reason 只列命中的檔，不列乾淨的檔', () => {
+    reset(repo);
+    writeFileSync(join(repo, 'leak.env'), `${FAKE_TOKEN}\n`);
+    writeFileSync(join(repo, 'clean.txt'), 'hello\n');
+    git(repo, 'add', 'leak.env', 'clean.txt');
+    /** 執行結果 */
+    const r = runGuard('git commit -m x', repo);
+    expect(r.reason).toContain('leak.env');
+    expect(r.reason).not.toContain('clean.txt');
   });
 });
 
@@ -350,6 +412,15 @@ describe('credential-commit-guard 自身錯誤：不擋 commit，但 exit 1 + st
     reset(brokenRepo);
     writeFileSync(join(brokenRepo, '.git/index'), 'not an index');
     const r = runGuard('git commit -m "x"', brokenRepo);
+    expect(r.reason).toBeNull();
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('掃描失敗');
+  });
+
+  test('沒有命中、但 pathspec 掃描失敗 → 不能靜默放行：exit 1 + stderr', () => {
+    reset(repo);
+    /** 執行結果 */
+    const r = runGuard('git commit -m x -- /nonexistent-outside-repo', repo);
     expect(r.reason).toBeNull();
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('掃描失敗');

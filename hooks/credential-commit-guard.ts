@@ -23,13 +23,22 @@
  * - 掃描沒有命中
  *
  * 失敗處理：hook 自身的錯誤——stdin 讀取逾時、JSON 解析失敗、事件欄位型別不符、git 掃描失敗——
- * 一律不擋 commit（避免 brick），但以 exit 1 + stderr 回報，由 hook-error-wrapper 記進 ERRORS.jsonl：
+ * 在「沒有任何命中」時一律不擋 commit（避免 brick），但以 exit 1 + stderr 回報，由 hook-error-wrapper 記進 ERRORS.jsonl：
  * 掃描沒跑成不能與「沒命中」長得一樣。唯一的 exit 0 例外是上面「無法解析 repo 根目錄」。
+ * 例外：已有掃描命中、另一個掃描失敗時，命中優先——照常 deny（exit 0），失敗訊息附註在 deny 原因裡，
+ * 不能讓後續的掃描失敗把已確認的憑證命中吃掉。
  *
- * 已知限制：
+ * 已知限制（第二輪 review 確認、決定不修，漏掃時是「沒掃到」而非誤放行已命中的結果）：
  * - `git add X && git commit` 寫在同一個 Bash 指令時，hook 觸發當下 add 尚未執行，暫存區看不到 X，掃不到。
  *   add 與 commit 分成兩次呼叫才完整涵蓋。
- * - 指令解析是對 shell 的近似（去除引號與 heredoc 內容後以分隔符切段），不是完整的 shell parser。
+ * - 指令解析是對 shell 的近似（去除引號與 heredoc 內容後以分隔符切段），不是完整的 shell parser。由此衍生：
+ *   (a) pathspec 加了引號（`git commit -m x "f.env"`）會被當成空引號佔位符而漏掃；
+ *   (b) pathspec 相對於指令的實際工作目錄，但 diff 以 repo 根目錄執行，子目錄下的相對路徑與 `~/` 開頭路徑漏掃；
+ *   (c) 只認指令開頭的 `cd` 與第一個 `-C` 來決定 repo，`git status && cd R && git commit` 會掃錯 repo；
+ *   (d) `VAR=1 git commit`、`env`／`sudo` 包裝、alias（`git ci`）、反引號、`bash -c "…"` 不會觸發本 hook
+ *       （isGitCommitCommand 與 commit-gate-guard 共用，不在此單獨改）。
+ * - 掃描走 `git diff` 文字輸出：binary 檔（含 .gitattributes 標 binary、含 NUL）不掃；
+ *   沒有 HEAD 的初始 commit 帶 pathspec 時，只掃暫存區。
  *
  * 擋下時寫一筆到 DENIALS.jsonl（scripts/lib/denial-log.ts，於擋下當下才動態載入）。
  */
@@ -45,7 +54,8 @@ import { isGitCommitCommand, resolveRepoRootFromCommand } from '../scripts/lib/r
  */
 export const CREDENTIAL_PATTERN = '://[^/:@[:space:]]+:[^$@/[:space:]][^@/[:space:]]*@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY';
 
-/** 單次 git／grep 子行程的逾時（毫秒）；須小於 settings.json 為本 hook 設的 timeout */
+/** 單次 git／grep 子行程的逾時（毫秒）。這只限制單次呼叫，hook 整體沒有固定上限（repo 解析、HEAD 檢查、最多 3 次 git diff、整批與逐檔 grep 的次數都會疊加）；
+ * 一般情況在 1 秒內完成，settings.json 為本 hook 設的 timeout（單位是秒，目前 30）是整體保險，逾時時 PreToolUse 會放行 */
 const SCAN_TIMEOUT_MS = 3000;
 
 /** stdin 讀取逾時（毫秒）：超過視為輸入讀取失敗 */
@@ -81,26 +91,42 @@ function stripQuotedText(command: string): string {
 }
 
 /**
- * 解析 git commit 指令，取得 -a／--all 與 pathspec。
+ * 解析 git commit 指令，取得 -a／--all 與 pathspec。指令中有多個 git commit 時合併各段的結果。
  * @param command Bash 指令字串
  * @returns 解析結果；指令中沒有 git commit 時為 { all: false, paths: [] }
  */
 export function parseCommit(command: string): CommitInfo {
-  // STEP 01: 去除引號與 heredoc 內容後，以 shell 分隔符切段，取出 git commit 那一段
+  // STEP 01: 去除引號與 heredoc 內容後，以 shell 分隔符切段，每個 git commit 段各自解析再合併
+  //   （`git commit -m a && git commit -am b`：第二段的 -a 也會把未暫存的變更帶進去）
   const stripped = stripQuotedText(command);
-  /** 含 git commit 的那一段指令 */
-  const seg = stripped.split(/&&|\|\||;|\n|\|/).find(s => isGitCommitCommand(s));
-  if (!seg) {
-    return { all: false, paths: [] };
-  }
+  /** 含 git commit 的各段指令 */
+  const segs = stripped.split(/&&|\|\||;|\n|\|/).filter(s => isGitCommitCommand(s));
+  /** 各段解析結果 */
+  const infos = segs.map(parseCommitSegment);
+  return {
+    all: infos.some(i => i.all),
+    paths: infos.flatMap(i => i.paths),
+  };
+}
 
-  // STEP 02: 取 commit 子指令之後的 token（用與 isGitCommitCommand 相同的前綴規則定位，避開 `-c commit.x=y` 這類誤命中）
+/**
+ * 解析單一 git commit 指令段（已去引號、已切段），取得 -a／--all 與 pathspec。
+ * @param seg 含 git commit 的單一指令段
+ * @returns 解析結果
+ */
+function parseCommitSegment(seg: string): CommitInfo {
+  // STEP 01: 取 commit 子指令之後的 token（用與 isGitCommitCommand 相同的前綴規則定位，避開 `-c commit.x=y` 這類誤命中）
   /** commit 子指令前綴的比對結果 */
   const prefix = /git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*commit(?![\w-])/.exec(seg);
-  /** commit 之後的 token 清單 */
-  const tokens = seg.slice((prefix?.index ?? 0) + (prefix?.[0].length ?? 0)).trim().split(/\s+/).filter(Boolean);
+  /** 去掉 shell 重導向（`> /dev/null`、`2>&1`、`< in`）與背景符號後，commit 之後的 token 清單；重導向目標不是 pathspec */
+  const tokens = seg
+    .slice((prefix?.index ?? 0) + (prefix?.[0].length ?? 0))
+    .replace(/\d*[<>]+&?\s*\S+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(t => t && t !== '&');
 
-  // STEP 03: 逐 token 解析旗標與 pathspec
+  // STEP 02: 逐 token 解析旗標與 pathspec
   let all = false;
   /** 蒐集到的 pathspec */
   const paths: string[] = [];
@@ -121,14 +147,14 @@ export function parseCommit(command: string): CommitInfo {
       if (tok === '--all') {
         all = true;
       }
-      // STEP 03.01: `--message foo` 這種值在下一個 token 的長選項，連值一起跳過
+      // STEP 02.01: `--message foo` 這種值在下一個 token 的長選項，連值一起跳過
       if (!tok.includes('=') && LONG_OPTIONS_WITH_VALUE.has(tok)) {
         i++;
       }
       continue;
     }
     if (tok.startsWith('-') && tok.length > 1) {
-      // STEP 03.02: 短選項（可合併，如 -am）：逐字母看，遇到帶值的字母就停（值是同 token 剩餘部分或下一個 token）
+      // STEP 02.02: 短選項（可合併，如 -am）：逐字母看，遇到帶值的字母就停（值是同 token 剩餘部分或下一個 token）
       for (let k = 1; k < tok.length; k++) {
         /** 目前的短選項字母 */
         const letter = tok[k];
@@ -144,7 +170,7 @@ export function parseCommit(command: string): CommitInfo {
       }
       continue;
     }
-    // STEP 03.03: 其餘 token 是 pathspec（空引號佔位符是被去除的 message 值，不算路徑）
+    // STEP 02.03: 其餘 token 是 pathspec（空引號佔位符是被去除的 message 值，不算路徑）
     if (tok !== '""' && tok !== "''") {
       paths.push(tok);
     }
@@ -278,34 +304,42 @@ if (import.meta.main) {
         process.exit(0);
       }
 
-      // STEP 04: 解析 commit 實際目標 repo（支援 git -C / cd）；解析不出來 → 放行（git commit 本身也會失敗）
+      // STEP 04: 解析 commit 實際目標 repo（只認開頭的 cd 與第一個 git -C，見檔頭已知限制）；解析不出來 → 放行（多半是 git commit 本身也會失敗）
       const repoRoot = resolveRepoRootFromCommand(command, cwd);
       if (!repoRoot) {
         process.exit(0);
       }
 
       // STEP 05: 掃描——暫存區必掃；-a／--all 加掃未暫存的已追蹤變更；指定 pathspec 加掃該些路徑的工作目錄內容
-      /** 命中的檔名（去重） */
-      let hits: string[] = [];
-      try {
-        /** 這次 commit 的旗標與 pathspec */
-        const info = parseCommit(command);
-        hits = scanAdded(repoRoot, ['--cached']);
-        if (info.all) {
-          hits = hits.concat(scanAdded(repoRoot, []));
+      //   每個掃描各自 try：某一個掃描失敗（例如 pathspec 指到 repo 外）不能丟掉其他掃描已確認的命中
+      /** 這次 commit 的旗標與 pathspec */
+      const info = parseCommit(command);
+      /** 要跑的 git diff 參數清單：暫存區必掃；-a 加掃未暫存；有 pathspec 且有 HEAD 時加掃該些路徑 */
+      const plans: string[][] = [
+        ['--cached'],
+        ...(info.all ? [[]] : []),
+        ...(info.paths.length > 0 && hasHead(repoRoot) ? [['HEAD', '--', ...info.paths]] : []),
+      ];
+      /** 命中的檔名（去重前） */
+      let found: string[] = [];
+      /** 第一個掃描失敗的訊息；null 表示全部掃描成功 */
+      let scanError: string | null = null;
+      for (const args of plans) { // args：單次 git diff 的參數
+        try {
+          found = found.concat(scanAdded(repoRoot, args));
+        } catch (err) {
+          scanError ??= err instanceof Error ? err.message : String(err);
         }
-        if (info.paths.length > 0 && hasHead(repoRoot)) {
-          hits = hits.concat(scanAdded(repoRoot, ['HEAD', '--', ...info.paths]));
-        }
-        hits = Array.from(new Set(hits));
-      } catch (err) {
-        // 掃描本身失敗：不擋 commit（避免 brick），但不能靜默——exit 1 讓 hook-error-wrapper 記進 ERRORS.jsonl
-        console.error(`credential-commit-guard 掃描失敗，本次 commit 未經憑證掃描：${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
       }
+      /** 命中的檔名（去重） */
+      const hits = Array.from(new Set(found));
 
-      // STEP 06: 無命中 → 放行
+      // STEP 06: 無命中 → 放行；但有掃描失敗時不能靜默放行——exit 1 讓 hook-error-wrapper 記進 ERRORS.jsonl（不擋 commit，避免 brick）
       if (hits.length === 0) {
+        if (scanError !== null) {
+          console.error(`credential-commit-guard 掃描失敗，本次 commit 未經完整憑證掃描：${scanError}`);
+          process.exit(1);
+        }
         process.exit(0);
       }
 
@@ -330,11 +364,13 @@ if (import.meta.main) {
         .catch((err: unknown) => `\n\n（附註：擋下紀錄模組載入失敗，本次未記錄：${err instanceof Error ? err.message : String(err)}）`);
 
       // STEP 09: deny 這次 commit
+      /** 有命中同時另有掃描失敗時的附註：命中照擋，但提醒掃描不完整 */
+      const scanNote = scanError === null ? '' : `\n\n（附註：另有掃描失敗，結果可能不完整：${scanError}）`;
       console.log(JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'deny',
-          permissionDecisionReason: reason + logNote,
+          permissionDecisionReason: reason + scanNote + logNote,
         },
       }));
       process.exit(0);
