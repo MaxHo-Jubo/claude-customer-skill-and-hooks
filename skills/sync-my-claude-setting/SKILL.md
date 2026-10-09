@@ -1,7 +1,7 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.9.0
+version: 1.9.1
 last_modified: 2026-10-03
 ---
 
@@ -365,7 +365,7 @@ python3 ~/.claude/scripts/check-private-content.py || {
 }
 git add -A
 # 憑證掃描（同 rules/common/security.md 的 pre-commit-scan；只列命中的檔名，不印憑證值）
-CRED_HITS=$(git diff --cached --name-only -E -G'://[^/:@[:space:]]+:[^@/[:space:]]+@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY')
+CRED_HITS=$(git diff --cached --name-only -E -G'://[^/:@[:space:]]+:[^$@/[:space:]][^@/[:space:]]*@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY')
 if [ -n "$CRED_HITS" ]; then
   echo "❌ 疑似憑證，停止 commit。命中檔案："; echo "$CRED_HITS"; exit 1;
 fi

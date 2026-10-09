@@ -260,6 +260,12 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-10-09（三）: 憑證掃描 pattern 收斂（降低誤擋）
+
+- **起因**：側邊提醒指出 `sk-` 規則前面沒有限制，`task-management-dashboard-widget`、`disk-encryption-configuration` 這類長名稱會被當成金鑰。實測屬實（兩者都命中），但在 4 個 repo 各 300 個 commit 的新增行裡 `sk-` 這條命中數是 0；實測看到的誤擋是另一條：CI workflow 裡 `x-access-token:${TOKEN}@` 形式的 URL 內嵌帳密（規則把 `${變數}` 當明文），居服 App repo 近 300 個 commit 有 2 行。
+- **pattern 兩處收斂**（hook 常數、`rules/common/security.md`、`skills/sync-my-claude-setting` STEP 04 三處同步，`sync-my-claude-setting` 升 1.9.1）：(1) `sk-` 前不得緊接英數字／`_`／`-`；(2) URL 內嵌帳密那條規則的密碼位置不得以 `$` 開頭。代價：密碼剛好以 `$` 開頭的真憑證會漏掃。
+- **驗證**：測試 25 → 33 項（4 種 `sk-` 金鑰形態仍被擋、4 種長名稱／變數展開放行）；3 個突變探針（拿掉前綴限制／拿掉 `$` 排除／拿掉 `sk-` 分支）各讓對應測試變紅，還原後位元相同；真實 repo 重測：居服 App 誤擋 2 → 0，其餘 repo 命中數不變。
+
 ### 2026-10-09（二）: commit 前憑證掃描 hook + android-verify-build skill + jira-release-sync 留言去重
 
 - **`hooks/credential-commit-guard.ts`（新增，PreToolUse Bash）**：把 `security.md` 的 pre-commit-scan 從自律變成機械強制。只在指令含 `git commit` 時掃，不對每個 Bash 呼叫掃——對照實測：每個 Bash 都掃的作法，暫存區一有 `api_key` 字樣就連 `git restore --staged` 也被擋（死鎖），且漏掉 `ghp_`／`sk-`／`AIza`／PEM 私鑰。25 項測試（臨時 git repo、假憑證執行期拼接、假 HOME，六種憑證形態各自驗證）＋ 11 個突變探針全數讓測試變紅，還原後位元相同。Tier 3 review（6 面向）揪出並已修正：`git diff -G` 會把「被刪除的憑證行」也算命中，導致清理外洩的 commit 自己被擋 → 改為只掃新增行；`-a` 偵測對 `-m "fix; x" -a` 這類引號內分號誤判 → 先去除引號與 heredoc 再解析；指定 pathspec 時 git 提交工作目錄版本卻只掃暫存區 → 加掃 pathspec；JSON 解析失敗／欄位型別不符／stdin 逾時原本靜默 exit 0 → 一律 exit 1 + stderr；pattern 三份副本改由測試機械檢查一致。

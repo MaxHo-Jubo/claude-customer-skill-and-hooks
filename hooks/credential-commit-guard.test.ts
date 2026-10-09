@@ -311,6 +311,40 @@ describe('credential-commit-guard 放行', () => {
   });
 });
 
+/** `sk-` 金鑰在各種前綴下仍必須被擋（前綴限制只排除「接在英數字／_／- 之後」的長名稱） */
+const SK_KEY_FORMS: Array<[string, string]> = [
+  ['等號後', 'OPENAI=sk-' + 'a'.repeat(FAKE_TOKEN_BODY_LENGTH)],
+  ['引號後（sk-proj- 形態）', 'k: "sk-proj-' + 'b'.repeat(FAKE_TOKEN_BODY_LENGTH) + '"'],
+  ['行首（sk-ant- 形態）', 'sk-ant-api03-' + 'c'.repeat(FAKE_TOKEN_BODY_LENGTH)],
+  ['空白後', 'Authorization: Bearer sk-' + 'd'.repeat(FAKE_TOKEN_BODY_LENGTH)],
+];
+
+/** 不是憑證、不該被擋的長名稱與變數展開 */
+const NOT_CREDENTIALS: Array<[string, string]> = [
+  ['含 sk- 的長連字號名稱（disk-）', "const x = 'disk-encryption-configuration';"],
+  ['含 sk- 的長連字號名稱（task-）', 'className="task-management-dashboard-widget"'],
+  ['URL 密碼位置是 ${VAR} 變數展開', 'git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/o/r.git"'],
+  ['URL 密碼位置是 $VAR 變數展開', 'url="https://user:$DB_PASSWORD@host/db"'],
+];
+
+describe('credential-commit-guard pattern 收斂（降低誤擋）', () => {
+  test.each(SK_KEY_FORMS)('sk- 金鑰（%s）仍被擋', (_name, content) => {
+    reset(repo);
+    writeFileSync(join(repo, 'k.env'), content + '\n');
+    git(repo, 'add', 'k.env');
+    expect(runGuard('git commit -m "x"', repo).reason).toContain('k.env');
+  });
+
+  test.each(NOT_CREDENTIALS)('%s → 放行', (_name, content) => {
+    reset(repo);
+    writeFileSync(join(repo, 'code.txt'), content + '\n');
+    git(repo, 'add', 'code.txt');
+    /** 執行前的 DENIALS 列數 */
+    const before = denialRows().length;
+    expectPass(runGuard('git commit -m "x"', repo), before);
+  });
+});
+
 describe('credential-commit-guard 自身錯誤：不擋 commit，但 exit 1 + stderr', () => {
   test('暫存區損毀 → 掃描失敗', () => {
     reset(brokenRepo);

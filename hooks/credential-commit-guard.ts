@@ -40,8 +40,10 @@ import { isGitCommitCommand, resolveRepoRootFromCommand } from '../scripts/lib/r
  * 疑似憑證的 ERE pattern。與 rules/common/security.md 的 pre-commit-scan、
  * skills/sync-my-claude-setting/SKILL.md STEP 04 逐字相同；三處一致由 credential-commit-guard.test.ts
  * 的「pattern 一致性」測試機械檢查，改一處漏改其他兩處會讓測試變紅。
+ * 兩處刻意收斂以降低誤擋：`sk-` 前不得緊接英數字／`_`／`-`（長名稱如 task-xxx 不是金鑰）；
+ * URL 內嵌帳密那條規則的密碼位置不得以 `$` 開頭（變數展開 `${TOKEN}` 不是明文）。理由與代價見 security.md。
  */
-export const CREDENTIAL_PATTERN = '://[^/:@[:space:]]+:[^@/[:space:]]+@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY';
+export const CREDENTIAL_PATTERN = '://[^/:@[:space:]]+:[^$@/[:space:]][^@/[:space:]]*@|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY';
 
 /** 單次 git／grep 子行程的逾時（毫秒）；須小於 settings.json 為本 hook 設的 timeout */
 const SCAN_TIMEOUT_MS = 3000;
