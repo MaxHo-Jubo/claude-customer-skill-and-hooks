@@ -258,6 +258,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-10-09: weekly-review 記憶整理後的規則同步 + advisorModel
+
+- **`harness/model-dispatch.md`**：`verify-vcs-state` 補「驗 origin/master ancestry 前先 `git fetch origin master`」（本機 origin/master 是快取，可能過時；案例為某票誤判「BE PR 已 merge」，該 PR 合進別的分支）。
+- **`rules/common/security.md`**：SECRET-MGMT 的 `why-scope` 原指向憑證撤銷追蹤記憶，該批外洩憑證已全數撤銷、追蹤記憶已刪，指標改為「已撤銷」。
+- **`settings.json`**：新增 `advisorModel: "opus"`。`model` 欄位不同步（本機預設已改 sonnet，repo 端維持原值）。本次依內容級過濾擋下 26 條含私有專案路徑／commit message 的 permission，逐條檢視皆為私有專案的一次性授權，無誤濾。
+- **同步範圍**：本機 `skills/.trash/`（Claude Code 移除內建 skill 時產生的暫存，內含 Anthropic 內建 skill 與其授權檔）本次用命令列 `--exclude='.trash'` 排除，未改 sync skill 本身；是否把 `.trash` 寫進 skill 的排除清單待決定。
+- `CLAUDE.md.20261009` 取代 `CLAUDE.md.20261007`，去除 `<conn>` 後內容與前版相同。
+
 ### 2026-10-07: Teams 討論 → Jira 結論同步 + review agent 明寫 effort
 
 - **起因**：同事在 Teams 開對話追蹤 Jira 票，結論常只留在 Teams、忘記貼回 Jira。以 <TICKET> 做 PoC（搜尋 → 讀 root → 產草稿 → 確認後貼 Jira）走通後併入既有工作流

@@ -198,6 +198,7 @@
     "defaultMode": "auto"
   },
   "model": "opus[1m]",
+  "advisorModel": "opus",
   "skillOverrides": {
     "ai-md": "user-invocable-only",
     "humanizer-zh-tw": "user-invocable-only",

@@ -134,6 +134,6 @@ upstream-trace: 斷言「沒有 X 檢查/攔截/防線」前，先找當前函�
 
 cwd-persistence: Bash 在專案目錄內 `cd` 會延續到之後的呼叫（2026-09-14 實測：cd 進子目錄後連 primary working directory 都跟著變；cd 到專案目錄外才會被 reset）。所以指令一律用絕對路徑或工具自帶的目錄參數（`git -C <abs>`、`npm --prefix <abs>`），真的需要 cwd 時就在同一次呼叫內寫 `cd <abs> && …`，不要依賴上一次呼叫留下的 cwd。不照 insights 原文「每段開頭 cd」，是因為複合指令裡的 `cd` 可能多觸發權限確認。實例：luna_web 比對指令跑在殘留的 react_18 目錄、FamilyMember 相對路徑因 cwd 停在 android/ 而失敗
 
-verify-vcs-state: 斷言「某 PR/commit/程式碼已在 master/目標分支」前，必須驗 origin/master ancestry（git cat-file / git merge-base --is-ancestor）；working tree 看得到 ≠ 目標分支已有。
+verify-vcs-state: 斷言「某 PR/commit/程式碼已在 master/目標分支」前，必須驗 origin/master ancestry（git cat-file / git merge-base --is-ancestor）；working tree 看得到 ≠ 目標分支已有。驗之前先 `git fetch origin master`——本機 origin/master 是快取，可能過時（2026-10-09 補，來源：曾誤判「BE PR 已 merge」，該 PR 合進別的分支，feature branch ancestry 含該 merge ≠ master 含）。
 
 graph-first: 在已建 codebase-memory-mcp 索引的專案（`list_projects` 確認）裡，找 symbol 定義/用法優先用 `search_graph`/`search_code` 取代 Grep；追呼叫鏈/評估改動影響面優先用 `trace_path`(direction, risk_labels) 取代手動追呼叫者。`trace_path` 對「方法當 callback 參照傳遞」（React method 綁定後當 prop 傳出、Redux dispatch 等間接呼叫）會漏，callers 回空不能直接當「無人呼叫」的結論，需再用 grep 交叉驗證後才能斷言安全；專案未索引則直接用 Grep/Glob。
