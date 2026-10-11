@@ -13,8 +13,10 @@ import type { JevQuestion } from './jev-questions';
  * 沒有總時間上限，同步 hook 最壞會卡 30 秒以上（tasks/jev-trial-plan.md 階段 0）。
  */
 
-/** systemOne 端點 */
-const API_URL = 'https://api.typesafe.ai/v1/systemone';
+/** 覆寫 systemOne 端點的環境變數名稱：只供測試指向本機 stub，正式環境不設 */
+const API_URL_ENV = 'JEV_API_URL';
+/** systemOne 端點（預設正式端點；設了 JEV_API_URL 時改打該位址，API key 也會送到那裡，只供測試 stub） */
+const API_URL = process.env[API_URL_ENV] || 'https://api.typesafe.ai/v1/systemone';
 /** 固定模型版本：門檻只對評估過的版本有效，升版要重跑 scripts/jev-eval/run-eval.ts */
 export const JEV_MODEL = 'jev-1.13.0';
 /** hook 內單次呼叫逾時（毫秒）：冷啟動 p95 826ms 的約 2.4 倍 */
@@ -154,11 +156,12 @@ export async function callJev(state: unknown, questions: Record<string, JevQuest
  * @param hook - hook 名稱（寫入 log 用）
  * @param state - 要判斷的狀態
  * @param questions - 題目
+ * @param timeoutMs - 逾時毫秒；預設 HOOK_TIMEOUT_MS，容忍度較高的 hook（如派工路由）可自帶較長值
  * @returns 成功回結果，失敗回 null
  */
-export async function askJev(hook: string, state: unknown, questions: Record<string, JevQuestion>): Promise<JevResult | null> {
+export async function askJev(hook: string, state: unknown, questions: Record<string, JevQuestion>, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<JevResult | null> {
   try {
-    return await callJev(state, questions, HOOK_TIMEOUT_MS);
+    return await callJev(state, questions, timeoutMs);
   } catch (err) {
     logDecision({ hook, error: String(err) });
     return null;

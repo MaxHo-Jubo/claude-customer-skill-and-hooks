@@ -115,6 +115,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Bash | `credential-commit-guard.ts` | git commit 前憑證掃描：只在指令含 `git commit` 時觸發，只掃**新增行**（暫存區；`-a`／`--all` 另掃未暫存的已追蹤變更；指定 pathspec 另掃該些路徑的工作目錄內容），移除或替換憑證的清理 commit 不會被擋；pattern 與 `rules/common/security.md` 的 pre-commit-scan 相同（測試機械檢查三處逐字一致）；命中即 deny、reason 只列檔名不印內容；commit 指令含 `[skip-credential-scan]` 放行（測試 fixture 假憑證用）；hook 自身錯誤（無效 JSON、欄位型別不符、git 掃描失敗）不擋 commit 但 exit 1 + stderr 交 `hook-error-wrapper` 記錄；擋下寫 `DENIALS.jsonl`。限制：同一個 Bash 指令內先 add 再 commit 時掃不到剛 add 的檔；指令解析是 shell 的近似 |
+| PreToolUse | 工具執行前 | Agent | `agent-model-router.ts` | 派工模型路由（Jev D 掛載點）：主模型派 subagent 沒寫 `model` 時，brief 送 Jev 分級 light／small／mid／top → 填 haiku／sonnet／opus，top 不填；只降不升由執行期保證：從 `transcript_path` 讀父模型，候選必須嚴格低於父模型（否則 `would_upgrade`，讀不到 `parent_unknown`）；以 `updatedInput` 整包取代工具輸入；conf < 0.3 不填；已寫 model／`fork`／定義檔固定 model（專案層優先）／找不到定義檔不碰；決策寫 `decisions.jsonl`（`D-route`）；Jev 失敗 fail-open，自身錯誤 exit 1 進 `ERRORS.jsonl` |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | spec 缺必要區段時 block（空骨架警告改由 `tool-reminders` mod 處理） |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
 | PostToolUse | git commit 後 | Bash | `post-commit-review.ts` | `git diff --numstat` 機械判定 Tier（0~3，邏輯抽在 `scripts/lib/tier.ts`），Tier 2/3 寫入 pending-review marker（含 `sessionId`）供 `commit-gate-guard.ts` / `stop-review-guard.ts` 閘門使用，並以 systemMessage 指派 `commit-review` skill 執行對應 chain（hook 本身不再列舉步驟） |
@@ -128,7 +129,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 
 > **hook-error-wrapper**：所有 hook（除 `post_tool_error.py` 和 Notification）皆透過 `hook-error-wrapper.sh` 包裝執行，失敗時自動記錄到 `ERRORS.jsonl`。
 
-> **TypeSafe Jev 試用（2026-09-24）**：`skill-activation-hook.ts`／`repeat-failure-detector.ts`／`stop-claim-guard.ts` 三個 hook（對應掛載點 A/C/B）共用 `scripts/lib/jev-client.ts`（fail-open HTTP client）與 `scripts/lib/jev-questions.ts`（題目定義），門檻與題目經 `scripts/jev-eval/run-eval.ts` 離線評估後拍板，題目或門檻改動須重跑評估。任一 Jev 呼叫失敗一律 fail-open（不擋流程），決策記錄於 `~/.claude/state/jev/decisions.jsonl`（不含原文）；環境變數 `JEV_HOOKS_DISABLED=1` 為 kill switch。
+> **TypeSafe Jev 試用（2026-09-24；2026-10-11 加 D）**：`skill-activation-hook.ts`／`repeat-failure-detector.ts`／`stop-claim-guard.ts`／`agent-model-router.ts` 四個 hook（對應掛載點 A/C/B/D）共用 `scripts/lib/jev-client.ts`（fail-open HTTP client）與 `scripts/lib/jev-questions.ts`（題目定義），門檻與題目經離線評估後拍板（A/B/C 用 `scripts/jev-eval/run-eval.ts`；D 用 `run-eval-d.ts`，改 `MAX_BRIEF_CHARS` 時另先跑 `extract-d-route.ts` 重抽資料集），題目或門檻改動須重跑對應評估。任一 Jev 呼叫失敗一律 fail-open（不擋流程），決策記錄於 `~/.claude/state/jev/decisions.jsonl`（不含原文）；環境變數 `JEV_HOOKS_DISABLED=1` 為 kill switch。
 
 ## Agents 一覽
 
@@ -259,6 +260,14 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-11: Jev 掛載點 D — 派工模型路由（PreToolUse `Agent`）
+
+- **`hooks/agent-model-router.ts`（新增，PreToolUse `Agent`）**：主模型派 subagent 沒寫 `model` 時，把 brief 丟給 Jev 問一題「最低需要哪一級」（light／small／mid／top），查表填 haiku／sonnet／opus，top 不填（只降不升），以 `hookSpecificOutput.updatedInput` 整包取代工具輸入（2.1.296 `claude -p` 實測：取代不合併、缺必填欄位會被 schema 驗證 deny、不需帶 `permissionDecision`，刻意不帶以免替 Agent 工具自動放行）。跳過：已寫 model、`fork`、定義檔 frontmatter 有固定 model、找不到定義檔；frontmatter `inherit` 的 plugin agent 會被路由。`ROUTE_CONF_MIN=0.3`（離線評估 n=250，label 取主模型明寫的 model：整體一致率 62.8%，Jev 幾乎不選 haiku；「比主模型更便宜」的品質風險各門檻 3.9–5.3%，提高門檻只讓更多派工留在 fable，保守替代 0.6 寫在常數註解）；`ROUTE_TIMEOUT_MS=4000`（逾時＝fail-open＝跑 fable，正是要避免的結果）。動機：近 30 天 500 次派工 253 次沒寫 model，session model 改 fable 後約 200 次會繼承 fable。來源：FB 文章「Route the task, not the session」。
+- **查證（二進位靜態＋`claude -p` 實測 T1–T8）**：`CLAUDE_CODE_SUBAGENT_MODEL` 不蓋呼叫參數與 frontmatter；frontmatter `inherit` 與內建 Explore 不讀該 env（Explore 從高於 opus 的父模型派出時內建上限 opus）；只有 `_FORCE` 全蓋且會從 Agent 工具 schema 移除 `model` 參數。主 transcript 的 `tool_use.input` 記 hook 改寫前的值，驗收只能看 `decisions.jsonl` 的 `D-route`、子代理 transcript 的 `message.model`、`/usage`。
+- `scripts/lib/jev-client.ts`：`askJev` 加可選 `timeoutMs`（預設不變）；`scripts/lib/jev-questions.ts`：新增 `TIER_QUESTIONS`；`scripts/jev-eval/extract-d-route.ts`＋`run-eval-d.ts`：資料集抽到 `~/.claude/state/jev/eval/`（含專案 brief，不進 repo），結果 `results-d-*.json` 只存統計與逐筆預測。測試 29 項（含 4 個子行程），hooks＋scripts 合計 155 pass；隔離驗收含真 `claude -p` 端到端（子代理實際跑 haiku）。settings.json 掛載由 user 手動加入（Edit 被 auto mode 分類器以 Self-Modification 拒絕）。
+- **Tier 3 review 修正（codex 6 面向：1 CRITICAL／39 IMPORTANT；`/simplify` 4 面向）**：(1) 「只降不升」改為執行期保證——`readParentModel` 從 stdin 的 `transcript_path` 讀父模型（尾端 512KB 取位置最新的 assistant `message.model` 或 `attachment.identity.modelId`，找不到再從檔頭 64KB 倍增掃到 8MB；實測 identity 偏移 p99 505KB、最大 1.3MB，固定 64KB 會漏 26% 的 session），`capByParent` 要求候選 model 在 `MODEL_RANK` 上嚴格低於父模型，否則 `skip: would_upgrade`，讀不到 `parent_unknown`；真 session 實測父 haiku 不改寫、父 opus 路由 haiku。(2) CRITICAL：`buildState` 空 prompt 改丟錯，資料抽取另計 `no_prompt`（實際資料集 0 筆受影響）。(3) 專案層 `<cwd>/.claude/agents/` 定義優先於使用者層，內建名稱也先查定義檔。(4) `readTier` 抽成共用，評估腳本不再複製答案驗證；逾時統計改用 `ROUTE_TIMEOUT_MS`（舊報告的 3.2% 逾時是用 2000 算的，用 4000 算為 0%）。(5) 未預期錯誤改 stderr＋exit 1 交 `hook-error-wrapper` 記錄；stdin 以 `unknown` 驗證；`RouteResult` 改互斥聯集。(6) 測試 29→59：`JEV_API_URL` 可覆寫端點，以 `Bun.serve` stub 跑完整 askJev→決策→stdout 流程（含 4000ms 逾時、HTTP 錯誤、缺 answers），遮罩測試改為憑證跨截斷邊界。(7) 抽 `scripts/lib/eval-utils.ts`（`pct`／`loadJsonl`）供兩支評估共用；`Row` 單一宣告；`MODEL_TIER` 由 `TIER_MODEL` 反推；rules 面向的變數註解／STEP／不可變性／console 全數補齊。評估重跑 n=256：一致率 62.5%，門檻規則仍選 0.3。
+- 待觀察（2026-10-18 回顧）：pr-review-toolkit 四個 `inherit` 審查 agent 也會被路由（user 選先放行，看 `model_out` 分佈再決定是否在 skill 派工約定加 `model: "opus"`）；A／B 線上逾時率 1.5–3.9%，D 送出文字是 A 的 2 倍。測試指令要寫 `bun test ./hooks/ ./scripts/`，不帶 `./` 會撈進 `plugins/marketplaces` 的第三方測試誤報。
 
 ### 2026-10-09（四）: credential-commit-guard 第二輪 review 修正 + hook `timeout` 單位修正
 

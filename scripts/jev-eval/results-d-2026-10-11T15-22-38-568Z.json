@@ -1,0 +1,4069 @@
+{
+  "model": "jev-1.13.0",
+  "rule": {
+    "MAX_CHEAPER_RATE": 0.1,
+    "MIN_ROUTED_N": 20,
+    "parentModel": "fable",
+    "routeTimeoutMs": 4000
+  },
+  "summary": {
+    "n": 256,
+    "confusion": {
+      "light": {
+        "light": 1,
+        "small": 30,
+        "mid": 16,
+        "top": 0
+      },
+      "small": {
+        "light": 3,
+        "small": 100,
+        "mid": 33,
+        "top": 0
+      },
+      "mid": {
+        "light": 1,
+        "small": 12,
+        "mid": 59,
+        "top": 1
+      },
+      "top": {
+        "light": 0,
+        "small": 0,
+        "mid": 0,
+        "top": 0
+      }
+    },
+    "agree": 0.625,
+    "perLabel": {
+      "light": {
+        "n": 47,
+        "agree": 0.02127659574468085
+      },
+      "small": {
+        "n": 136,
+        "agree": 0.7352941176470589
+      },
+      "mid": {
+        "n": 73,
+        "agree": 0.8082191780821918
+      },
+      "top": {
+        "n": 0,
+        "agree": null
+      }
+    },
+    "confDist": [
+      {
+        "range": "0.0-0.1",
+        "n": 0
+      },
+      {
+        "range": "0.1-0.2",
+        "n": 1
+      },
+      {
+        "range": "0.2-0.3",
+        "n": 7
+      },
+      {
+        "range": "0.3-0.4",
+        "n": 15
+      },
+      {
+        "range": "0.4-0.5",
+        "n": 18
+      },
+      {
+        "range": "0.5-0.6",
+        "n": 24
+      },
+      {
+        "range": "0.6-0.7",
+        "n": 43
+      },
+      {
+        "range": "0.7-0.8",
+        "n": 37
+      },
+      {
+        "range": "0.8-0.9",
+        "n": 52
+      },
+      {
+        "range": "0.9-1.0",
+        "n": 59
+      }
+    ],
+    "table": [
+      {
+        "t": 0.3,
+        "hi": null,
+        "n": 247,
+        "routed": 0.96484375,
+        "agree": 0.6437246963562753,
+        "pricier": 0.3076923076923077,
+        "cheaper": 0.048582995951417005
+      },
+      {
+        "t": 0.4,
+        "hi": null,
+        "n": 232,
+        "routed": 0.90625,
+        "agree": 0.6724137931034483,
+        "pricier": 0.28448275862068967,
+        "cheaper": 0.04310344827586207
+      },
+      {
+        "t": 0.5,
+        "hi": null,
+        "n": 214,
+        "routed": 0.8359375,
+        "agree": 0.7149532710280374,
+        "pricier": 0.2383177570093458,
+        "cheaper": 0.04672897196261682
+      },
+      {
+        "t": 0.6,
+        "hi": null,
+        "n": 190,
+        "routed": 0.7421875,
+        "agree": 0.7473684210526316,
+        "pricier": 0.21578947368421053,
+        "cheaper": 0.03684210526315789
+      },
+      {
+        "t": 0.7,
+        "hi": null,
+        "n": 148,
+        "routed": 0.578125,
+        "agree": 0.7905405405405406,
+        "pricier": 0.16891891891891891,
+        "cheaper": 0.04054054054054054
+      },
+      {
+        "t": 0.8,
+        "hi": null,
+        "n": 111,
+        "routed": 0.43359375,
+        "agree": 0.8018018018018018,
+        "pricier": 0.15315315315315314,
+        "cheaper": 0.04504504504504504
+      }
+    ],
+    "bands": [
+      {
+        "t": 0.3,
+        "hi": 0.4,
+        "n": 15,
+        "routed": 0.05859375,
+        "agree": 0.2,
+        "pricier": 0.6666666666666666,
+        "cheaper": 0.13333333333333333
+      },
+      {
+        "t": 0.4,
+        "hi": 0.5,
+        "n": 18,
+        "routed": 0.0703125,
+        "agree": 0.16666666666666666,
+        "pricier": 0.8333333333333334,
+        "cheaper": 0
+      },
+      {
+        "t": 0.5,
+        "hi": 0.6,
+        "n": 24,
+        "routed": 0.09375,
+        "agree": 0.4583333333333333,
+        "pricier": 0.4166666666666667,
+        "cheaper": 0.125
+      },
+      {
+        "t": 0.6,
+        "hi": 0.7,
+        "n": 42,
+        "routed": 0.1640625,
+        "agree": 0.5952380952380952,
+        "pricier": 0.38095238095238093,
+        "cheaper": 0.023809523809523808
+      },
+      {
+        "t": 0.7,
+        "hi": 0.8,
+        "n": 37,
+        "routed": 0.14453125,
+        "agree": 0.7567567567567568,
+        "pricier": 0.21621621621621623,
+        "cheaper": 0.02702702702702703
+      },
+      {
+        "t": 0.8,
+        "hi": null,
+        "n": 111,
+        "routed": 0.43359375,
+        "agree": 0.8018018018018018,
+        "pricier": 0.15315315315315314,
+        "cheaper": 0.04504504504504504
+      }
+    ],
+    "pick": {
+      "t": 0.3,
+      "hi": null,
+      "n": 247,
+      "routed": 0.96484375,
+      "agree": 0.6437246963562753,
+      "pricier": 0.3076923076923077,
+      "cheaper": 0.048582995951417005
+    },
+    "predTop": 0.00390625,
+    "latency": {
+      "p50": 262.8373330000013,
+      "p95": 581.4544999999999,
+      "overRouteTimeout": 0
+    }
+  },
+  "errors": [],
+  "results": [
+    {
+      "id": "D001",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.51,
+      "probs": {
+        "light": 0,
+        "small": 0.63,
+        "mid": 0.34,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 436.56045800000004
+    },
+    {
+      "id": "D002",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.41,
+      "probs": {
+        "light": 0,
+        "small": 0.56,
+        "mid": 0.28,
+        "top": 0.15
+      },
+      "second": "mid",
+      "ms": 462.83408299999996
+    },
+    {
+      "id": "D003",
+      "subagent_type": "",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.47,
+      "probs": {
+        "light": 0,
+        "small": 0.35,
+        "mid": 0.6,
+        "top": 0.05
+      },
+      "second": "small",
+      "ms": 437.189875
+    },
+    {
+      "id": "D004",
+      "subagent_type": "",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.29,
+      "probs": {
+        "light": 0,
+        "small": 0.47,
+        "mid": 0.45,
+        "top": 0.08
+      },
+      "second": "mid",
+      "ms": 462.461791
+    },
+    {
+      "id": "D005",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.68,
+      "probs": {
+        "light": 0,
+        "small": 0.76,
+        "mid": 0.23,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 227.30558400000007
+    },
+    {
+      "id": "D006",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.87,
+      "probs": {
+        "light": 0,
+        "small": 0.09,
+        "mid": 0.9,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 309.432542
+    },
+    {
+      "id": "D007",
+      "subagent_type": "",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.53,
+      "probs": {
+        "light": 0,
+        "small": 0.65,
+        "mid": 0.32,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 523.5393329999999
+    },
+    {
+      "id": "D008",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.87,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 498.37491600000004
+    },
+    {
+      "id": "D009",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.73,
+      "probs": {
+        "light": 0,
+        "small": 0.8,
+        "mid": 0.19,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 296.883416
+    },
+    {
+      "id": "D010",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.83,
+        "mid": 0.16,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 554.9880830000001
+    },
+    {
+      "id": "D011",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.03,
+        "mid": 0.95,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 366.760125
+    },
+    {
+      "id": "D012",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.23,
+        "mid": 0.75,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 527.129208
+    },
+    {
+      "id": "D013",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.6,
+      "probs": {
+        "light": 0,
+        "small": 0.7,
+        "mid": 0.22,
+        "top": 0.08
+      },
+      "second": "mid",
+      "ms": 581.4544999999999
+    },
+    {
+      "id": "D014",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.73,
+      "probs": {
+        "light": 0,
+        "small": 0.8,
+        "mid": 0.15,
+        "top": 0.05
+      },
+      "second": "mid",
+      "ms": 222.05004099999996
+    },
+    {
+      "id": "D015",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.75,
+      "probs": {
+        "light": 0,
+        "small": 0.81,
+        "mid": 0.19,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 293.935166
+    },
+    {
+      "id": "D016",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.6,
+      "probs": {
+        "light": 0,
+        "small": 0.7,
+        "mid": 0.3,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 257.89483300000006
+    },
+    {
+      "id": "D017",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.83,
+        "mid": 0.17,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 203.74849999999992
+    },
+    {
+      "id": "D018",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.05,
+        "mid": 0.77,
+        "top": 0.18
+      },
+      "second": "top",
+      "ms": 205.65716700000007
+    },
+    {
+      "id": "D019",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.02,
+        "mid": 0.93,
+        "top": 0.05
+      },
+      "second": "top",
+      "ms": 228.15325000000007
+    },
+    {
+      "id": "D020",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.36,
+      "probs": {
+        "light": 0.01,
+        "small": 0.44,
+        "mid": 0.52,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 264.1913340000001
+    },
+    {
+      "id": "D021",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0.01,
+        "small": 0.9,
+        "mid": 0.08,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 263.9704160000001
+    },
+    {
+      "id": "D022",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.08,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 254.96437500000002
+    },
+    {
+      "id": "D023",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0.01,
+        "small": 0.9,
+        "mid": 0.07,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 224.5815419999999
+    },
+    {
+      "id": "D024",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0.01,
+        "small": 0.88,
+        "mid": 0.09,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 357.22291600000017
+    },
+    {
+      "id": "D025",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.76,
+      "probs": {
+        "light": 0.01,
+        "small": 0.82,
+        "mid": 0.16,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 306.37199999999984
+    },
+    {
+      "id": "D026",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.89,
+      "probs": {
+        "light": 0.01,
+        "small": 0.92,
+        "mid": 0.06,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 305.9949999999999
+    },
+    {
+      "id": "D027",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.75,
+        "mid": 0.23,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 487.95737499999996
+    },
+    {
+      "id": "D028",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.48,
+      "probs": {
+        "light": 0,
+        "small": 0.61,
+        "mid": 0.38,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 448.7424579999997
+    },
+    {
+      "id": "D029",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0.02,
+        "small": 0.83,
+        "mid": 0.12,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 499.43949999999995
+    },
+    {
+      "id": "D030",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.39,
+      "probs": {
+        "light": 0.01,
+        "small": 0.54,
+        "mid": 0.28,
+        "top": 0.17
+      },
+      "second": "mid",
+      "ms": 500.08650000000034
+    },
+    {
+      "id": "D031",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.83,
+      "probs": {
+        "light": 0.02,
+        "small": 0.87,
+        "mid": 0.07,
+        "top": 0.04
+      },
+      "second": "mid",
+      "ms": 253.90591700000004
+    },
+    {
+      "id": "D032",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.08,
+        "mid": 0.91,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 374.1796250000002
+    },
+    {
+      "id": "D033",
+      "subagent_type": "pr-review-toolkit:silent-failure-hunter",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.05,
+        "mid": 0.93,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 377.7275410000002
+    },
+    {
+      "id": "D034",
+      "subagent_type": "pr-review-toolkit:comment-analyzer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.76,
+      "probs": {
+        "light": 0,
+        "small": 0.82,
+        "mid": 0.17,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 359.7720000000004
+    },
+    {
+      "id": "D035",
+      "subagent_type": "pr-review-toolkit:pr-test-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.87,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 1472.2456249999996
+    },
+    {
+      "id": "D036",
+      "subagent_type": "pr-review-toolkit:type-design-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.61,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.71,
+        "top": 0.17
+      },
+      "second": "top",
+      "ms": 1342.848625
+    },
+    {
+      "id": "D037",
+      "subagent_type": "pr-reviewer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0.01,
+        "small": 0.88,
+        "mid": 0.11,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 789.5765409999999
+    },
+    {
+      "id": "D038",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.92,
+      "probs": {
+        "light": 0,
+        "small": 0.03,
+        "mid": 0.94,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 806.4452080000001
+    },
+    {
+      "id": "D039",
+      "subagent_type": "pr-review-toolkit:silent-failure-hunter",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.95,
+      "probs": {
+        "light": 0,
+        "small": 0.02,
+        "mid": 0.96,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 217.33949999999913
+    },
+    {
+      "id": "D040",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.39,
+      "probs": {
+        "light": 0.01,
+        "small": 0.54,
+        "mid": 0.39,
+        "top": 0.05
+      },
+      "second": "mid",
+      "ms": 345.19675000000007
+    },
+    {
+      "id": "D041",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.49,
+      "probs": {
+        "light": 0,
+        "small": 0.62,
+        "mid": 0.31,
+        "top": 0.07
+      },
+      "second": "mid",
+      "ms": 345.7007499999995
+    },
+    {
+      "id": "D042",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.56,
+      "probs": {
+        "light": 0,
+        "small": 0.67,
+        "mid": 0.27,
+        "top": 0.06
+      },
+      "second": "mid",
+      "ms": 335.94166700000005
+    },
+    {
+      "id": "D043",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.27,
+      "probs": {
+        "light": 0,
+        "small": 0.45,
+        "mid": 0.43,
+        "top": 0.12
+      },
+      "second": "mid",
+      "ms": 223.6240829999997
+    },
+    {
+      "id": "D044",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.36,
+      "probs": {
+        "light": 0,
+        "small": 0.52,
+        "mid": 0.43,
+        "top": 0.05
+      },
+      "second": "mid",
+      "ms": 281.75579199999993
+    },
+    {
+      "id": "D045",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.61,
+      "probs": {
+        "light": 0,
+        "small": 0.71,
+        "mid": 0.14,
+        "top": 0.15
+      },
+      "second": "top",
+      "ms": 207.6019580000002
+    },
+    {
+      "id": "D046",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.32,
+      "probs": {
+        "light": 0,
+        "small": 0.45,
+        "mid": 0.49,
+        "top": 0.06
+      },
+      "second": "small",
+      "ms": 312.17291599999953
+    },
+    {
+      "id": "D047",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.55,
+      "probs": {
+        "light": 0,
+        "small": 0.31,
+        "mid": 0.66,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 214.86149999999998
+    },
+    {
+      "id": "D048",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.37,
+      "probs": {
+        "light": 0,
+        "small": 0.53,
+        "mid": 0.41,
+        "top": 0.06
+      },
+      "second": "mid",
+      "ms": 202.9586250000002
+    },
+    {
+      "id": "D049",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.37,
+      "probs": {
+        "light": 0,
+        "small": 0.45,
+        "mid": 0.53,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 229.01566700000058
+    },
+    {
+      "id": "D050",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.47,
+      "probs": {
+        "light": 0,
+        "small": 0.34,
+        "mid": 0.6,
+        "top": 0.06
+      },
+      "second": "small",
+      "ms": 207.4573330000003
+    },
+    {
+      "id": "D051",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.53,
+      "probs": {
+        "light": 0,
+        "small": 0.22,
+        "mid": 0.65,
+        "top": 0.13
+      },
+      "second": "small",
+      "ms": 219.82108299999982
+    },
+    {
+      "id": "D052",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.32,
+      "probs": {
+        "light": 0,
+        "small": 0.49,
+        "mid": 0.45,
+        "top": 0.06
+      },
+      "second": "mid",
+      "ms": 196.39808399999947
+    },
+    {
+      "id": "D053",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.48,
+      "probs": {
+        "light": 0,
+        "small": 0.61,
+        "mid": 0.3,
+        "top": 0.09
+      },
+      "second": "mid",
+      "ms": 258.32116700000006
+    },
+    {
+      "id": "D054",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0,
+        "small": 0.96,
+        "mid": 0.04,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 220.28233400000045
+    },
+    {
+      "id": "D055",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0.01,
+        "small": 0.97,
+        "mid": 0.02,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 317.43045900000016
+    },
+    {
+      "id": "D056",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.59,
+      "probs": {
+        "light": 0.01,
+        "small": 0.69,
+        "mid": 0.3,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 216.79320800000005
+    },
+    {
+      "id": "D057",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.52,
+      "probs": {
+        "light": 0,
+        "small": 0.34,
+        "mid": 0.64,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 300.5725419999999
+    },
+    {
+      "id": "D058",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.09,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 268.0044170000001
+    },
+    {
+      "id": "D059",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.6,
+      "probs": {
+        "light": 0,
+        "small": 0.7,
+        "mid": 0.29,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 237.98462500000005
+    },
+    {
+      "id": "D060",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.57,
+      "probs": {
+        "light": 0,
+        "small": 0.68,
+        "mid": 0.32,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 225.74104200000056
+    },
+    {
+      "id": "D061",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.8,
+      "probs": {
+        "light": 0,
+        "small": 0.14,
+        "mid": 0.85,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 221.7161670000005
+    },
+    {
+      "id": "D062",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.97,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 253.9970830000002
+    },
+    {
+      "id": "D063",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0.01,
+        "small": 0.95,
+        "mid": 0.04,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 243.3862909999998
+    },
+    {
+      "id": "D064",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.89,
+      "probs": {
+        "light": 0,
+        "small": 0.92,
+        "mid": 0.08,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 236.6348339999995
+    },
+    {
+      "id": "D065",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.41,
+      "probs": {
+        "light": 0,
+        "small": 0.4,
+        "mid": 0.56,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 239.16620899999998
+    },
+    {
+      "id": "D066",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.64,
+      "probs": {
+        "light": 0,
+        "small": 0.73,
+        "mid": 0.25,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 250.64133399999992
+    },
+    {
+      "id": "D067",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.25,
+        "mid": 0.74,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 248.65599999999995
+    },
+    {
+      "id": "D068",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0,
+        "small": 0.88,
+        "mid": 0.11,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 218.76875000000018
+    },
+    {
+      "id": "D069",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.6,
+      "probs": {
+        "light": 0,
+        "small": 0.29,
+        "mid": 0.7,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 221.05404100000032
+    },
+    {
+      "id": "D070",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.44,
+      "probs": {
+        "light": 0,
+        "small": 0.4,
+        "mid": 0.58,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 205.25533300000006
+    },
+    {
+      "id": "D071",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0,
+        "small": 0.9,
+        "mid": 0.09,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 239.0797500000008
+    },
+    {
+      "id": "D072",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.44,
+      "probs": {
+        "light": 0,
+        "small": 0.42,
+        "mid": 0.58,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 2183.36125
+    },
+    {
+      "id": "D073",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.48,
+      "probs": {
+        "light": 0,
+        "small": 0.38,
+        "mid": 0.61,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 249.99504100000013
+    },
+    {
+      "id": "D074",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.81,
+      "probs": {
+        "light": 0,
+        "small": 0.86,
+        "mid": 0.13,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 221.44433300000037
+    },
+    {
+      "id": "D075",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.73,
+      "probs": {
+        "light": 0,
+        "small": 0.19,
+        "mid": 0.8,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 642.7866670000003
+    },
+    {
+      "id": "D076",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.08,
+        "mid": 0.87,
+        "top": 0.05
+      },
+      "second": "small",
+      "ms": 247.88837500000045
+    },
+    {
+      "id": "D077",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.18,
+        "mid": 0.75,
+        "top": 0.07
+      },
+      "second": "small",
+      "ms": 194.86124999999993
+    },
+    {
+      "id": "D078",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.6,
+      "probs": {
+        "light": 0,
+        "small": 0.7,
+        "mid": 0.24,
+        "top": 0.06
+      },
+      "second": "mid",
+      "ms": 469.54641600000014
+    },
+    {
+      "id": "D079",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.8,
+      "probs": {
+        "light": 0,
+        "small": 0.13,
+        "mid": 0.85,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 379.53112500000043
+    },
+    {
+      "id": "D080",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.41,
+      "probs": {
+        "light": 0,
+        "small": 0.43,
+        "mid": 0.56,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 214.84500000000116
+    },
+    {
+      "id": "D081",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.05,
+        "mid": 0.93,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 440.68766700000015
+    },
+    {
+      "id": "D082",
+      "subagent_type": "pr-reviewer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0.01,
+        "small": 0.96,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 530.9601249999996
+    },
+    {
+      "id": "D083",
+      "subagent_type": "pr-review-toolkit:comment-analyzer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.64,
+      "probs": {
+        "light": 0,
+        "small": 0.73,
+        "mid": 0.26,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 301.01466600000003
+    },
+    {
+      "id": "D084",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.22,
+        "mid": 0.74,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 242.3769169999996
+    },
+    {
+      "id": "D085",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.19,
+        "mid": 0.77,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 360.92491599999994
+    },
+    {
+      "id": "D086",
+      "subagent_type": "Explore",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.97,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 212.9641249999995
+    },
+    {
+      "id": "D087",
+      "subagent_type": "Explore",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.71,
+      "probs": {
+        "light": 0,
+        "small": 0.78,
+        "mid": 0.21,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 242.72925000000032
+    },
+    {
+      "id": "D088",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.07,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 265.93145800000093
+    },
+    {
+      "id": "D089",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.95,
+        "mid": 0.04,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 243.99770799999988
+    },
+    {
+      "id": "D090",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.95,
+        "mid": 0.05,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 207.54483299999993
+    },
+    {
+      "id": "D091",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.71,
+      "probs": {
+        "light": 0.04,
+        "small": 0.78,
+        "mid": 0.18,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 318.58008299999983
+    },
+    {
+      "id": "D092",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0.14,
+        "small": 0.83,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 254.9025419999998
+    },
+    {
+      "id": "D093",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.73,
+      "probs": {
+        "light": 0.01,
+        "small": 0.8,
+        "mid": 0.16,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 277.2497919999996
+    },
+    {
+      "id": "D094",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.52,
+      "probs": {
+        "light": 0,
+        "small": 0.32,
+        "mid": 0.64,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 271.197666
+    },
+    {
+      "id": "D095",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.63,
+      "probs": {
+        "light": 0,
+        "small": 0.2,
+        "mid": 0.72,
+        "top": 0.08
+      },
+      "second": "small",
+      "ms": 485.7560000000012
+    },
+    {
+      "id": "D096",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0.01,
+        "small": 0.9,
+        "mid": 0.08,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 294.61433299999953
+    },
+    {
+      "id": "D097",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.93,
+        "mid": 0.04,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 229.06587499999932
+    },
+    {
+      "id": "D098",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.85,
+      "probs": {
+        "light": 0.01,
+        "small": 0.89,
+        "mid": 0.1,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 250.66833300000053
+    },
+    {
+      "id": "D099",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.87,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 211.33849999999984
+    },
+    {
+      "id": "D100",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.52,
+      "probs": {
+        "light": 0,
+        "small": 0.35,
+        "mid": 0.64,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 233.07087499999943
+    },
+    {
+      "id": "D101",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.11,
+        "mid": 0.87,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 295.7990000000009
+    },
+    {
+      "id": "D102",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.02,
+        "mid": 0.97,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 383.74391599999944
+    },
+    {
+      "id": "D103",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.95,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.96,
+        "top": 0.03
+      },
+      "second": "top",
+      "ms": 205.65062500000022
+    },
+    {
+      "id": "D104",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.92,
+      "probs": {
+        "light": 0,
+        "small": 0,
+        "mid": 0.94,
+        "top": 0.06
+      },
+      "second": "top",
+      "ms": 279.6325830000005
+    },
+    {
+      "id": "D105",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.95,
+        "top": 0.04
+      },
+      "second": "top",
+      "ms": 287.3104170000006
+    },
+    {
+      "id": "D106",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.93,
+        "top": 0.06
+      },
+      "second": "top",
+      "ms": 252.2046250000003
+    },
+    {
+      "id": "D107",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.97,
+        "top": 0.02
+      },
+      "second": "top",
+      "ms": 231.96541700000125
+    },
+    {
+      "id": "D108",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.57,
+      "probs": {
+        "light": 0.01,
+        "small": 0.6799999999999999,
+        "mid": 0.24,
+        "top": 0.07
+      },
+      "second": "mid",
+      "ms": 243.2469170000004
+    },
+    {
+      "id": "D109",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0.05,
+        "small": 0.83,
+        "mid": 0.11,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 263.71429200000057
+    },
+    {
+      "id": "D110",
+      "subagent_type": "pr-reviewer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.79,
+      "probs": {
+        "light": 0,
+        "small": 0.84,
+        "mid": 0.15,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 271.15587499999856
+    },
+    {
+      "id": "D111",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.21,
+        "mid": 0.77,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 249.2854159999988
+    },
+    {
+      "id": "D112",
+      "subagent_type": "pr-review-toolkit:silent-failure-hunter",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.25,
+        "mid": 0.74,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 237.21441699999923
+    },
+    {
+      "id": "D113",
+      "subagent_type": "pr-review-toolkit:comment-analyzer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.68,
+      "probs": {
+        "light": 0,
+        "small": 0.76,
+        "mid": 0.23,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 238.96533399999862
+    },
+    {
+      "id": "D114",
+      "subagent_type": "pr-review-toolkit:pr-test-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.25,
+        "mid": 0.74,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 240.21891700000015
+    },
+    {
+      "id": "D115",
+      "subagent_type": "pr-review-toolkit:type-design-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.81,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.86,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 444.73445900000115
+    },
+    {
+      "id": "D116",
+      "subagent_type": "pr-reviewer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.83,
+        "mid": 0.16,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 287.4258340000015
+    },
+    {
+      "id": "D117",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.23,
+        "mid": 0.75,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 254.55345800000032
+    },
+    {
+      "id": "D118",
+      "subagent_type": "pr-review-toolkit:silent-failure-hunter",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.04,
+        "mid": 0.93,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 299.7270410000001
+    },
+    {
+      "id": "D119",
+      "subagent_type": "pr-review-toolkit:comment-analyzer",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.39,
+      "probs": {
+        "light": 0,
+        "small": 0.54,
+        "mid": 0.44,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 233.2828750000008
+    },
+    {
+      "id": "D120",
+      "subagent_type": "pr-review-toolkit:pr-test-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.22,
+        "mid": 0.77,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 223.34354200000053
+    },
+    {
+      "id": "D121",
+      "subagent_type": "pr-review-toolkit:type-design-analyzer",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.79,
+      "probs": {
+        "light": 0,
+        "small": 0.13,
+        "mid": 0.84,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 262.8373330000013
+    },
+    {
+      "id": "D122",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.37,
+      "probs": {
+        "light": 0.01,
+        "small": 0.53,
+        "mid": 0.39,
+        "top": 0.07
+      },
+      "second": "mid",
+      "ms": 221.592584
+    },
+    {
+      "id": "D123",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.52,
+      "probs": {
+        "light": 0,
+        "small": 0.64,
+        "mid": 0.31,
+        "top": 0.05
+      },
+      "second": "mid",
+      "ms": 246.49762499999997
+    },
+    {
+      "id": "D124",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.92,
+      "probs": {
+        "light": 0.03,
+        "small": 0.94,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 357.1464590000014
+    },
+    {
+      "id": "D125",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.63,
+      "probs": {
+        "light": 0.02,
+        "small": 0.72,
+        "mid": 0.24,
+        "top": 0.02
+      },
+      "second": "mid",
+      "ms": 258.75837499999943
+    },
+    {
+      "id": "D126",
+      "subagent_type": "Explore",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.55,
+      "probs": {
+        "light": 0,
+        "small": 0.66,
+        "mid": 0.33,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 293.97254200000134
+    },
+    {
+      "id": "D127",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.85,
+      "probs": {
+        "light": 0.01,
+        "small": 0.89,
+        "mid": 0.1,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 276.6787089999998
+    },
+    {
+      "id": "D128",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.52,
+      "probs": {
+        "light": 0.02,
+        "small": 0.64,
+        "mid": 0.34,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 303.3233330000003
+    },
+    {
+      "id": "D129",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.61,
+      "probs": {
+        "light": 0.01,
+        "small": 0.71,
+        "mid": 0.28,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 293.9596249999995
+    },
+    {
+      "id": "D130",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.6,
+      "probs": {
+        "light": 0.01,
+        "small": 0.7,
+        "mid": 0.28,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 232.48725000000013
+    },
+    {
+      "id": "D131",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.39,
+      "probs": {
+        "light": 0.01,
+        "small": 0.54,
+        "mid": 0.41,
+        "top": 0.04
+      },
+      "second": "mid",
+      "ms": 292.1569589999999
+    },
+    {
+      "id": "D132",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.92,
+      "probs": {
+        "light": 0.05,
+        "small": 0.94,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 202.72720900000058
+    },
+    {
+      "id": "D133",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.57,
+      "probs": {
+        "light": 0,
+        "small": 0.26,
+        "mid": 0.68,
+        "top": 0.06
+      },
+      "second": "small",
+      "ms": 233.0539579999986
+    },
+    {
+      "id": "D134",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.07,
+        "mid": 0.75,
+        "top": 0.18
+      },
+      "second": "top",
+      "ms": 213.76333300000078
+    },
+    {
+      "id": "D135",
+      "subagent_type": "Plan",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.81,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.86,
+        "top": 0.13
+      },
+      "second": "top",
+      "ms": 250.79912499999955
+    },
+    {
+      "id": "D136",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.85,
+      "probs": {
+        "light": 0,
+        "small": 0.1,
+        "mid": 0.89,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 1073.7133329999997
+    },
+    {
+      "id": "D137",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.73,
+      "probs": {
+        "light": 0,
+        "small": 0.15,
+        "mid": 0.8,
+        "top": 0.05
+      },
+      "second": "small",
+      "ms": 213.41004200000134
+    },
+    {
+      "id": "D138",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.09,
+        "mid": 0.83,
+        "top": 0.08
+      },
+      "second": "small",
+      "ms": 309.69237500000054
+    },
+    {
+      "id": "D139",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.03,
+        "mid": 0.95,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 251.38908300000003
+    },
+    {
+      "id": "D140",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.71,
+      "probs": {
+        "light": 0,
+        "small": 0.16,
+        "mid": 0.78,
+        "top": 0.06
+      },
+      "second": "small",
+      "ms": 218.6384999999991
+    },
+    {
+      "id": "D141",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.71,
+      "probs": {
+        "light": 0,
+        "small": 0.16,
+        "mid": 0.78,
+        "top": 0.06
+      },
+      "second": "small",
+      "ms": 309.35100000000057
+    },
+    {
+      "id": "D142",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.99,
+      "probs": {
+        "light": 0,
+        "small": 0,
+        "mid": 0.99,
+        "top": 0.01
+      },
+      "second": "top",
+      "ms": 258.6967919999988
+    },
+    {
+      "id": "D143",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.21,
+        "mid": 0.77,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 252.6420419999995
+    },
+    {
+      "id": "D144",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.89,
+      "probs": {
+        "light": 0,
+        "small": 0.04,
+        "mid": 0.92,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 309.390625
+    },
+    {
+      "id": "D145",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.02,
+        "mid": 0.97,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 237.60933400000067
+    },
+    {
+      "id": "D146",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.69,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.77,
+        "top": 0.11
+      },
+      "second": "small",
+      "ms": 265.63879199999974
+    },
+    {
+      "id": "D147",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.97,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.98,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 350.62975000000006
+    },
+    {
+      "id": "D148",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.99,
+      "probs": {
+        "light": 0,
+        "small": 0,
+        "mid": 0.99,
+        "top": 0.01
+      },
+      "second": "top",
+      "ms": 368.3037499999991
+    },
+    {
+      "id": "D149",
+      "subagent_type": "Plan",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.49,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.62,
+        "top": 0.37
+      },
+      "second": "top",
+      "ms": 287.25254099999984
+    },
+    {
+      "id": "D150",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.05,
+        "mid": 0.9299999999999999,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 223.51841700000114
+    },
+    {
+      "id": "D151",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.97,
+        "top": 0.02
+      },
+      "second": "top",
+      "ms": 273.38237499999923
+    },
+    {
+      "id": "D152",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.15,
+        "mid": 0.83,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 333.61554100000103
+    },
+    {
+      "id": "D153",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.97,
+      "probs": {
+        "light": 0,
+        "small": 0,
+        "mid": 0.98,
+        "top": 0.02
+      },
+      "second": "top",
+      "ms": 238.73433300000033
+    },
+    {
+      "id": "D154",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.04,
+        "mid": 0.93,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 631.2274590000015
+    },
+    {
+      "id": "D155",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0,
+        "mid": 0.93,
+        "top": 0.07
+      },
+      "second": "top",
+      "ms": 636.2080839999999
+    },
+    {
+      "id": "D156",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.07,
+        "mid": 0.74,
+        "top": 0.19
+      },
+      "second": "top",
+      "ms": 278.306125000001
+    },
+    {
+      "id": "D157",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.03,
+        "mid": 0.95,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 283.4359169999989
+    },
+    {
+      "id": "D158",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.97,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.98,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 221.86516699999993
+    },
+    {
+      "id": "D159",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.51,
+      "probs": {
+        "light": 0,
+        "small": 0.36,
+        "mid": 0.63,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 216.93224999999984
+    },
+    {
+      "id": "D160",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.85,
+      "probs": {
+        "light": 0,
+        "small": 0.1,
+        "mid": 0.89,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 265.485584
+    },
+    {
+      "id": "D161",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.37,
+      "probs": {
+        "light": 0,
+        "small": 0.53,
+        "mid": 0.46,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 337.30733299999883
+    },
+    {
+      "id": "D162",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.52,
+      "probs": {
+        "light": 0,
+        "small": 0.64,
+        "mid": 0.36,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 1321.620583
+    },
+    {
+      "id": "D163",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.02,
+        "mid": 0.9299999999999999,
+        "top": 0.05
+      },
+      "second": "top",
+      "ms": 281.0759170000001
+    },
+    {
+      "id": "D164",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.93,
+        "top": 0.05
+      },
+      "second": "top",
+      "ms": 259.31924999999865
+    },
+    {
+      "id": "D165",
+      "subagent_type": "Plan",
+      "label": "mid",
+      "pred": "top",
+      "conf": 0.68,
+      "probs": {
+        "light": 0,
+        "small": 0.01,
+        "mid": 0.23,
+        "top": 0.76
+      },
+      "second": "mid",
+      "ms": 209.96087500000067
+    },
+    {
+      "id": "D166",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.63,
+      "probs": {
+        "light": 0,
+        "small": 0.27,
+        "mid": 0.72,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 290.6275420000002
+    },
+    {
+      "id": "D167",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.47,
+      "probs": {
+        "light": 0,
+        "small": 0.37,
+        "mid": 0.6,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 338.91479099999924
+    },
+    {
+      "id": "D168",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.37,
+      "probs": {
+        "light": 0,
+        "small": 0.45,
+        "mid": 0.53,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 240.71645799999897
+    },
+    {
+      "id": "D169",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.39,
+      "probs": {
+        "light": 0,
+        "small": 0.54,
+        "mid": 0.38,
+        "top": 0.08
+      },
+      "second": "mid",
+      "ms": 1293.676625
+    },
+    {
+      "id": "D170",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.67,
+      "probs": {
+        "light": 0.01,
+        "small": 0.75,
+        "mid": 0.21,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 453.81054100000074
+    },
+    {
+      "id": "D171",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.95,
+        "mid": 0.05,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 258.73804199999904
+    },
+    {
+      "id": "D172",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.85,
+      "probs": {
+        "light": 0,
+        "small": 0.89,
+        "mid": 0.11,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 285.0068749999991
+    },
+    {
+      "id": "D173",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.92,
+      "probs": {
+        "light": 0,
+        "small": 0.06,
+        "mid": 0.94,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 324.8786249999994
+    },
+    {
+      "id": "D174",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.95,
+        "mid": 0.05,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 272.38095799999974
+    },
+    {
+      "id": "D175",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.83,
+      "probs": {
+        "light": 0,
+        "small": 0.87,
+        "mid": 0.13,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 346.5308750000004
+    },
+    {
+      "id": "D176",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.85,
+      "probs": {
+        "light": 0.01,
+        "small": 0.89,
+        "mid": 0.07,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 224.94070799999827
+    },
+    {
+      "id": "D177",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.83,
+      "probs": {
+        "light": 0.01,
+        "small": 0.87,
+        "mid": 0.04,
+        "top": 0.08
+      },
+      "second": "top",
+      "ms": 508.83129200000076
+    },
+    {
+      "id": "D178",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.81,
+      "probs": {
+        "light": 0,
+        "small": 0.13,
+        "mid": 0.86,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 254.03150000000096
+    },
+    {
+      "id": "D179",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.55,
+      "probs": {
+        "light": 0,
+        "small": 0.66,
+        "mid": 0.26,
+        "top": 0.08
+      },
+      "second": "mid",
+      "ms": 199.09170799999993
+    },
+    {
+      "id": "D180",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0,
+        "small": 0.96,
+        "mid": 0.04,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 204.60137499999837
+    },
+    {
+      "id": "D181",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0,
+        "small": 0.9,
+        "mid": 0.1,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 221.01508300000023
+    },
+    {
+      "id": "D182",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.45,
+      "probs": {
+        "light": 0,
+        "small": 0.41,
+        "mid": 0.59,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 262.42433399999936
+    },
+    {
+      "id": "D183",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.65,
+      "probs": {
+        "light": 0,
+        "small": 0.15,
+        "mid": 0.74,
+        "top": 0.11
+      },
+      "second": "small",
+      "ms": 244.39933399999973
+    },
+    {
+      "id": "D184",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.48,
+      "probs": {
+        "light": 0,
+        "small": 0.61,
+        "mid": 0.32,
+        "top": 0.07
+      },
+      "second": "mid",
+      "ms": 321.4014590000006
+    },
+    {
+      "id": "D185",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.63,
+      "probs": {
+        "light": 0.01,
+        "small": 0.72,
+        "mid": 0.17,
+        "top": 0.1
+      },
+      "second": "mid",
+      "ms": 250.52737499999967
+    },
+    {
+      "id": "D186",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "light",
+      "conf": 1,
+      "probs": {
+        "light": 1,
+        "small": 0,
+        "mid": 0,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 262.25525000000016
+    },
+    {
+      "id": "D187",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.48,
+      "probs": {
+        "light": 0.01,
+        "small": 0.38,
+        "mid": 0.61,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 262.7424169999995
+    },
+    {
+      "id": "D188",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.51,
+      "probs": {
+        "light": 0,
+        "small": 0.37,
+        "mid": 0.63,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 300.4933749999982
+    },
+    {
+      "id": "D189",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0.02,
+        "small": 0.96,
+        "mid": 0.02,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 244.33429200000137
+    },
+    {
+      "id": "D190",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.97,
+      "probs": {
+        "light": 0.01,
+        "small": 0.98,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 231.08137499999975
+    },
+    {
+      "id": "D191",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0.01,
+        "small": 0.9,
+        "mid": 0.09,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 261.95637499999975
+    },
+    {
+      "id": "D192",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.76,
+      "probs": {
+        "light": 0,
+        "small": 0.16,
+        "mid": 0.82,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 232.869917
+    },
+    {
+      "id": "D193",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.67,
+      "probs": {
+        "light": 0.24,
+        "small": 0.75,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 280.2769580000004
+    },
+    {
+      "id": "D194",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.73,
+      "probs": {
+        "light": 0.19,
+        "small": 0.8,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 294.3580000000002
+    },
+    {
+      "id": "D195",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.65,
+      "probs": {
+        "light": 0.25,
+        "small": 0.74,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 250.9822920000006
+    },
+    {
+      "id": "D196",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.75,
+      "probs": {
+        "light": 0.18,
+        "small": 0.81,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 286.68537500000093
+    },
+    {
+      "id": "D197",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.89,
+      "probs": {
+        "light": 0,
+        "small": 0.92,
+        "mid": 0.08,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 231.41733300000124
+    },
+    {
+      "id": "D198",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.09,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 204.7497910000002
+    },
+    {
+      "id": "D199",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.56,
+      "probs": {
+        "light": 0,
+        "small": 0.31,
+        "mid": 0.67,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 305.8345419999987
+    },
+    {
+      "id": "D200",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.81,
+      "probs": {
+        "light": 0,
+        "small": 0.07,
+        "mid": 0.86,
+        "top": 0.07
+      },
+      "second": "small",
+      "ms": 551.8339999999989
+    },
+    {
+      "id": "D201",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.71,
+      "probs": {
+        "light": 0,
+        "small": 0.78,
+        "mid": 0.21,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 294.50804100000096
+    },
+    {
+      "id": "D202",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.64,
+      "probs": {
+        "light": 0,
+        "small": 0.18,
+        "mid": 0.73,
+        "top": 0.09
+      },
+      "second": "small",
+      "ms": 224.63829199999964
+    },
+    {
+      "id": "D203",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0.16,
+        "small": 0.83,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 221.17420799999854
+    },
+    {
+      "id": "D204",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "light",
+      "conf": 0.96,
+      "probs": {
+        "light": 0.97,
+        "small": 0.03,
+        "mid": 0,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 289.6996670000008
+    },
+    {
+      "id": "D205",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "light",
+      "conf": 0.97,
+      "probs": {
+        "light": 0.98,
+        "small": 0.02,
+        "mid": 0,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 230.73033299999952
+    },
+    {
+      "id": "D206",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "light",
+      "conf": 0.96,
+      "probs": {
+        "light": 0.97,
+        "small": 0.03,
+        "mid": 0,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 321.57837500000096
+    },
+    {
+      "id": "D207",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "light",
+      "conf": 0.99,
+      "probs": {
+        "light": 0.99,
+        "small": 0.01,
+        "mid": 0,
+        "top": 0
+      },
+      "second": "small",
+      "ms": 269.70687499999985
+    },
+    {
+      "id": "D208",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.76,
+      "probs": {
+        "light": 0.17,
+        "small": 0.82,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 310.41658299999835
+    },
+    {
+      "id": "D209",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.68,
+      "probs": {
+        "light": 0.23,
+        "small": 0.76,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 290.877457999999
+    },
+    {
+      "id": "D210",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.52,
+      "probs": {
+        "light": 0.35,
+        "small": 0.64,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 300.63708300000144
+    },
+    {
+      "id": "D211",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.75,
+      "probs": {
+        "light": 0.18,
+        "small": 0.81,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 255.8919160000005
+    },
+    {
+      "id": "D212",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.91,
+      "probs": {
+        "light": 0.01,
+        "small": 0.93,
+        "mid": 0.05,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 196.161458999999
+    },
+    {
+      "id": "D213",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.09,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 229.04212499999994
+    },
+    {
+      "id": "D214",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0.01,
+        "small": 0.88,
+        "mid": 0.11,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 226.9658750000017
+    },
+    {
+      "id": "D215",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.33,
+      "probs": {
+        "light": 0.01,
+        "small": 0.5,
+        "mid": 0.48,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 273.7323329999999
+    },
+    {
+      "id": "D216",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.87,
+      "probs": {
+        "light": 0,
+        "small": 0.06,
+        "mid": 0.9,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 228.7778330000001
+    },
+    {
+      "id": "D217",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.77,
+      "probs": {
+        "light": 0,
+        "small": 0.15,
+        "mid": 0.83,
+        "top": 0.02
+      },
+      "second": "small",
+      "ms": 300.73920799999905
+    },
+    {
+      "id": "D218",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.75,
+      "probs": {
+        "light": 0,
+        "small": 0.12,
+        "mid": 0.81,
+        "top": 0.07
+      },
+      "second": "small",
+      "ms": 201.7284580000014
+    },
+    {
+      "id": "D219",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0,
+        "small": 0.95,
+        "mid": 0.05,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 211.77324999999837
+    },
+    {
+      "id": "D220",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0,
+        "small": 0.88,
+        "mid": 0.11,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 227.2621250000011
+    },
+    {
+      "id": "D221",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.67,
+      "probs": {
+        "light": 0,
+        "small": 0.75,
+        "mid": 0.24,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 200.23866599999747
+    },
+    {
+      "id": "D222",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.43,
+      "probs": {
+        "light": 0,
+        "small": 0.11,
+        "mid": 0.57,
+        "top": 0.32
+      },
+      "second": "top",
+      "ms": 325.5804169999974
+    },
+    {
+      "id": "D223",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.76,
+      "probs": {
+        "light": 0,
+        "small": 0.09,
+        "mid": 0.82,
+        "top": 0.09
+      },
+      "second": "small",
+      "ms": 307.41712499999994
+    },
+    {
+      "id": "D224",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.72,
+      "probs": {
+        "light": 0.2,
+        "small": 0.79,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 288.3713749999988
+    },
+    {
+      "id": "D225",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.65,
+      "probs": {
+        "light": 0.25,
+        "small": 0.74,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 207.82704099999683
+    },
+    {
+      "id": "D226",
+      "subagent_type": "pr-review-toolkit:code-reviewer",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.89,
+      "probs": {
+        "light": 0,
+        "small": 0.05,
+        "mid": 0.92,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 289.0034579999992
+    },
+    {
+      "id": "D227",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.68,
+      "probs": {
+        "light": 0.23,
+        "small": 0.76,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 235.14125000000058
+    },
+    {
+      "id": "D228",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0.02,
+        "small": 0.96,
+        "mid": 0.02,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 253.79012499999953
+    },
+    {
+      "id": "D229",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.85,
+      "probs": {
+        "light": 0.01,
+        "small": 0.89,
+        "mid": 0.1,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 201.0814160000009
+    },
+    {
+      "id": "D230",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.77,
+      "probs": {
+        "light": 0.16,
+        "small": 0.83,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 628.0674169999984
+    },
+    {
+      "id": "D231",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.91,
+        "mid": 0.09,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 288.96250000000146
+    },
+    {
+      "id": "D232",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.95,
+      "probs": {
+        "light": 0,
+        "small": 0.96,
+        "mid": 0.04,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 304.3241249999992
+    },
+    {
+      "id": "D233",
+      "subagent_type": "",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.87,
+      "probs": {
+        "light": 0,
+        "small": 0.9,
+        "mid": 0.09,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 433.95187499999884
+    },
+    {
+      "id": "D234",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.55,
+      "probs": {
+        "light": 0.33,
+        "small": 0.66,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 204.07637500000055
+    },
+    {
+      "id": "D235",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.71,
+      "probs": {
+        "light": 0.21,
+        "small": 0.78,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 317.04241700000057
+    },
+    {
+      "id": "D236",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.91,
+      "probs": {
+        "light": 0,
+        "small": 0.93,
+        "mid": 0.07,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 209.18391600000177
+    },
+    {
+      "id": "D237",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.83,
+      "probs": {
+        "light": 0.12,
+        "small": 0.87,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 317.54699999999866
+    },
+    {
+      "id": "D238",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.29,
+      "probs": {
+        "light": 0,
+        "small": 0.47,
+        "mid": 0.3,
+        "top": 0.23
+      },
+      "second": "mid",
+      "ms": 221.89941700000054
+    },
+    {
+      "id": "D239",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "mid",
+      "conf": 0.19,
+      "probs": {
+        "light": 0,
+        "small": 0.37,
+        "mid": 0.39,
+        "top": 0.24
+      },
+      "second": "small",
+      "ms": 290.0812079999996
+    },
+    {
+      "id": "D240",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.27,
+      "probs": {
+        "light": 0,
+        "small": 0.45,
+        "mid": 0.32,
+        "top": 0.23
+      },
+      "second": "mid",
+      "ms": 279.6879169999993
+    },
+    {
+      "id": "D241",
+      "subagent_type": "general-purpose",
+      "label": "mid",
+      "pred": "small",
+      "conf": 0.24,
+      "probs": {
+        "light": 0,
+        "small": 0.43,
+        "mid": 0.3,
+        "top": 0.27
+      },
+      "second": "mid",
+      "ms": 308.88512499999706
+    },
+    {
+      "id": "D242",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0.01,
+        "small": 0.95,
+        "mid": 0.03,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 247.70724999999948
+    },
+    {
+      "id": "D243",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.71,
+      "probs": {
+        "light": 0.21,
+        "small": 0.78,
+        "mid": 0.01,
+        "top": 0
+      },
+      "second": "light",
+      "ms": 216.44358300000022
+    },
+    {
+      "id": "D244",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0.01,
+        "small": 0.97,
+        "mid": 0.02,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 299.6621669999986
+    },
+    {
+      "id": "D245",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.97,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 465.1083749999998
+    },
+    {
+      "id": "D246",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.93,
+      "probs": {
+        "light": 0.02,
+        "small": 0.95,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 314.0899169999975
+    },
+    {
+      "id": "D247",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.96,
+      "probs": {
+        "light": 0,
+        "small": 0.97,
+        "mid": 0.03,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 229.92675000000236
+    },
+    {
+      "id": "D248",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.29,
+      "probs": {
+        "light": 0,
+        "small": 0.47,
+        "mid": 0.12,
+        "top": 0.41
+      },
+      "second": "top",
+      "ms": 242.17766699999993
+    },
+    {
+      "id": "D249",
+      "subagent_type": "general-purpose",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.81,
+      "probs": {
+        "light": 0.02,
+        "small": 0.86,
+        "mid": 0.09,
+        "top": 0.03
+      },
+      "second": "mid",
+      "ms": 210.15850000000137
+    },
+    {
+      "id": "D250",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.84,
+      "probs": {
+        "light": 0,
+        "small": 0.88,
+        "mid": 0.12,
+        "top": 0
+      },
+      "second": "mid",
+      "ms": 239.24412499999744
+    },
+    {
+      "id": "D251",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "small",
+      "conf": 0.53,
+      "probs": {
+        "light": 0,
+        "small": 0.65,
+        "mid": 0.34,
+        "top": 0.01
+      },
+      "second": "mid",
+      "ms": 231.09416700000293
+    },
+    {
+      "id": "D252",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.56,
+      "probs": {
+        "light": 0,
+        "small": 0.32,
+        "mid": 0.67,
+        "top": 0.01
+      },
+      "second": "small",
+      "ms": 224.91162500000064
+    },
+    {
+      "id": "D253",
+      "subagent_type": "general-purpose",
+      "label": "small",
+      "pred": "mid",
+      "conf": 0.88,
+      "probs": {
+        "light": 0,
+        "small": 0.06,
+        "mid": 0.91,
+        "top": 0.03
+      },
+      "second": "small",
+      "ms": 271.6501250000001
+    },
+    {
+      "id": "D254",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "small",
+      "conf": 0.76,
+      "probs": {
+        "light": 0.01,
+        "small": 0.82,
+        "mid": 0.11,
+        "top": 0.06
+      },
+      "second": "mid",
+      "ms": 238.5028749999983
+    },
+    {
+      "id": "D255",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.4,
+      "probs": {
+        "light": 0,
+        "small": 0.41,
+        "mid": 0.55,
+        "top": 0.04
+      },
+      "second": "small",
+      "ms": 288.0278330000001
+    },
+    {
+      "id": "D256",
+      "subagent_type": "",
+      "label": "light",
+      "pred": "mid",
+      "conf": 0.25,
+      "probs": {
+        "light": 0.01,
+        "small": 0.38,
+        "mid": 0.44,
+        "top": 0.17
+      },
+      "second": "small",
+      "ms": 281.9407089999986
+    }
+  ]
+}

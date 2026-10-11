@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-05（新增 mod `review-band`：唯讀顯示 pending-review marker；三支 PreToolUse guard 擋下時寫 `DENIALS.jsonl`；`weekly-review` 1.9.0 加擋下統計；新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-11（新增 PreToolUse `Agent` hook `agent-model-router.ts`：Jev 掛載點 D 派工模型路由；`jev-questions.ts` 加 `TIER_QUESTIONS`；`jev-client.ts` 的 `askJev` 加可選 timeoutMs；新增 `jev-eval/extract-d-route.ts`、`run-eval-d.ts`）；前次 2026-10-05（新增 mod `review-band`：唯讀顯示 pending-review marker；三支 PreToolUse guard 擋下時寫 `DENIALS.jsonl`；`weekly-review` 1.9.0 加擋下統計；新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -565,6 +565,7 @@
 | `Read` | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示先用 `smart_outline`；同檔每 session 只擋一次（再次送出即放行，等於減速丘）；fail-open 失敗不阻斷；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
 | `Bash` | `commit-gate-guard.ts` | pending-review 閘門——該 repo 有 Tier 2/3 commit 的 review 尚未完成（`~/.claude/state/pending-review/<repo>.json` marker 存在）時，deny 開新 `git commit`；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行，避免永久 brick；失敗一律 fail-open；擋下時經 `scripts/lib/denial-log.ts` 寫一筆到 `~/.claude/.learnings/DENIALS.jsonl`（寫入失敗只在 deny 原因後加附註，不影響 deny） |
 | `Bash` | `credential-commit-guard.ts` | git commit 前憑證掃描（2026-10-09 新增）——只在指令含 `git commit` 時觸發（不對每個 Bash 掃，否則暫存區有命中時連修復指令也被擋成死鎖）；只掃**新增行**（暫存區；`-a`／`--all` 另掃未暫存的已追蹤變更；指定 pathspec 另掃該些路徑的工作目錄內容），清理憑證的 commit 不會被擋；pattern 與 `rules/common/security.md` pre-commit-scan 相同（測試檢查逐字一致）；命中 deny 且只列檔名；commit 指令含 `[skip-credential-scan]` 放行；hook 自身錯誤不擋 commit 但 exit 1 交 `hook-error-wrapper` 記錄；擋下寫 `DENIALS.jsonl`；同一指令串內先 add 再 commit 時掃不到剛 add 的檔；已知限制（pathspec 加引號、子目錄相對路徑、`VAR=1 git commit`／alias 不觸發等）見 hook 檔頭；重導向不算 pathspec、多個 `git commit` 各段合併、已命中優先於後續掃描失敗（第二輪 review 修正） |
+| `Agent` | `agent-model-router.ts` | 派工模型路由（Jev D 掛載點，2026-10-11 新增）——主模型派 subagent 沒寫 `model` 時，brief（遮罩憑證、截 `MAX_BRIEF_CHARS=4000`）送 Jev 問一題 tier（light／small／mid／top），conf ≥ `ROUTE_CONF_MIN=0.3` 時查表填 haiku／sonnet／opus，top 不填；只降不升由執行期保證——`readParentModel` 從 stdin `transcript_path` 讀父模型（尾端 512KB 取位置最新的 assistant model／identity modelId，找不到從檔頭 64KB 倍增掃到 8MB），`capByParent` 要求候選在 `MODEL_RANK`（haiku<sonnet<opus<fable）嚴格低於父模型，否則 `skip: would_upgrade`，讀不到 `parent_unknown`；以 `hookSpecificOutput.updatedInput` 整包取代工具輸入（2.1.296 實測：取代不合併、缺必填欄位會被 schema 驗證 deny、不需 `permissionDecision`，刻意不帶）；跳過已寫 model、`fork`、定義檔 frontmatter 有固定 model（自訂 agent 查 `~/.claude/agents/<type>.md`，plugin agent 查 `installed_plugins.json` 的 installPath；frontmatter 只用 regex 抓頂層 `model` 行，因 plugin description 含未加引號的冒號會讓 YAML 解析丟錯）、找不到定義檔；內建 general-purpose／claude／Explore／Plan 可路由；`ROUTE_TIMEOUT_MS=4000`（逾時＝fail-open＝繼承 fable）；決策寫 `~/.claude/state/jev/decisions.jsonl`（`hook: D-route`，含 subagent_type／tier／conf／次高／model_out／skip，不含 brief）；失敗 fail-open；kill switch `JEV_HOOKS_DISABLED=1`；評估見 `jev-eval/run-eval-d.ts` |
 
 ### PostToolUse
 
@@ -626,9 +627,12 @@
 | `spec-section-validator.ts` | 驗證 spec 必要區段是否存在；預設模式供 PostToolUse block，`--warn-only` 供 `tool-reminders` mod 只輸出空骨架警告 |
 | `inventory-drift-detector.ts` | 偵測 `memory/inventory.md` 與實際 skill/hook 的差異；由 `tool-reminders` mod 呼叫（2026-10-05 起）。舊版讀從未存在的 `CLAUDE_TOOL_NAME`／`CLAUDE_TOOL_INPUT` 環境變數而整支空轉，現改讀 stdin；排除 `skills/synced/` 與 `node_modules`；移除已無讀取端的 `skill-rules.json` 比對 |
 | `skill-activation-hook.ts` | UserPromptSubmit hook — 用 TypeSafe Jev 語意模型路由 user prompt（v2，2026-09-24 全面改寫，見上方 Hooks／UserPromptSubmit 章節） |
-| `lib/jev-client.ts` | Jev（TypeSafe systemOne）HTTP client 共用 lib（2026-09-24 新增）— `callJev`（丟錯版，供離線評估用）／`askJev`（fail-open 版，供 hook 用，出錯回 `null` 並寫 log）；含逾時（`HOOK_TIMEOUT_MS=2000`）、送出前遞迴遮罩憑證（`maskSecrets`）、決策 log（`logDecision`，不含原文）、per-session state 路徑推導（`sessionStatePath`）與原子寫入（`writeJsonAtomic`）；被三個 Jev hook 與 `jev-eval/run-eval.ts` 共用 |
-| `lib/jev-questions.ts` | 三個 Jev 掛載點的題目定義（2026-09-24 新增）— A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑 `jev-eval/run-eval.ts` |
+| `lib/jev-client.ts` | Jev（TypeSafe systemOne）HTTP client 共用 lib（2026-09-24 新增）— `callJev`（丟錯版，供離線評估用）／`askJev`（fail-open 版，供 hook 用，出錯回 `null` 並寫 log；2026-10-11 加可選 `timeoutMs`，D 掛載點帶 4000）；含逾時（預設 `HOOK_TIMEOUT_MS=2000`）、送出前遞迴遮罩憑證（`maskSecrets`）、決策 log（`logDecision`，不含原文）、per-session state 路徑推導（`sessionStatePath`）與原子寫入（`writeJsonAtomic`）；被三個 Jev hook 與 `jev-eval/run-eval.ts` 共用 |
+| `lib/jev-questions.ts` | 四個 Jev 掛載點的題目定義（2026-09-24 新增，2026-10-11 加 D）— D 派工分級一題（`TIER_QUESTIONS`／`TIER_LABELS`：light／small／mid／top，判準對齊 harness/model-dispatch.md §3 分工表）、A 路由三題（`routingQuestions()` 動態讀本機 skill 清單，套用 `skillOverrides`／`disable-model-invocation` 過濾規則）、B 完成宣告兩題（`CLAIM_QUESTIONS`）、C 同錯判定一題（`REPEAT_QUESTIONS`）；題目文字改動需重跑對應評估（A/B/C：`jev-eval/run-eval.ts`；D：`jev-eval/run-eval-d.ts`，改 `MAX_BRIEF_CHARS` 時先跑 `extract-d-route.ts` 重抽） |
 | `jev-eval/run-eval.ts` | Jev 離線評估 CLI（2026-09-24 新增）— 讀 `jev-eval/{a-routing,b-claims,c-repeat}.jsonl` 三份評估集直接呼叫 systemOne，輸出各題準確率／confidence 門檻表／錯誤案例／延遲，原始結果存 `results-<時間>.json`；門檻挑選規則（`MIN_PRECISION=0.9`／`MIN_COVERAGE=0.5`）事先寫死，不看結果再調 |
+| `lib/eval-utils.ts` | 離線評估共用工具（2026-10-11 新增）— `pct`（nearest-rank 百分位）、`loadJsonl(absPath, parse)`（解析錯誤帶檔名＋行號）；`run-eval.ts` 與 `run-eval-d.ts` 共用 |
+| `jev-eval/extract-d-route.ts` | D 掛載點評估資料集抽取（2026-10-11 新增）— 掃 `~/.claude/projects/*/*.jsonl` 近 30 天主模型明寫 `model` 的 Agent 呼叫，label 取 haiku→light／sonnet→small／opus→mid，brief 遮罩截斷後寫到 `~/.claude/state/jev/eval/d-route.jsonl`（含專案 brief，放 state 目錄不進 repo） |
+| `jev-eval/run-eval-d.ts` | D 掛載點離線評估（2026-10-11 新增）— 直接呼叫 hook 的 `routeModel`，確保評估的就是 hook 的決策；輸出混淆矩陣、各門檻路由比例／一致率／比主模型更貴或更便宜比例、延遲；統計與逐筆預測存 `results-d-*.json`（不含原文）；門檻挑選規則事先寫死（路由 ≥ 20 筆且更便宜 ≤ 10% 的最低門檻） |
 | `skill-version-check.ts` | PostToolUse hook — SKILL.md 被編輯時偵測 version 是否更新，未更新則提醒 |
 | `lib/denial-log.ts` | guard 擋下紀錄的格式唯一定義處（2026-10-05 新增）— `DenialRow`（`ts/kind/guard/tool/target/cwd_name/session/reason`，target 與 reason 寫入前遮罩憑證）；`logDenial()`（寫入 `~/.claude/.learnings/DENIALS.jsonl`，輸入逐欄驗型別，失敗拋錯）／`tryLogDenial()`（給 guard 用，失敗時另寫一筆 `context: hook:denial-log` 到 ERRORS.jsonl 並回傳附註字串，不影響 deny）；被 `commit-gate-guard.ts`、`r15-syntax-guard.ts` 於擋下當下動態 `import()`（不放檔頭：模組壞掉時 guard 仍要能擋），測試 `lib/denial-log.test.ts` |
 | `log-denial.ts` | `lib/denial-log.ts` 的 CLI 包裝，給 bash guard（`big-read-guard.sh`）用；輸入不合法或寫入失敗 → stderr + exit 1；三支 guard 的回歸測試在 `hooks/denial-guards.test.ts` |
@@ -895,9 +899,11 @@ pr-reviewer agent ──→ CODE-REVIEW-RULE.md（規則來源）
 codebase-memory-mcp ──→ TOOL-USAGE graph-first 規則（已索引專案優先 search_graph/trace_path 取代 Grep/手動追呼叫鏈）
                       ──→ commit-review skill Tier 2/3 blast radius 分析
 
-TypeSafe Jev 試用（2026-09-24 新增，3 個 hook 共用底層）：
+TypeSafe Jev 試用（2026-09-24 新增，2026-10-11 加 D；4 個 hook 共用底層）：
   skill-activation-hook.ts（UserPromptSubmit，掛載點 A）─┐
   repeat-failure-detector.ts（PostToolUseFailure，掛載點 C）├──→ lib/jev-client.ts（callJev/askJev）──→ TypeSafe systemOne API
-  stop-claim-guard.ts（Stop，掛載點 B）────────────────┘         lib/jev-questions.ts（三掛載點題目定義；A 動態讀本機 skill 清單）
-  jev-eval/run-eval.ts（離線評估）──→ 與上方三個 hook 共用 lib/jev-client.ts + lib/jev-questions.ts（題目／門檻改動需重跑評估，見 tasks/jev-trial-plan.md）
+  stop-claim-guard.ts（Stop，掛載點 B）────────────────┤         lib/jev-questions.ts（四掛載點題目定義；A 動態讀本機 skill 清單）
+  agent-model-router.ts（PreToolUse Agent，掛載點 D）───┘
+  jev-eval/run-eval.ts（A/B/C 離線評估）、jev-eval/run-eval-d.ts（D 離線評估，資料集由 extract-d-route.ts 抽到 ~/.claude/state/jev/eval/）
+      ──→ 與上方四個 hook 共用 lib/jev-client.ts + lib/jev-questions.ts（題目／門檻改動需重跑評估，見 tasks/jev-trial-plan.md）
 ```

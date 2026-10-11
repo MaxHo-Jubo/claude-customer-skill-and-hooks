@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import fs from 'fs';
 import path from 'path';
+import { loadJsonl as loadJsonlAt, pct } from '../lib/eval-utils';
 import { callJev, JEV_MODEL, type JevAnswer, readAnswer } from '../lib/jev-client';
 import { CLAIM_QUESTIONS, type JevQuestion, REPEAT_QUESTIONS, routingQuestions } from '../lib/jev-questions';
 
@@ -64,13 +65,12 @@ const SUITES: Suite[] = [
 ];
 
 /**
- * 讀 jsonl 評估集
+ * 讀 jsonl 評估集（共用 eval-utils 的 loadJsonl，逐行原樣轉型）
  * @param file - 檔名（相對 DIR）
  * @returns 每行一筆物件
  */
 function loadJsonl(file: string): Record<string, unknown>[] {
-  const lines = fs.readFileSync(path.join(DIR, file), 'utf-8').split('\n');
-  return lines.filter((l) => l.trim()).map((l) => JSON.parse(l) as Record<string, unknown>);
+  return loadJsonlAt(path.join(DIR, file), (raw) => raw as Record<string, unknown>);
 }
 
 /**
@@ -167,17 +167,6 @@ async function checkDeterminism(suite: Suite, first: CaseResult[]): Promise<numb
     }
   }
   return maxDiff;
-}
-
-/**
- * 取百分位數（nearest-rank）
- * @param xs - 數列
- * @param p - 百分位（0-100）
- * @returns 該百分位的值
- */
-function pct(xs: number[], p: number): number {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)];
 }
 
 try {

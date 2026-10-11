@@ -198,7 +198,6 @@
     "defaultMode": "auto"
   },
   "model": "opus[1m]",
-  "advisorModel": "opus",
   "skillOverrides": {
     "ai-md": "user-invocable-only",
     "humanizer-zh-tw": "user-invocable-only",
@@ -349,6 +348,17 @@
             "statusMessage": "Scanning staged changes for credentials..."
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/agent-model-router.ts",
+            "timeout": 10,
+            "statusMessage": "Routing delegation model via Jev..."
+          }
+        ]
       }
     ],
     "Stop": [
@@ -433,6 +443,7 @@
       "effortLevel": "high"
     }
   },
+  "advisorModel": "opus",
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "remoteControlAtStartup": false,

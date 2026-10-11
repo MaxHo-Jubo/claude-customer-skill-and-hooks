@@ -171,3 +171,26 @@ export const REPEAT_QUESTIONS: Record<string, JevQuestion> = {
     instructions: '這次失敗跟上次是同一個問題（同一錯誤或同一個測試仍然失敗）。字面不同但根因相同也算',
   },
 };
+
+/** 派工模型等級的選項標籤（對應掛載點 D），由便宜到貴；hook 依此查表填 model */
+export const TIER_LABELS = ['light', 'small', 'mid', 'top'] as const;
+
+/** 派工模型等級的標籤型別 */
+export type Tier = (typeof TIER_LABELS)[number];
+
+/**
+ * 派工模型等級一題（對應掛載點 D），state 應為 `{ subagent_type, description, prompt }`。
+ * 判準合併 harness/model-dispatch.md §3 模型分工表與「可核對程度」四級分法；選項說明改動要重跑 scripts/jev-eval/run-eval-d.ts
+ */
+export const TIER_QUESTIONS: Record<string, JevQuestion> = {
+  tier: {
+    type: 'choice',
+    instructions: '這段 AI coding 助理派給子代理（subagent）的任務說明，最低需要哪一級的模型才能可靠完成',
+    criteria: {
+      light: '機械式工作，結果一眼就能核對：已解出固定模式的批次套用、格式整理、單檔摘要、樣板生成',
+      small: '需要閱讀理解，但規格寫得夠清楚、可以對照檢查：搜尋研究、明確 spec 的實作、有測試保護的重構、checklist 式審查',
+      mid: '需要實作加測試、診斷或量測：原因未知的除錯、跨模組影響分析、牽涉跨檔案 invariant 的修改、找原因類任務',
+      top: '跨系統設計、證據互相矛盾、要在多種設計之間取捨：架構設計、多樣本評審的裁判',
+    } satisfies Record<Tier, string>,
+  },
+};
