@@ -10,7 +10,7 @@ import path from 'path';
  * 由 ~/.claude/mods/tool-reminders 在 Write/Edit 後呼叫，stdout 經 tool.call 的 context 送給 model。
  *
  * 觸發條件：Write 或 Edit 工具修改了以下路徑的檔案：
- * - ~/.claude/skills/（不含 claude.ai 同步的 skills/synced/）
+ * - ~/.claude/skills/（不含 claude.ai 同步的 skills/synced/ 與已刪除 skill 的 skills/.trash/）
  * - ~/.claude/hooks/
  * - ~/.claude/plugins/
  * - ~/.claude/scripts/
@@ -131,8 +131,9 @@ function findSkillFiles(dir: string): string[] {
   // STEP 02: 遞迴收集 SKILL.md
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
-    // 排除平台同步的 skills 與相依套件內附帶的 SKILL.md（如 playwright-core 的 trace/skill）
-    if (fullPath === SYNCED_SKILLS_DIR || entry.name === 'node_modules') {
+    // 排除平台同步的 skills、已刪除 skill 的垃圾桶（.trash，裡面的 SKILL.md 不是現役 skill）
+    // 與相依套件內附帶的 SKILL.md（如 playwright-core 的 trace/skill）
+    if (fullPath === SYNCED_SKILLS_DIR || entry.name === 'node_modules' || entry.name === '.trash') {
       continue;
     }
     if (entry.isDirectory()) {
