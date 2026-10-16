@@ -24,7 +24,7 @@ WEIGHTS = {
 SECONDS_PER_DAY = 86400
 # --days 預設值（天）：只看最近一週有寫入的 session，對應 weekly-review 的回顧週期
 DEFAULT_DAYS = 7
-# --top 預設值（筆）：weekly-review STEP 09 一次只檢討成本最高的 3 個 session
+# --top 預設值（筆）：未指定時輸出成本權重前 3 名，對應 weekly-review STEP 09 的「前 3 名」選項；可用 --top 覆寫，0 表示全部
 DEFAULT_TOP = 3
 # transcript 根目錄：Claude Code 把每個專案的 session 存在 <根>/<專案目錄>/<uuid>.jsonl
 PROJECTS_ROOT = os.path.expanduser("~/.claude/projects")

@@ -189,7 +189,13 @@ describe('isCodexReviewRunning', () => {
   });
 
   test('core.abbrev=4 產生的 4 字元目錄名也是合法縮寫 → true', () => {
-    makeRun(FULL_HASH.slice(0, 4), ['aspect-rules.log']);
+    // STEP 01: 建立 git 允許的最短縮寫（core.abbrev 最小值）長度的輸出目錄
+    /** git core.abbrev 的最小值：測試合法縮寫的下界 */
+    const MIN_ABBREVIATED_SHA_LENGTH = 4;
+    makeRun(FULL_HASH.slice(0, MIN_ABBREVIATED_SHA_LENGTH), ['aspect-rules.log']);
+
+    // STEP 02: 仍判為進行中
+
     expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(true);
   });
 });
