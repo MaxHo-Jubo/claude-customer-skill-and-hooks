@@ -87,14 +87,17 @@ export interface EslintPlan {
  * @returns 第一個命中的值；走到上界都沒有為 null
  */
 function findUp<T>(startDir: string, repoRoot: string, probe: (dir: string) => T | null): T | null {
+  // STEP 01: 從起點開始逐層往上
   /** 目前檢查的資料夾 */
   let dir = startDir;
   while (true) {
+    // STEP 01.01: 本層探測，命中就回傳
     /** 本層探測結果 */
     const found = probe(dir);
     if (found !== null) {
       return found;
     }
+    // STEP 01.02: 已到上界（repo 根目錄）或檔案系統根目錄 → 找不到；否則往上一層
     /** 上一層資料夾 */
     const parent = dirname(dir);
     if (dir === repoRoot || parent === dir) {

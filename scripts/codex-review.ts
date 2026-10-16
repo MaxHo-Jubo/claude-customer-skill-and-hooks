@@ -40,16 +40,13 @@ import {
   REVIEW_ASPECTS, aspectsForTierKeys, buildAspectPrompt,
   type ReviewAspect, type AspectPromptContext,
 } from './lib/codex-aspects';
-import { aspectsForTier, repoRootToken, resolveRepoRoot } from './lib/review-marker';
+import { aspectsForTier, CODEX_REVIEW_OUTPUT_ROOT, repoRootToken, resolveRepoRoot } from './lib/review-marker';
 
 /** codex 輸出 schema 檔路徑；以本腳本位置推導，避免相依於呼叫端的 cwd */
 const SCHEMA_PATH = join(dirname(import.meta.path), 'schemas', 'codex-review-aspect.json');
 
 /** 規則檔絕對路徑；codex 在 read-only sandbox 下可讀取 repo 以外的路徑（已實測） */
 const RULE_FILE_PATH = join(homedir(), '.claude', 'CODE-REVIEW-RULE.md');
-
-/** 報告輸出根目錄；每個 commit 一個子目錄，保留供事後查閱與對帳 */
-const OUTPUT_ROOT = join(homedir(), '.claude', 'state', 'codex-review');
 
 /** 單一面向的預設逾時（毫秒）。實測 effort=none 的單次 review 約 66s，effort=high 需更久，故給足裕度 */
 const DEFAULT_TIMEOUT_MS = 900_000;
@@ -284,7 +281,7 @@ if (!argAspectKeys && aspects.length !== expectedAspects) {
 // basename(repoRoot)：只取 basename 會讓兩個 basename 相同、絕對路徑不同的 repo
 // （同名專案放在不同父目錄下的常見情形）共用同一個輸出位置並互相覆寫報告。
 /** 本次 commit 的報告目錄 */
-const outputDir = join(OUTPUT_ROOT, repoRootToken(repoRoot), shortSha);
+const outputDir = join(CODEX_REVIEW_OUTPUT_ROOT, repoRootToken(repoRoot), shortSha);
 mkdirSync(outputDir, { recursive: true });
 
 /**

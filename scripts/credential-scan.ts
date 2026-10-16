@@ -38,10 +38,12 @@ const EXIT_ERROR = 2;
  * @throws 出現未知旗標，或給了多個路徑
  */
 export function parseArgs(argv: string[]): { all: boolean; repo: string | null } {
+  // STEP 01: 初始化結果
   /** 是否帶 --all */
   let all = false;
   /** 指定的 repo 路徑 */
   let repo: string | null = null;
+  // STEP 02: 逐個參數分類——--all、未知旗標（拋錯）、第一個路徑、多餘路徑（拋錯）
   for (const arg of argv) {
     if (arg === '--all') {
       all = true;

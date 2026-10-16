@@ -26,7 +26,11 @@ let repo = '';
 /** 非 git 的臨時目錄 */
 let plain = '';
 
-/** 在測試 repo 執行 git */
+/**
+ * 在測試 repo 執行 git。
+ * @param args git 參數
+ * @throws git 以非 0 結束時，錯誤訊息帶 stderr
+ */
 const git = (args: string[]): void => {
   const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
   if (r.status !== 0) {
@@ -34,7 +38,12 @@ const git = (args: string[]): void => {
   }
 };
 
-/** 執行被測腳本 */
+/**
+ * 執行被測腳本。
+ * @param args 傳給腳本的命令列參數
+ * @param cwd 執行的工作目錄（預設為測試 repo）
+ * @returns spawnSync 的結果（status、stdout、stderr）
+ */
 const scan = (args: string[], cwd: string = repo) =>
   spawnSync('bun', [SCRIPT, ...args], { cwd, encoding: 'utf8' });
 

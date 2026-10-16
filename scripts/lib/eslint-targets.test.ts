@@ -9,7 +9,11 @@ let outer = '';
 /** 受測的 git repo 根目錄（臨時，不需真的 git init） */
 let repo = '';
 
-/** 建立檔案（含上層資料夾）；內容無關緊要 */
+/**
+ * 建立空檔案（含上層資料夾）；內容無關緊要。
+ * @param parts 路徑片段，以 join 組成絕對路徑
+ * @returns 建立的檔案絕對路徑
+ */
 const touch = (...parts: string[]): string => {
   /** 檔案絕對路徑 */
   const p = join(...parts);

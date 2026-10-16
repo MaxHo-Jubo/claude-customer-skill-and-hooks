@@ -145,7 +145,7 @@ export function repoRootToken(repoRoot: string): string {
   return repoRoot.replace(/[/\\]/g, '-');
 }
 
-/** codex review 報告輸出根目錄：與 scripts/codex-review.ts 的 OUTPUT_ROOT 同一路徑，兩邊必須一起改 */
+/** codex review 報告輸出根目錄：scripts/codex-review.ts 寫報告與本檔判定「review 仍在跑」共用這一個常數 */
 export const CODEX_REVIEW_OUTPUT_ROOT = join(homedir(), '.claude', 'state', 'codex-review');
 
 /**
@@ -155,8 +155,11 @@ export const CODEX_REVIEW_OUTPUT_ROOT = join(homedir(), '.claude', 'state', 'cod
  */
 export const CODEX_RUNNING_MAX_IDLE_MS = 20 * 60 * 1000;
 
-/** 輸出目錄名（git short sha）的最短長度：git 預設縮寫下限 7，更短的名稱不可能是 commit hash，不做前綴比對 */
-const MIN_SHORT_SHA_LENGTH = 7;
+/**
+ * 輸出目錄名（git short sha）的最短長度：git 的 core.abbrev 最小可設為 4（預設會依 repo 大小自動取 7 以上），
+ * 所以 4～6 字元的目錄名也是合法縮寫；更短的名稱不可能是 git 產生的縮寫，不做前綴比對。
+ */
+const MIN_SHORT_SHA_LENGTH = 4;
 
 /** codex review 完成後才會寫入的總結檔名：存在即代表該輪已結束 */
 const CODEX_SUMMARY_FILE = 'summary.json';
@@ -169,7 +172,7 @@ const CODEX_SUMMARY_FILE = 'summary.json';
  * 任何讀取錯誤一律回 false（= 無法證明在跑，閘門照舊攔截），不會因為讀不到而放行。
  * 限制：同一 sha 重跑時舊的 summary.json 還在，會被判為「已結束」，退回原本的攔截行為。
  * @param repoRoot marker 記錄的 git repo 根目錄絕對路徑
- * @param commitHash marker 記錄的 commit hash（完整或縮寫皆可）
+ * @param commitHash marker 記錄的完整 commit hash；輸出目錄名（git short sha）必須是它的前綴才算同一個 commit
  * @param now 現在時間（epoch ms）
  * @param outputRoot 輸出根目錄；預設為真實位置，測試注入臨時目錄用
  * @returns codex review 是否仍在執行
@@ -188,23 +191,26 @@ export function isCodexReviewRunning(
       return false;
     }
     for (const name of readdirSync(tokenDir)) {
+      // STEP 01.01: 名稱太短或不是這個 commit 的前綴 → 不是本次 commit 的輸出
       if (name.length < MIN_SHORT_SHA_LENGTH || !commitHash.startsWith(name)) {
         continue;
       }
 
-      // STEP 02: 已有 summary.json 代表該輪結束，不算進行中
+      // STEP 01.02: 已有 summary.json 代表該輪結束，不算進行中
       /** 這個 commit 的 codex 輸出目錄 */
       const runDir = join(tokenDir, name);
       if (existsSync(join(runDir, CODEX_SUMMARY_FILE))) {
         continue;
       }
 
-      // STEP 03: 目錄本身（建立時間）與其中檔案（面向 log／json）取最新的寫入時間
+      // STEP 01.03: 目錄本身（建立時間）與其中檔案（面向 log／json）取最新的寫入時間
       /** 目錄與內含檔案中最新的 mtime（epoch ms） */
       let latest = statSync(runDir).mtimeMs;
       for (const f of readdirSync(runDir)) {
         latest = Math.max(latest, statSync(join(runDir, f)).mtimeMs);
       }
+
+      // STEP 01.04: 最近一次寫入在靜止上限之內 → 仍在跑
       if (now - latest <= CODEX_RUNNING_MAX_IDLE_MS) {
         return true;
       }

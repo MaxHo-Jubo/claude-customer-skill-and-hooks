@@ -40,6 +40,7 @@ const STDIN_TIMEOUT_MS = 2000;
  * @returns 是否為 sed 指令
  */
 function isSedToken(token: string): boolean {
+  // STEP 01: 比對 sed／gsed，允許絕對或相對路徑前綴（/usr/bin/sed、./gsed）
   return /^(?:\S*\/)?g?sed$/.test(token);
 }
 
@@ -50,6 +51,7 @@ function isSedToken(token: string): boolean {
  * @returns 是否在指令位置
  */
 function isCommandPosition(before: string[]): boolean {
+  // STEP 01: sed 之前的每個 token 都必須是包裝、控制關鍵字、環境變數賦值、旗標、數值引數或 `{}`
   return before.every((t) => WRAPPERS.has(t) || CONTROL_WORDS.has(t) || /^\w+=/.test(t) || /^-/.test(t) || /^\d+$/.test(t) || t === '{}');
 }
 
@@ -59,14 +61,17 @@ function isCommandPosition(before: string[]): boolean {
  * @returns 是否命中 -i／--in-place
  */
 function hasInPlaceFlag(args: string[]): boolean {
+  // STEP 01: 逐個 token 檢查，遇到旗標結束符就停
   for (const t of args) {
+    // STEP 01.01: `--` 之後都是檔名引數，不再有旗標
     if (t === '--') {
       return false;
     }
+    // STEP 01.02: 長旗標 --in-place（可帶 =後綴）
     if (/^--in-place(?:=.*)?$/.test(t)) {
       return true;
     }
-    // 短旗標群：-i、-i.bak、-ni、-Ei、-ie；前面只能是字母，避免把 -5 之類的數值引數誤判
+    // STEP 01.03: 短旗標群：-i、-i.bak、-ni、-Ei、-ie；前面只能是字母，避免把 -5 之類的數值引數誤判
     if (/^-(?!-)[A-Za-z]*i/.test(t)) {
       return true;
     }

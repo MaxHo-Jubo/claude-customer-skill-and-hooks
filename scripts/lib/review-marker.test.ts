@@ -130,7 +130,12 @@ describe('isCodexReviewRunning', () => {
   /** 臨時輸出根目錄（注入給受測函式，不碰真實 ~/.claude/state/codex-review） */
   let root = '';
 
-  /** 建立 `<root>/<token>/<name>/`，並可選擇寫入檔案；回傳該目錄路徑 */
+  /**
+   * 建立 `<root>/<token>/<name>/`，並可選擇寫入檔案。
+   * @param name 輸出目錄名（git short sha）
+   * @param files 要在目錄內建立的檔名（內容固定為 `{}`）
+   * @returns 該目錄的絕對路徑
+   */
   const makeRun = (name: string, files: string[] = []): string => {
     /** 該 commit 的輸出目錄 */
     const dir = join(root, repoRootToken(FAKE_REPO), name);
@@ -178,8 +183,13 @@ describe('isCodexReviewRunning', () => {
     expect(isCodexReviewRunning(FAKE_REPO, other, Date.now(), root)).toBe(false);
   });
 
-  test('目錄名短於 7 字元不做前綴比對（不可能是 commit hash）→ false', () => {
+  test('目錄名短於 4 字元不做前綴比對（git core.abbrev 最小值 4，更短不可能是縮寫）→ false', () => {
     makeRun('abc', ['x.log']);
-    expect(isCodexReviewRunning(FAKE_REPO, 'abcdef0', Date.now(), root)).toBe(false);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(false);
+  });
+
+  test('core.abbrev=4 產生的 4 字元目錄名也是合法縮寫 → true', () => {
+    makeRun(FULL_HASH.slice(0, 4), ['aspect-rules.log']);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(true);
   });
 });

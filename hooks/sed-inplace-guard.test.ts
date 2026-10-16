@@ -101,7 +101,11 @@ const runGuard = (stdin: string, home: string, script: string = GUARD): Run => {
   return { code: r.status, stdout: r.stdout };
 };
 
-/** 組一個 PreToolUse Bash 事件 */
+/**
+ * 組一個 PreToolUse Bash 事件。
+ * @param command Bash 指令字串
+ * @returns 可直接餵給 guard stdin 的 JSON 字串
+ */
 const bashEvent = (command: string): string =>
   JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, session_id: 'sed-guard-test', cwd: '/tmp/some-repo' });
 

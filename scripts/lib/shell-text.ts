@@ -11,6 +11,9 @@
  * @returns 去除後的字串（引號內文字以空引號取代）
  */
 export function stripQuotedText(command: string): string {
+  // STEP 01: 先去除 heredoc 內容（含結尾分隔字）——要早於引號處理，避免 heredoc 內的引號干擾配對
+  // STEP 02: 雙引號內文字換成空雙引號（保留跳脫字元的配對）
+  // STEP 03: 單引號內文字換成空單引號
   return command
     .replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\s*\1\b/g, ' ')
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
