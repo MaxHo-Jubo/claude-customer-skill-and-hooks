@@ -7,7 +7,9 @@
  * 舊行為（2026-10 週檢討）：一律在 repo 根目錄跑 `npx eslint`，根目錄沒有本機 eslint 時 npx 下載
  * ESLint 10 並 exit 2、被當環境問題跳過——lint 從沒真的跑過。
  *
- * 未涵蓋：逾時（ESLINT_TIMEOUT_MS 是 30 秒常數、無注入點）與總時間預算（40 秒），測試不等這麼久。
+ * 逾時（預設 30 秒）與總時間預算（預設 40 秒）以環境變數 POST_COMMIT_ESLINT_TIMEOUT_MS／
+ * POST_COMMIT_ESLINT_BUDGET_MS 縮短後測試；假 eslint 的 hang 模式用 `exec sleep` 取代 shell 本身，
+ * 逾時被殺時不會留下孫行程握著 stdout 讓 hook 多等。
  * 假 HOME 只傳給子行程，不碰真實的 ~/.claude/state。
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -25,6 +27,7 @@ echo "$(pwd -P)|$*" >> "$ESLINT_LOG"
 code=$(cat "$(pwd -P)/.fake-exit" 2>/dev/null || echo 0)
 if [ "$code" = "1" ]; then echo "src/a.js 1:1 error no-unused-vars"; fi
 if [ "$code" = "2" ]; then echo "config broke: cannot read .eslintrc" >&2; fi
+if [ "$code" = "hang" ]; then exec sleep 30; fi
 exit $code
 `;
 
@@ -56,9 +59,9 @@ function put(rel: string, content: string): void {
 /**
  * 在資料夾放一份假的本機 eslint。
  * @param dir 相對於 repo 的資料夾（其下建 node_modules/.bin/eslint）
- * @param exitCode 假 eslint 離開時的 exit code
+ * @param exitCode 假 eslint 離開時的 exit code；'hang' 表示卡住 30 秒不離開（測逾時用）
  */
-function installFakeEslint(dir: string, exitCode: number = 0): void {
+function installFakeEslint(dir: string, exitCode: number | 'hang' = 0): void {
   put(`${dir}/node_modules/.bin/eslint`, FAKE_ESLINT);
   chmodSync(join(repo, dir, 'node_modules', '.bin', 'eslint'), 0o755);
   put(`${dir}/.fake-exit`, String(exitCode));
@@ -67,9 +70,10 @@ function installFakeEslint(dir: string, exitCode: number = 0): void {
 /**
  * 提交指定檔案並以子行程執行 hook。
  * @param files 要 add 並 commit 的相對路徑
+ * @param extraEnv 額外傳給 hook 子行程的環境變數（如縮短逾時的覆寫值）
  * @returns hook 印出的 systemMessage；沒有輸出為 null
  */
-function commitAndRunHook(files: string[]): string | null {
+function commitAndRunHook(files: string[], extraEnv: Record<string, string> = {}): string | null {
   // STEP 01: 提交檔案（node_modules 與 .fake-exit 不進 commit，只提交 JS 檔）
   git(`add ${files.join(' ')}`);
   git('commit -q -m change');
@@ -89,7 +93,7 @@ function commitAndRunHook(files: string[]): string | null {
       session_id: 'eslint-test-session',
     }),
     encoding: 'utf8',
-    env: { ...process.env, HOME: fakeHome, CLAUDE_COMMIT_REVIEW_ENGINE: 'agent', ESLINT_LOG: logFile },
+    env: { ...process.env, HOME: fakeHome, CLAUDE_COMMIT_REVIEW_ENGINE: 'agent', ESLINT_LOG: logFile, ...extraEnv },
   }).trim();
 
   // STEP 03: 取出 systemMessage
@@ -202,5 +206,56 @@ describe('post-commit-review eslint 分組：結果分類', () => {
     const message = commitAndRunHook(['app/src/a.js']);
     expect(eslintCalls()).toEqual([]);
     expect(message).toContain('1 檔找不到 eslint 設定檔，跳過');
+  });
+});
+
+describe('post-commit-review eslint 分組：逾時與總時間預算', () => {
+  test('單組卡住超過逾時 → 該組被殺並回報「未執行」，hook 仍照常指派 review', () => {
+    put('app/.eslintrc.json', '{}');
+    installFakeEslint('app', 'hang');
+    put('app/lib/a.js', 'a\n');
+    /** 開始時間（毫秒） */
+    const t0 = Date.now();
+    const message = commitAndRunHook(['app/lib/a.js'], { POST_COMMIT_ESLINT_TIMEOUT_MS: '500' });
+    expect(Date.now() - t0).toBeLessThan(15000);
+    expect(message).toContain('⏭️ eslint [app]：未執行（exit ?');
+    expect(message).not.toContain('❌ eslint');
+    expect(message).toContain('Skill(commit-review)');
+  });
+
+  test('總預算用完 → 後面的組如實標示跳過、不呼叫；單組逾時被截到剩餘預算而不是整段逾時', () => {
+    // STEP 01: 兩個子專案都會卡住；單組逾時 10 秒、總預算 300 毫秒
+    put('app/.eslintrc.json', '{}');
+    installFakeEslint('app', 'hang');
+    put('web/.eslintrc.json', '{}');
+    installFakeEslint('web', 'hang');
+    put('app/lib/a.js', 'a\n');
+    put('web/lib/b.js', 'b\n');
+
+    // STEP 02: 若沒有 Math.min(逾時, 剩餘預算)，第一組要等滿 10 秒；有的話約 0.3 秒就被殺
+    /** 開始時間（毫秒） */
+    const t0 = Date.now();
+    const message = commitAndRunHook(['app/lib/a.js', 'web/lib/b.js'], {
+      POST_COMMIT_ESLINT_TIMEOUT_MS: '10000',
+      POST_COMMIT_ESLINT_BUDGET_MS: '300',
+    });
+    expect(Date.now() - t0).toBeLessThan(7000);
+
+    // STEP 03: 第一組被呼叫並因預算耗盡被殺；第二組沒被呼叫，訊息標明預算用完
+    expect(eslintCalls().map((c) => c.cwd)).toEqual([join(repo, 'app')]);
+    expect(message).toContain('⏭️ eslint [app]：未執行');
+    expect(message).toContain('⏭️ eslint [web]：總時間預算 0.3 秒已用完，跳過 1 檔');
+    expect(message).toContain('Skill(commit-review)');
+  });
+
+  test('覆寫值不是正整數（空字串、負數、文字）→ 退回預設，不崩潰、照常執行 eslint', () => {
+    put('app/.eslintrc.json', '{}');
+    installFakeEslint('app');
+    put('app/lib/a.js', 'a\n');
+    const message = commitAndRunHook(['app/lib/a.js'], {
+      POST_COMMIT_ESLINT_TIMEOUT_MS: 'abc',
+      POST_COMMIT_ESLINT_BUDGET_MS: '-5',
+    });
+    expect(message).toContain('✅ eslint [app]：1 檔通過');
   });
 });

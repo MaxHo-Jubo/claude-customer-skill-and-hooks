@@ -24,15 +24,36 @@ import { resolveEngine, buildSkillInvocation, type EngineDecision, type ReviewEn
  * 例外：命令包含 `git push` 子指令（commit and push 場景跳過）
  */
 
-/** 單一 eslint 組的執行逾時（毫秒）：超過視為卡住，該組回報「未執行」 */
-const ESLINT_TIMEOUT_MS = 30000;
+/**
+ * 讀取環境變數中的正整數毫秒覆寫值，供測試縮短逾時用（真實逾時是 30／40 秒，測試不能等這麼久）。
+ * 未設定、或設定了但不是正整數時回傳預設值：覆寫旋鈕設錯不該讓 hook 崩潰，
+ * 否則後面的 Tier 判定與 writeMarker 不會執行（commit 沒有 pending-review 閘門）。
+ * @param name 環境變數名稱
+ * @param fallback 預設毫秒值
+ * @returns 覆寫值或預設值
+ */
+function envMs(name: string, fallback: number): number {
+  // STEP 01: 讀取並解析；只接受純數字字串的正整數
+  /** 環境變數原始字串 */
+  const raw = process.env[name];
+  if (raw === undefined || !/^\d+$/.test(raw)) {
+    return fallback;
+  }
+  /** 解析後的毫秒值 */
+  const ms = Number(raw);
+  return ms > 0 ? ms : fallback;
+}
+
+/** 單一 eslint 組的執行逾時（毫秒）：超過視為卡住，該組回報「未執行」；可用 POST_COMMIT_ESLINT_TIMEOUT_MS 覆寫 */
+const ESLINT_TIMEOUT_MS = envMs('POST_COMMIT_ESLINT_TIMEOUT_MS', 30000);
 
 /**
  * 全部 eslint 組合計可用的時間預算（毫秒）：settings.json 給整支 hook 的上限是 60 秒，
  * 逐組同步執行時各組 30 秒會累加，超過上限 hook 被終止，後面的 Tier 判定與 writeMarker 就不會執行
  * （commit 沒有 pending-review 閘門）。預留 20 秒給 git 查詢、Tier 判定與上鎖。
+ * 可用 POST_COMMIT_ESLINT_BUDGET_MS 覆寫（測試用）。
  */
-const ESLINT_TOTAL_BUDGET_MS = 40000;
+const ESLINT_TOTAL_BUDGET_MS = envMs('POST_COMMIT_ESLINT_BUDGET_MS', 40000);
 
 /** 單一 eslint 組回報給模型的輸出字數上限：避免大量 lint 訊息灌爆 systemMessage */
 const ESLINT_OUTPUT_MAX_CHARS = 2000;
