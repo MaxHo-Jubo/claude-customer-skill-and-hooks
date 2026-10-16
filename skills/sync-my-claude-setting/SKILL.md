@@ -1,8 +1,8 @@
 ---
 name: sync-my-claude-setting
 description: "Sync My Claude Setting — 同步本機 Claude 設定到 Repo。當使用者提到 /sync-my-claude-setting、想備份設定、說「同步設定」、「備份 claude 設定」、「把設定推上去」時使用此 skill。也支援 restore 反向同步（repo → 本機）。"
-version: 1.9.1
-last_modified: 2026-10-03
+version: 1.9.2
+last_modified: 2026-10-16
 ---
 
 # Sync My Claude Setting — 同步本機 Claude 設定到 Repo
@@ -97,9 +97,9 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
 ```bash
 # 對每個目錄項目（一律排除 *.bak 臨時備份與 macOS 系統垃圾檔）
 # *.bak[0-9]*：涵蓋 README.md.bak2 這類無 dash 的手動編號備份（*.bak-* 抓不到）
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'synced' "$SOURCE/skills/" "$TARGET/skills/" || true
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/hooks/" "$TARGET/hooks/" || true
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/scripts/" "$TARGET/scripts/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '.trash' -x '__pycache__' -x 'synced' "$SOURCE/skills/" "$TARGET/skills/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '__pycache__' "$SOURCE/hooks/" "$TARGET/hooks/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '__pycache__' "$SOURCE/scripts/" "$TARGET/scripts/" || true
 # rules/ 額外排除 repo 專屬的 README.md（本機無此檔，不應列入差異或被刪）
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'README.md' "$SOURCE/rules/" "$TARGET/rules/" || true
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$SOURCE/agents/" "$TARGET/agents/" || true
@@ -241,9 +241,10 @@ with open('$TARGET/mcp-servers.json', 'w') as f:
 # --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*'：本機臨時備份不進 repo（同時保護 repo 側同名檔不被 --delete 清掉）
 #   *.bak[0-9]* 涵蓋 README.md.bak2 這類無 dash 編號備份；--exclude='.DS_Store'：macOS 系統垃圾檔
 # skills/ 另排除 'synced'：Claude Code 平台管理的 skill bundle 快取目錄（含 UUID 命名的 anthropic-skills 副本），非使用者 skill
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='synced' "$SOURCE/skills/" "$TARGET/skills/"
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$SOURCE/hooks/" "$TARGET/hooks/"
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$SOURCE/scripts/" "$TARGET/scripts/"
+# skills/ 另排除 '.trash'：已刪除 skill 的垃圾桶；skills/hooks/scripts 皆排除 '__pycache__'：Python 編譯快取（.gitignore 雖擋，但複製會多做工且污染比對）
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.trash' --exclude='__pycache__' --exclude='synced' "$SOURCE/skills/" "$TARGET/skills/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='__pycache__' "$SOURCE/hooks/" "$TARGET/hooks/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='__pycache__' "$SOURCE/scripts/" "$TARGET/scripts/"
 # rules/ 額外保護 repo 專屬的 README.md（本機無此檔，--delete 會誤刪）
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='README.md' "$SOURCE/rules/" "$TARGET/rules/"
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$SOURCE/agents/" "$TARGET/agents/"
@@ -467,9 +468,9 @@ diff -u <(python3 "$MASK_PY" --del-model --del-local "$TARGET/settings.json") <(
 diff -u "$TARGET/statusline/statusline-command.sh" "$SOURCE/statusline-command.sh" || true
 
 # 目錄比對（排除 *.bak/*.bak-*/*.bak[0-9]*/.DS_Store；skills 另排除平台快取目錄 synced；rules 排除 repo 專屬 README.md）
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'synced' "$TARGET/skills/" "$SOURCE/skills/" || true
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$TARGET/hooks/" "$SOURCE/hooks/" || true
-diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' "$TARGET/scripts/" "$SOURCE/scripts/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '.trash' -x '__pycache__' -x 'synced' "$TARGET/skills/" "$SOURCE/skills/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '__pycache__' "$TARGET/hooks/" "$SOURCE/hooks/" || true
+diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x '__pycache__' "$TARGET/scripts/" "$SOURCE/scripts/" || true
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'README.md' "$TARGET/rules/" "$SOURCE/rules/" || true
 diff -rq -x '*.bak' -x '*.bak-*' -x '*.bak[0-9]*' -x '.DS_Store' -x 'harness-diagnosis.md' -x 'handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/" || true
 # mods/：排除規則與正向 STEP 01 逐字相同；失敗不吞掉
@@ -561,9 +562,9 @@ if [ -n "$LATEST_CLAUDE" ]; then
 fi
 
 # 目錄還原（排除 *.bak/*.bak-*/*.bak[0-9]*/.DS_Store；skills 另排除平台快取目錄 synced；rules 不還原 repo 專屬 README.md 到本機）
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='synced' "$TARGET/skills/" "$SOURCE/skills/"
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$TARGET/hooks/" "$SOURCE/hooks/"
-rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' "$TARGET/scripts/" "$SOURCE/scripts/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='.trash' --exclude='__pycache__' --exclude='synced' "$TARGET/skills/" "$SOURCE/skills/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='__pycache__' "$TARGET/hooks/" "$SOURCE/hooks/"
+rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='__pycache__' "$TARGET/scripts/" "$SOURCE/scripts/"
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='README.md' "$TARGET/rules/" "$SOURCE/rules/"
 # harness/ 還原同樣排除機器專屬檔（repo 的診斷/交接是別台機器的，不還原到本機）
 rsync -avL --delete --exclude='*.bak' --exclude='*.bak-*' --exclude='*.bak[0-9]*' --exclude='.DS_Store' --exclude='harness-diagnosis.md' --exclude='handover-letter.md' "$TARGET/harness/" "$SOURCE/harness/"
@@ -623,7 +624,8 @@ else:
 - `CLAUDE.md` 的 `<conn>` 區段包含個人資訊，同步時自動移除，禁止出現在 repo
 - 目錄同步用 `rsync --delete`，repo 側多出的檔案會被刪除（`*.bak` 與 `rules/README.md` 除外，見安全規則）
 - `settings.json` 複製/還原都會經 `mask_secrets.py` 遮罩 `permissions` 中的明文 secret；restore 後本機原本夾帶 secret 的 permission 會變成 `***MASKED***`（該 permission 失效，需要時重新授權即可，本就不該把 secret 留在 allow-list）
-- `*.bak`／`*.bak-*`（日期／版本後綴備份，如 `pr-reviewer.md.bak-20260813`、`model-dispatch.md.bak-20260813`）／`*.bak[0-9]*`（無 dash 編號備份，如 `README.md.bak2`）雙向不同步；`.DS_Store` 等 macOS 系統垃圾檔不同步；`skills/synced/` 為 Claude Code 平台管理的 skill bundle 快取（UUID 命名，非使用者 skill）不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
+- **排除規則一律逐字寫在指令上，禁止放進 shell 變數再不加引號展開**：zsh 不會對未加引號的變數斷詞（bash 會），`B="--exclude=*.bak --exclude=*.bak-*"; rsync $B …` 在 zsh 下整串變成單一怪參數，`*.bak` 排除靜默失效（2026-10-16 實測：43 個本機備份檔被複製進 repo 工作樹）。上方指令範例都是逐字寫出，照抄即可；要重用就用陣列 `B=(--exclude='*.bak' …); rsync "${B[@]}" …`，並在 commit 前跑 `git status --short | grep -E '\.bak'` 確認沒有備份檔進來
+- `*.bak`／`*.bak-*`（日期／版本後綴備份，如 `pr-reviewer.md.bak-20260813`、`model-dispatch.md.bak-20260813`）／`*.bak[0-9]*`（無 dash 編號備份，如 `README.md.bak2`）雙向不同步；`.DS_Store` 等 macOS 系統垃圾檔、`skills/.trash`、`__pycache__` 不同步；`skills/synced/` 為 Claude Code 平台管理的 skill bundle 快取（UUID 命名，非使用者 skill）不同步；`rules/README.md` 為 repo 專屬說明文件，正向同步不刪、restore 不還原到本機
 - MCP Server 同步過濾 `env` 欄位與敏感 args 值，restore 時需手動補回
 - **push 在 review 之後**：STEP 04 只 commit，STEP 05 跑 review，STEP 06 才 push。這樣 review 修出的問題可以 `--amend` 收進同一個 commit，不必另開 fix commit 或改寫已發布歷史
 - **review 修正先落回本機 `~/.claude/` 再 rsync 到 repo**（只改 repo 會被下次同步的本機舊版覆蓋掉）；`README.md`/`CATALOG.md`/`plugins/README.md` 為 repo 專屬，直接改 repo

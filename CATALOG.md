@@ -146,7 +146,7 @@
 - **來源**：改寫自 mattpocock/skills `skills/engineering/retro`（本機化：繁中、補證據門檻、對應本機檔案、移除 openai.yaml）
 - **被呼叫**：`weekly-review` STEP 09 派 subagent 照本檔執行
 
-#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.9.0）
+#### `/sync-my-claude-setting` — 同步本機 Claude 設定到 Repo（v1.9.2）
 
 - **位置**：`~/.claude/skills/sync-my-claude-setting/SKILL.md`
 - **用法**：`/sync-my-claude-setting`

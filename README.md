@@ -76,7 +76,7 @@
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
 | weekly-review | `/weekly-review` | 1.10.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.10.0 STEP 09 環境檢討改派 subagent 照 `retro` skill 執行；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | retro | `/retro [session 路徑或 uuid]` | — | 對 coding session 做環境檢討（只讀不改）：每個改善候選必附 session 檔路徑＋行號證據，產出候選清單由使用者逐項確認後另行執行；`weekly-review` STEP 09 也派 subagent 照本檔執行。`disable-model-invocation: true`。改寫自 mattpocock/skills 的 retro | 
-| sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.0 | 同步本機 Claude 設定到 Repo（v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
+| sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.2 | 同步本機 Claude 設定到 Repo（v1.9.2 補排除 `skills/.trash`、`__pycache__`，並明文禁止把排除規則放進未加引號的 shell 變數（zsh 不斷詞，`*.bak` 排除會靜默失效）；v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
 | ai-md | `/ai-md` | 4.0.0 | 將 CLAUDE.md 轉為 AI-native 結構化格式 |
@@ -262,6 +262,10 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-16（二）: sync-my-claude-setting 1.9.2 — 補排除規則
+
+- **`skills/sync-my-claude-setting/SKILL.md`**：`skills/`、`hooks/`、`scripts/` 的 rsync／diff 指令補排除 `__pycache__`，`skills/` 另補 `.trash`（STEP 01／02、restore R1／R2 共 12 行）；注意事項新增「排除規則一律逐字寫在指令上，禁止放進未加引號的 shell 變數」——zsh 不對變數斷詞，`*.bak` 排除靜默失效，同日首次同步有 43 個備份檔被複製進工作樹（commit 前清掉，未進歷史）。
 
 ### 2026-10-16: weekly-review 環境檢討改善（codex 放行／分組 eslint／憑證掃描腳本／sed -i hook／ctx-handoff 誤報）
 
