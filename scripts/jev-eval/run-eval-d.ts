@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import fs from 'fs';
 import path from 'path';
-import { readTier, ROUTE_TIMEOUT_MS, routeModel } from '../../hooks/agent-model-router';
+import { type ParentState, readTier, ROUTE_TIMEOUT_MS, routeModel } from '../../hooks/agent-model-router';
 import { loadJsonl, pct } from '../lib/eval-utils';
 import { callJev, JEV_MODEL } from '../lib/jev-client';
 import { type Tier, TIER_LABELS, TIER_QUESTIONS } from '../lib/jev-questions';
@@ -13,7 +13,7 @@ import { DATASET_PATH, type Row } from './extract-d-route';
  * 讀 extract-d-route.ts 產出的資料集（state 目錄，含 brief 原文），逐筆問 Jev tier 題，
  * 以主模型明寫的 model 當 label，印出混淆矩陣、一致率、confidence 分佈與各門檻的路由統計。
  * 讀答案用 hook 的 readTier、路由與否用 hook 的 routeModel，評估的就是 hook 的決策邏輯；
- * 父模型固定視為 EVAL_PARENT_MODEL（fable，等級最高），所以只降不升的上限在評估中不會擋下任何候選。
+ * 父模型固定視為 EVAL_PARENT（fable 且可用，等級最高），所以只降不升的上限在評估中不會擋下任何候選。
  * 門檻挑選規則事先寫死（MAX_CHEAPER_RATE／MIN_ROUTED_N），不看結果再調。
  * 結果存 results-d-<時間>.json：只存統計與逐筆預測，不存 brief 原文（scripts/ 會被同步到公開 repo）。
  *
@@ -34,8 +34,8 @@ const THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 const MAX_CHEAPER_RATE = 0.1;
 /** 挑門檻的規則：有路由的案例數下限，太少時比例不可信 */
 const MIN_ROUTED_N = 20;
-/** 評估時的父模型：固定視為 fable（資料集沒有記錄派工當下的主模型） */
-const EVAL_PARENT_MODEL = 'fable';
+/** 評估時的父模型狀態：固定視為 fable 且可用（資料集沒有記錄派工當下的主模型） */
+const EVAL_PARENT: ParentState = { model: 'fable', fableOff: false };
 /** confidence 分佈的分桶寬度 */
 const CONF_BUCKET = 0.1;
 /** confidence 分桶標籤的小數位數 */
@@ -281,7 +281,7 @@ async function runAll(rows: Row[]): Promise<{ results: CaseResult[]; errors: str
 }
 
 /**
- * 某門檻下的路由統計（路由與否由 hook 的 routeModel 決定，父模型固定 EVAL_PARENT_MODEL；pred=top 不路由）
+ * 某門檻下的路由統計（路由與否由 hook 的 routeModel 決定，父模型固定 EVAL_PARENT；pred=top 不路由）
  * @param rs - 評估結果
  * @param t - 門檻
  * @param hi - 區段上界（不含）；不給為累計（conf ≥ t 全部）
@@ -293,7 +293,7 @@ function thresholdRow(rs: CaseResult[], t: number, hi = Infinity) {
    * @param r - 評估結果
    * @returns true 表示 hook 會填 model
    */
-  const isRouted = (r: CaseResult): boolean => routeModel(r.pred, r.conf, t, EVAL_PARENT_MODEL).model !== null && r.conf < hi;
+  const isRouted = (r: CaseResult): boolean => routeModel(r.pred, r.conf, t, EVAL_PARENT).model !== null && r.conf < hi;
   // STEP 01: 篩出會被路由的案例
   /** 會被路由的案例 */
   const routed = rs.filter(isRouted);
@@ -580,7 +580,7 @@ function out(line: string): void {
  */
 function printReport(s: ReturnType<typeof summarize>, errors: string[]): void {
   // STEP 01: 混淆矩陣與一致率
-  out(`\n## D 派工等級（n=${s.n}，失敗 ${errors.length}，父模型固定視為 ${EVAL_PARENT_MODEL}）整體一致率 ${pctText(s.agree)}｜pred=top ${pctText(s.predTop)}`);
+  out(`\n## D 派工等級（n=${s.n}，失敗 ${errors.length}，父模型固定視為 ${EVAL_PARENT.model}）整體一致率 ${pctText(s.agree)}｜pred=top ${pctText(s.predTop)}`);
   out(`label\\pred | ${TIER_LABELS.join(' | ')} | 一致率`);
   for (const l of TIER_LABELS) {
     /**
@@ -630,7 +630,7 @@ async function main(): Promise<void> {
   /** 結果檔路徑 */
   const file = path.join(DIR, `results-d-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   /** 本次評估的挑選規則與前提（寫入結果檔） */
-  const rule = { MAX_CHEAPER_RATE, MIN_ROUTED_N, parentModel: EVAL_PARENT_MODEL, routeTimeoutMs: ROUTE_TIMEOUT_MS };
+  const rule = { MAX_CHEAPER_RATE, MIN_ROUTED_N, parentModel: EVAL_PARENT.model, routeTimeoutMs: ROUTE_TIMEOUT_MS };
   fs.writeFileSync(file, JSON.stringify({ model: JEV_MODEL, rule, summary: s, errors, results }, null, JSON_INDENT));
   out(`結果：${file}`);
 }

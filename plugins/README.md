@@ -2,7 +2,7 @@
 
 目前安裝的 Claude Code 插件與 MCP 伺服器清單。
 
-## Plugins（19 個安裝，8 個啟用）
+## Plugins（20 個安裝，10 個啟用）
 
 ### claude-plugins-official（Anthropic 官方）
 
@@ -27,6 +27,12 @@
 | Plugin | 狀態 | 用途 |
 |--------|------|------|
 | claude-hud | ❌ 停用（2026-07-25） | statusline HUD 概念參考；概念已被本機 `statusline-command.sh` 採納，不需持續啟用 plugin 本體 |
+
+### ask-better（muchblack/ask-better）
+
+| Plugin | 狀態 | 用途 |
+|--------|------|------|
+| ask-better | ✅ 啟用（2026-10-15 試用，10-22 回顧去留） | prompt 教練（依 ESR〈How To Ask Questions The Smart Way〉）：訊息有缺口時在回覆末尾補一行改寫建議；評估點為中文輸出穩定性、命中價值、每則約 +200 token |
 
 ### mcp-outline（mcp-outline，v1.10.1）
 

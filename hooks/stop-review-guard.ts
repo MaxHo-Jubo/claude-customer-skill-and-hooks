@@ -13,12 +13,14 @@
  * - marker.sessionId === 本次 session_id：本 session 自己欠的 review
  * - marker.repoRoot === resolveRepoRoot(cwd)：跨 session 接手（新 session 開在同 repo）
  *
+ * codex review 正在背景執行時放行且不計數：此時 block 只會逼模型空轉輪詢，
+ * 連擋 3 次耗盡保險絲（2026-10 週檢討 4 個 session 重現）；review 結束後的回合結束照舊攔截。
  * 防 brick 保險絲：per-session 有界計數（stopBlockCounts），達上限放行並印大聲警告。
  * 一律 fail-open：hook 自身任何錯誤都放行，絕不因守門員故障而卡死回合。
  */
 import { existsSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { MARKER_DIR, readValidMarker, resolveRepoRoot, type ReviewMarker, aspectsForTier } from '../scripts/lib/review-marker';
+import { MARKER_DIR, readValidMarker, resolveRepoRoot, type ReviewMarker, aspectsForTier, isCodexReviewRunning } from '../scripts/lib/review-marker';
 import { buildSkillInvocation, LEGACY_MARKER_ENGINE } from '../scripts/lib/review-engine';
 
 /**
@@ -120,7 +122,16 @@ process.stdin.on('end', () => {
      */
     const engine = hit.marker.engine ?? LEGACY_MARKER_ENGINE;
 
-    // STEP 06: 保險絲——本 session 已達 block 上限，放行並印大聲警告（每次回合結束都會再提醒）
+    // STEP 06: codex review 仍在背景執行——放行且不計入保險絲。review 結束（summary.json 出現）
+    // 或 codex 靜止逾時（isCodexReviewRunning 判為死亡）後，下次回合結束恢復攔截
+    if (isCodexReviewRunning(hit.marker.repoRoot, hit.marker.commitHash || '', now)) {
+      console.log(JSON.stringify({
+        systemMessage: `⏳ pending-review Stop 閘門：commit ${hash10} 的 codex review 仍在背景執行，本次放行（不計入保險絲）。完成後請讀 summary 並執行 clear-pending-review.ts 解鎖。`,
+      }));
+      process.exit(0);
+    }
+
+    // STEP 07: 保險絲——本 session 已達 block 上限，放行並印大聲警告（每次回合結束都會再提醒）
     if (count >= MAX_STOP_BLOCKS) {
       console.log(JSON.stringify({
         systemMessage: [
@@ -132,7 +143,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 07: 計數 +1 寫回 marker。寫回失敗必須「放行」而非照樣 block：
+    // STEP 08: 計數 +1 寫回 marker。寫回失敗必須「放行」而非照樣 block：
     // 計數推不進去（磁碟唯讀等）時繼續 block 會變成無上限循環，違反防 brick 原則
     try {
       /** 計數遞增後的新 marker 內容（immutable 更新，不動原物件） */
@@ -145,7 +156,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // STEP 08: block 回合結束——reason 直接指派 commit-review，指令級注入不靠自覺
+    // STEP 09: block 回合結束——reason 直接指派 commit-review，指令級注入不靠自覺
     /** 注入給模型的指派內容：做什麼（skill+args）、做完如何解鎖 */
     const reason = [
       `🔒 pending-review 閘門（Stop）：Tier ${hit.marker.tier} commit ${hash10}（${hit.marker.repoRoot}）的 review 尚未完成，本回合不得結束。`,

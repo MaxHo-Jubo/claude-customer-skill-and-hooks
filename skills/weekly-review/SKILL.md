@@ -1,7 +1,7 @@
 ---
 name: weekly-review
-description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」時觸發。"
-version: 1.9.0
+description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」、「本週環境檢討」時觸發。"
+version: 1.10.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -20,6 +20,7 @@ version: 1.9.0
 - `/weekly-review --skip-jira` — 跳過 STEP 00 與 STEP 01.5（不需 Jira 整合）
 - 使用者說「整理記憶」— 只執行步驟 5（記憶整理），不檢查 MCP
 - 使用者說「review skill errors」— 只執行步驟 6~8（錯誤分析循環），不檢查 MCP
+- 使用者說「本週環境檢討」— 只執行步驟 9（retro），不檢查 MCP
 
 ## Busboy 紀律（執行所有步驟時遵守）
 
@@ -515,6 +516,45 @@ Context 格式：skill:{name} / hook:{name} / {file-path} / unknown
 
 ---
 
+### STEP 09: 環境檢討（retro）
+
+> 前置：STEP 06~08 已彙整（本步驟拿它們的結果去重）。只產出建議，不改任何檔案。檢討準則與面向見 `~/.claude/skills/retro/SKILL.md`（user-invoked skill，不能用 Skill tool 呼叫，subagent 直接讀檔照做）。
+
+1. **挑 session**：
+   - 先執行 `python3 -I ~/.claude/skills/retro/scripts/rank-sessions.py --days {回顧天數} --top 0 | wc -l` 取得期間 session 總數（腳本已排除 scratchpad 暫存 session，成本權重 = input×1 + cache 寫入×2 + cache 讀取×0.1 + output×5）。
+   - 用 AskUserQuestion 讓使用者選：**1) 成本權重前 3 名**（`--top 3`）｜**2) 全部**（`--top 0`）。
+   - 選 2 且總數 > 10：先回報總數與預估 agent 數，使用者再確認一次才繼續；確認後分批派工，每批 ≤ 5 個、批次之間序列執行。
+
+2. **派工**（主 session 直接 orchestrate，不包一層 agent）：
+   - 每個 session 一個 subagent：`general-purpose`、`model: sonnet`、**不帶 `name`**、所有 agent 放同一則訊息並行；單批 ≥ 3 個時同一則訊息加掛 1800 秒看門狗（規則見 `~/.claude/harness/model-dispatch.md` §2）。
+   - prompt 照 `~/.claude/harness/delegation-templates.md` §1 三件套填空：
+     - 目標：照 `~/.claude/skills/retro/SKILL.md` 的 Steps 1~3 檢討 session `{jsonl 絕對路徑}`，唯讀，不改任何檔案、不再 spawn subagent。
+     - 驗收：七個面向逐一回答；無候選寫「無，已查 {來源}」；每個候選附證據（session 檔路徑＋行號或原句）。
+     - 回報：繁體中文、≤ 600 字；每條格式「面向｜問題｜證據｜建議變更（哪個檔、改什麼）」；禁止貼超過 10 行的 log 或程式碼。
+   - 驗收條件是「每個 agent 都回流，或在報告標明降級」。收不到結果的 agent 不得自己補做後當成功，列入「未檢討／降級」。
+
+3. **彙整**：
+   - 同一根因出現在多個 session → 合併為一筆並註記出現 session 數（次數越多越嚴重）。
+   - 與 STEP 05、STEP 07 已提出的建議交叉比對，重複者刪除並註明「已於 STEP x 提出」。
+   - 依嚴重度排序。
+
+輸出格式：
+
+```
+## 環境檢討（{起始日} ~ {結束日}，檢討 {N} 個 session）
+
+### 候選（依嚴重度）
+| # | 面向 | 問題 | 出現 session 數 | 證據 | 建議變更 |
+|---|------|------|---------------|------|---------|
+
+### 未檢討／降級
+- {未回流的 agent 或未選入的 session 與原因；無則寫「無」}
+```
+
+4. 輸出後等待使用者逐項確認；確認後的變更依 `~/.claude/harness/knowledge-protocol.md` 另行執行。
+
+---
+
 ## Subagent 執行策略
 
 ```
@@ -529,6 +569,10 @@ STEP 06 (Subagent A) ←→ STEP 08 (Subagent B)  ← 平行
 STEP 07 (Subagent C, 可多個) ← 每個 skill 一個 subagent，平行
   ↓ 全部完成
 主 agent 彙整結果，等待使用者逐項確認修補
+  ↓ 使用者確認
+STEP 09 (Subagent D, 每個 session 一個) ← 主 agent 直接派，同一則訊息並行
+  ↓ 全部回流（或標明降級）
+主 agent 彙整、與 STEP 05/07 去重，等待使用者逐項確認
 ```
 
 **Subagent 一覽**：
@@ -539,6 +583,7 @@ STEP 07 (Subagent C, 可多個) ← 每個 skill 一個 subagent，平行
 | Subagent A（錯誤分析） | STEP 06 | 與 B 平行 |
 | Subagent B（amendment 追蹤） | STEP 08 | 與 A 平行 |
 | Subagent C（修補建議，N 個） | STEP 07 | 每個 skill 一個，平行 |
+| Subagent D（retro，N 個） | STEP 09 | 每個 session 一個，平行（每批 ≤ 5） |
 
 ## 注意事項
 
@@ -548,6 +593,8 @@ STEP 07 (Subagent C, 可多個) ← 每個 skill 一個 subagent，平行
 - 步驟 5 完成後暫停，使用者確認後才進入步驟 6~8
 - 步驟 7 的修補建議需要使用者逐項確認才執行
 - 步驟 8 的成效判定需要使用者確認才更新 AMENDMENTS.md
+- 步驟 7~8 確認完畢後進入步驟 9；步驟 9 的每項環境變更需使用者逐項確認才執行
+- 如果使用者只說「本週環境檢討」，直接跳到步驟 9
 - 如果使用者只說「整理記憶」，直接跳到步驟 5
 - 如果使用者只說「review skill errors」，直接跳到步驟 6~8
 - `ERRORS.jsonl` 不存在或為空時，步驟 6~8 全部跳過並告知使用者

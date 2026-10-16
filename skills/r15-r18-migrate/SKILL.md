@@ -1,7 +1,7 @@
 ---
 name: r15-r18-migrate
 description: 把一個 React 15 頁面 entry 以最小改動遷移到 React 18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），一次處理一個 entry 並產出 commit 與結構化結果；觸發語 `/r15-r18-migrate <entry-id> [--resume]`。
-version: 1.1.2
+version: 1.1.3
 ---
 
 # R15 → R18 最小改動遷移（單 entry）
@@ -183,6 +183,13 @@ tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要�
 
 落點計算：**以 `r18_dir` 本身判定，不看 `type`**。`r18_dir` 為 `frontend/react_18/src/r15-legacy/` 的 entry **只去掉 `frontend/react_15/`、保留完整相對路徑**（`daycase/actions.js` → `r15-legacy/daycase/actions.js`，七支同名的模組級 `actions.js` 殼才不會互撞）；其他任何 entry（不論 `type` 是 `page` 或 `shared`）把 `r15_path` 去掉 `frontend/react_15/<模組>/`（`<模組>` 是 R15 的第一段目錄）後接在 `entry.r18_dir` 之後。shared 層搬過來的檔（`r18_dir` 為 `r15-legacy/` 者，由盤點填好）與 R18 既有同名元件並存、不覆寫；消費者的 import 路徑一律取 `shared_deps.r18_equivalent`，**不要自己推 R18 路徑**。跨 entry 的 import（消費檔在本 entry、被 import 的檔屬於另一個 entry）只要複製後相對路徑會改變，盤點都已列進 `shared_deps`，`r18_equivalent` 就是依上述規則算出的提供者落點；相對路徑不變（同根落點）的不列。
 
+**import `r15-legacy/` 的元件前，必須先讀該元件的檔頭註解**（1.1.3 起）：`shared_deps[]` 裡 `r18_equivalent` 落在 `frontend/react_18/src/r15-legacy/` 底下的每一項，在寫下那行 `import`、**也在決定要傳給它哪些 props 之前**，用 Read 讀該檔最上方的註解區塊（檔頭 JSDoc／`/* … */`，含「與 R15 的差異」與以 `【移植注意】` 開頭的段落）。這些註解是搬那個元件的人留下的、關於「消費端要怎麼用」的唯一來源——R15 原檔看不出來、你憑對 R18 的印象也猜不出來（例如 `CustomBootstrapButton` 的 `bsStyle` 在 R18 要靠它內部轉換才不會變色、`TableMultipleFilter` 在 R18 根本打不開選單）。讀完照做：
+   - 註解寫「消費端可沿用某 props 原樣傳入」→ 照 R15 的 props 傳，不要自作主張改寫；寫「要改傳 X」→ 照它的寫法改。
+   - 註解寫某 props／用法**不支援或行為不同** → 該呼叫處依註解改，並把那一處寫進合約表五與報告的 ⚠ 清單。
+   - 註解寫「**無法運作／不要直接 import 使用**」（如 `TableMultipleFilter`）→ 不 import；走步驟 6 的 `blocked(no_mapping)`。
+   - 元件沒有任何註解、或註解沒提到本 entry 用到的 props → 不代表沒有差異；回到 Phase 3(c) 逐 props 比對，且合約表五的「檔頭註解結論」欄寫「無註解」，不要留空。
+   不准用「這個元件我之前看過／它是 shared 層搬的所以應該一樣」代替這一步；每個 entry、每個被 import 的 r15-legacy 元件都要實際讀一次。R18 原生元件（不在 `r15-legacy/` 底下）不適用這一條。
+
 **禁止**：改成 hooks、改名、順手重構、換套件、動 `TableContainer`。
 
 ### 步驟 3：路由與開關
@@ -203,7 +210,7 @@ tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要�
 
 ### 步驟 4：註解與命名
 
-原註解逐字照搬；所有建立或修改的檔案，檔頭 `Modified` 欄位新增一行。不補 STEP、不補 JSDoc、不改變數名。tab-reuse entry 沒有被複製或新建的元件檔，只對本次實際修改的檔（R15 header／content、R18 子路由檔）加 `Modified`。
+原註解逐字照搬；所有建立或修改的檔案，檔頭 `Modified` 欄位新增一行。不補 STEP、不補 JSDoc、不改變數名。**例外（1.1.3 起）**：搬進 `r15-legacy/` 的元件，若有「消費端遷移時必須知道」的差異或限制（props 不相容、用法要改、無法運作、需要重寫），要在**檔頭註解**寫「與 R15 的差異」，並把消費端必讀的部分另起一段、以 `【移植注意】` 開頭（寫清楚：影響哪些 props／用法、消費端要怎麼做、怎麼驗證的）——後面遷移消費端的 entry 會依步驟 2 讀這段註解決定怎麼 import，沒寫等於下一個人會踩到。這是註解，不改程式行為；沒有差異就不必加。tab-reuse entry 沒有被複製或新建的元件檔，只對本次實際修改的檔（R15 header／content、R18 子路由檔）加 `Modified`。
 
 ### 步驟 5：建置
 
@@ -215,6 +222,8 @@ tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要�
 ### 步驟 6：無對照項目盤點
 
 對照表查無、且 R18 全庫也找不到先例的用法 → 在合約表標 ⚠ 並 `blocked(no_mapping)`，`notes` 寫出是哪個套件／哪個 API／哪一行。**不要自己發明轉換規則**：發明出來的寫法沒有先例可比對，Phase 3 也驗不出來。
+
+被 import 的 `r15-legacy/` 元件，其檔頭【移植注意】（步驟 2）寫「無法運作／不要直接 import 使用」→ `blocked(no_mapping)`，`notes` 寫出元件路徑、引用該段註解的關鍵一句、以及本 entry 哪個檔的哪一行用到它；不要自己改寫那個元件來繞過。
 
 tab-reuse entry 只盤 `shared_deps` 那一筆：其 `r18_equivalent` 在磁碟不存在 → `blocked(no_mapping)`，`notes` 寫「提供者 entry 的落點尚未存在」（`depends_on` 理論上已保證這個依賴已完成，這裡是防禦性檢查）。
 
@@ -240,7 +249,7 @@ tab-reuse entry 只做 feature flag 三層一致性表，與三個 MUST-CHECK �
 
 ### (c) 合約表回填
 
-對 `<entry>-contract.md` 的每一列回填 `R18 對應`（路徑:行號或名稱，找不到寫「無對應」）與 `等價 ✅/⚠️/❌`。`entry.shared_deps[]` 的每一項也各佔一列（填在合約檔的「shared_deps 對照」表）：`r18_equivalent` 非 null 的，比對 R15 檔的 export 面與本 entry 實際用到的 props／函式名是否都存在於該 R18 檔，缺的逐一列出並標 ⚠️（這些就是呼叫端要改的地方）；為 null 的直接標 ❌「無對應」。⚠️ 的語意是「需要人工複查」，不是「大概沒問題」。所有 ⚠️ 與 ❌ 的列都必須進報告的 ⚠ 清單，並計入 `warnings_count`。
+對 `<entry>-contract.md` 的每一列回填 `R18 對應`（路徑:行號或名稱，找不到寫「無對應」）與 `等價 ✅/⚠️/❌`。`entry.shared_deps[]` 的每一項也各佔一列（填在合約檔的「shared_deps 對照」表）：`r18_equivalent` 非 null 的，比對 R15 檔的 export 面與本 entry 實際用到的 props／函式名是否都存在於該 R18 檔，缺的逐一列出並標 ⚠️（這些就是呼叫端要改的地方）；為 null 的直接標 ❌「無對應」。`r18_equivalent` 落在 `r15-legacy/` 的項目，另在「檔頭註解結論」欄寫步驟 2 讀到的結論（註解怎麼說、本 entry 怎麼因應；沒有註解寫「無註解」）——這一欄不得留空，空的視為沒做步驟 2；註解提到的限制若影響本 entry 的呼叫處，標 ⚠️ 並進 ⚠ 清單。⚠️ 的語意是「需要人工複查」，不是「大概沒問題」。所有 ⚠️ 與 ❌ 的列都必須進報告的 ⚠ 清單，並計入 `warnings_count`。
 
 tab-reuse entry 只回填表五（shared_deps 對照）——沒有其他合約表列可回填。
 

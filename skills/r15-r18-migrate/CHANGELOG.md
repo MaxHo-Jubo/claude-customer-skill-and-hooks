@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 1.1.3 (2026-10-16，消費端 import `r15-legacy/` 元件前必讀元件註解)
+
+只改 SKILL.md 與 `templates/contract.template.md` 的文字規則，不動 `helpers/`（runner 行為、`result.schema.json`、`queue.json` 欄位、CLI 旗標、子命令都不變）。
+
+- **起因**：shared-ui-1 的人工驗證（2026-10-16，jsdom＋真實 BS5／BS3 CSS，49 項斷言）發現 runner 回報的 ⚠ 裡有兩個影響消費端的缺陷，而這類資訊只存在於「搬那個元件的人」腦中：`CustomBootstrapButton` 的 `bsStyle`／`bsSize` 在 R18 被忽略（R15 約 20 處消費端傳 `primary`／`default`／`danger`，取消鈕與 danger 鈕全變藍），`TableMultipleFilter` 在 R18 根本打不開選單（靠 BS3 jQuery JS 的 `data-toggle`）。消費端 entry 的模型只會照 `shared_deps.r18_equivalent` import，看不到這些差異。
+- **步驟 2 新增規則**：import `r15-legacy/` 底下的元件前（也在決定傳哪些 props 之前），必須實際用 Read 讀該檔檔頭註解（「與 R15 的差異」與 `【移植注意】` 段），依註解處理：可沿用原 props、要改傳、行為不同（進 ⚠）、無法運作（→ `blocked(no_mapping)`，不 import）。不准憑印象略過；R18 原生元件不適用。
+- **步驟 4 例外**：搬進 `r15-legacy/` 的元件若有消費端必須知道的差異／限制，檔頭註解要寫「與 R15 的差異」並以 `【移植注意】` 另起一段標出消費端必讀的部分。
+- **步驟 6**：`【移植注意】` 寫明無法運作的元件，`blocked(no_mapping)` 的 `notes` 要引用該段與使用處。blocked 列舉仍是八種，字面值不變。
+- **Phase 3(c)／合約表五**：新增「檔頭註解結論」欄，`r15-legacy` 落點必填，空白視為沒做步驟 2。
+- **未做**：沒有機械檢查（runner 不檢查合約表那一欄有沒有填、也不檢查模型有沒有真的 Read 那個檔）；這一條靠 skill 文字與報告留痕，之後若要強制，可由 runner 在 `done` 前掃合約表五。既有已搬的 `r15-legacy` 元件只有 `CustomBootstrapButton`、`TableMultipleFilter`（2026-10-16）與 shared-ui-2 的檔有補註解；其餘（`Datepicker`、`EmployeeTypeahead`、`CheckBoxListRequired` 等）的差異目前只在 PR #11357 說明裡。
+
 ## 1.1.2 (2026-09-23～30，第一批～第四批、第五批階段一～三與收尾修正、第六批、第七批、部署試點後修正)
 
 1.1.1 收版後補做的 fresh-context stub 實跑驗收 18/18 通過，但兩個驗收 agent 各抓到一個驗收條件以外的缺陷，讀碼確認屬實。這一批只修這兩個（D1 兩層都做），加上設計紅隊在修法裡抓到、會自造新洞的三點。

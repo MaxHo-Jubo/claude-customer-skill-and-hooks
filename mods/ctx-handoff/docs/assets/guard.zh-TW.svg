@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-label="動畫：寫在 CLAUDE.md 的規則 Claude 一再違反，被起草成守門；Claude 問要不要啟用，你說好，下一次 git push 就收到提醒。旁邊是輸入框上方的面板，依序切換守門、記憶、規則、最近整理與設定分頁">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", Helvetica, Arial, sans-serif; }
+      .t { fill: #c9d1d9; font-size: 14px; } .m { fill: #8b949e; font-size: 13px; }
+      /* 14 秒一輪：左邊 3–50% 規則變成守門並命中；右邊面板 0–58% 停在守門分頁，之後依序切到其他分頁 */
+      .s1 { animation: s1 14s linear infinite; } @keyframes s1 { 0%, 3% { opacity: 0; } 3.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s2 { animation: s2 14s linear infinite; } @keyframes s2 { 0%, 14% { opacity: 0; } 14.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s3 { animation: s3 14s linear infinite; } @keyframes s3 { 0%, 26% { opacity: 0; } 26.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s3b { animation: s3b 14s linear infinite; } @keyframes s3b { 0%, 34% { opacity: 0; } 34.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s4 { animation: s4 14s linear infinite; } @keyframes s4 { 0%, 44% { opacity: 0; } 44.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s4b { animation: s4b 14s linear infinite; } @keyframes s4b { 0%, 47% { opacity: 0; } 47.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .tab0 { animation: tab0 14s linear infinite; } @keyframes tab0 { 0%, 57.5% { opacity: 1; } 58%, 100% { opacity: 0; } }
+      .tab1 { animation: tab1 14s linear infinite; } @keyframes tab1 { 0%, 58% { opacity: 0; } 58.6%, 68% { opacity: 1; } 68.5%, 100% { opacity: 0; } }
+      .tab2 { animation: tab2 14s linear infinite; } @keyframes tab2 { 0%, 68.5% { opacity: 0; } 69.1%, 78.5% { opacity: 1; } 79%, 100% { opacity: 0; } }
+      .tab3 { animation: tab3 14s linear infinite; } @keyframes tab3 { 0%, 79% { opacity: 0; } 79.6%, 89% { opacity: 1; } 89.5%, 100% { opacity: 0; } }
+      .tab4 { animation: tab4 14s linear infinite; } @keyframes tab4 { 0%, 89.5% { opacity: 0; } 90.1%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+      .gd { animation: gd 14s linear infinite; } @keyframes gd { 0%, 37.5% { opacity: 1; } 38%, 100% { opacity: 0; } }
+      .go { animation: go 14s linear infinite; } @keyframes go { 0%, 38% { opacity: 0; } 38.6%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+      .h0 { animation: h0 14s linear infinite; } @keyframes h0 { 0%, 47.5% { opacity: 1; } 48%, 100% { opacity: 0; } }
+      .h1 { animation: h1 14s linear infinite; } @keyframes h1 { 0%, 48% { opacity: 0; } 48.6%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+    </style>
+  </defs>
+  <rect width="960" height="360" rx="18" fill="#0d1117"/>
+  <text x="40" y="48" class="sans" font-size="17" font-weight="600" fill="#e6edf3">寫成規則還一再犯，就升級成守門；你點頭才生效。</text>
+  <text x="40" y="72" class="sans m">守門檢查工具呼叫，提醒或擋下 Claude。守門、記憶、規則、最近整理與設定都在同一個面板。</text>
+
+  <!-- 規則變成守門 -->
+  <g class="s1"><rect x="40" y="96" width="432" height="44" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="123" class="sans t">CLAUDE.md：推送前先問我</text><text x="456" y="123" text-anchor="end" class="sans" font-size="13" fill="#f87171">又被糾正 2 次</text></g>
+  <g class="s2"><rect x="40" y="150" width="432" height="60" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="174" class="sans t">守門草稿 #3・提醒</text><text x="56" y="197" class="mono m">Bash 符合 /git push/・試比對命中 2 次</text></g>
+  <g class="s3"><rect x="40" y="220" width="432" height="44" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="247" class="sans t">Claude：要啟用守門 #3 嗎？</text><text x="456" y="247" text-anchor="end" class="mono s3b" font-size="14" fill="#7dd3fc">› 好</text></g>
+  <g class="s4"><rect x="40" y="274" width="432" height="60" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="298" class="mono t">$ git push origin main</text><g class="s4b"><rect x="50" y="306" width="412" height="22" rx="6" fill="#2a2210"/><text x="60" y="322" class="sans" font-size="13" fill="#fbbf24">→ 要推送了？先跟使用者確認</text></g></g>
+
+  <!-- 輸入框上方的面板 -->
+  <rect x="496" y="96" width="424" height="238" rx="12" fill="#161b22" stroke="url(#accent)" stroke-width="1.5"/>
+  <text x="512" y="124" class="mono" font-size="13"><tspan fill="#7dd3fc" font-weight="700">ctx-handoff</tspan><tspan fill="#8b949e">・專案筆記與守門</tspan></text>
+  <g>
+    <text x="519" y="154" class="mono" font-size="12" fill="#8b949e">守門 4</text><g class="tab0"><rect x="512" y="140" width="52.4" height="20" rx="4" fill="#1f3a52"/><text x="519" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">守門 4</text></g>
+    <text x="577.4" y="154" class="mono" font-size="12" fill="#8b949e">記憶 52</text><g class="tab1"><rect x="570.4" y="140" width="59.599999999999994" height="20" rx="4" fill="#1f3a52"/><text x="577.4" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">記憶 52</text></g>
+    <text x="643" y="154" class="mono" font-size="12" fill="#8b949e">規則 7</text><g class="tab2"><rect x="636" y="140" width="52.4" height="20" rx="4" fill="#1f3a52"/><text x="643" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">規則 7</text></g>
+    <text x="701.4" y="154" class="mono" font-size="12" fill="#8b949e">最近整理</text><g class="tab3"><rect x="694.4" y="140" width="62" height="20" rx="4" fill="#1f3a52"/><text x="701.4" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">最近整理</text></g>
+    <text x="769.4" y="154" class="mono" font-size="12" fill="#8b949e">設定</text><g class="tab4"><rect x="762.4" y="140" width="38" height="20" rx="4" fill="#1f3a52"/><text x="769.4" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">設定</text></g>
+  </g>
+  <line x1="512" y1="168" x2="904" y2="168" stroke="#30363d"/>
+  <g class="tab0">
+      <g class="gd"><text x="512" y="188" class="mono" font-size="12"><tspan fill="#fbbf24">● 草稿</tspan></text></g>
+      <g class="go"><text x="512" y="188" class="mono" font-size="12"><tspan fill="#4ade80">● 啟用</tspan></text></g>
+      <g class="h0"><text x="560.4" y="188" class="mono" font-size="12" fill="#8b949e">#3・提醒・觸發 0 次</text></g>
+      <g class="h1"><text x="560.4" y="188" class="mono" font-size="12" fill="#8b949e">#3・提醒・觸發 1 次</text></g>
+      <g class="gd"><rect x="864" y="174" width="40" height="20" rx="4" fill="#1f6feb"/><text x="884" y="188" text-anchor="middle" class="mono" font-size="12" fill="#e6edf3">核准</text></g>
+      <g class="go"><rect x="864" y="174" width="40" height="20" rx="4" fill="#21262d"/><text x="884" y="188" text-anchor="middle" class="mono" font-size="12" fill="#e6edf3">停用</text></g>
+      <text x="528" y="210" class="mono" font-size="12"><tspan fill="#c9d1d9">推送前先問我</tspan></text>
+      <text x="528" y="230" class="mono" font-size="12"><tspan fill="#c9d1d9">→ 要推送了？先跟使用者確認</tspan></text>
+      <text x="528" y="250" class="mono" font-size="12"><tspan fill="#8b949e">試比對這段對話：148 次工具呼叫中命中 2 次</tspan></text>
+      <text x="512" y="278" class="mono" font-size="12"><tspan fill="#4ade80">● 啟用</tspan> <tspan fill="#8b949e">#1・擋下・觸發 5 次</tspan></text>
+      <text x="528" y="300" class="mono" font-size="12"><tspan fill="#c9d1d9">Bash 路徑用正斜線</tspan></text>
+    </g>
+  <g class="tab1">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#8b949e">最新 4 條（共 52 條）</tspan></text>
+      <text x="512" y="214" class="mono" font-size="12"><tspan fill="#a78bfa">修正</tspan><tspan x="548" fill="#c9d1d9">回覆用使用者的語言</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#a78bfa">偏好</tspan><tspan x="548" fill="#c9d1d9">commit 前先問我</tspan></text>
+      <text x="512" y="258" class="mono" font-size="12"><tspan fill="#a78bfa">事實</tspan><tspan x="548" fill="#c9d1d9">設定只在面板調整</tspan></text>
+      <text x="512" y="280" class="mono" font-size="12"><tspan fill="#a78bfa">位置</tspan><tspan x="548" fill="#c9d1d9">發版步驟在 CONTRIBUTING.md</tspan></text>
+    </g>
+  <g class="tab2">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">8 次</tspan><tspan x="556" fill="#c9d1d9">宣稱正式站版本前，讀實際部署的版本</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">5 次</tspan><tspan x="556" fill="#c9d1d9">推送前先在本機跑檢查</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">3 次</tspan><tspan x="556" fill="#c9d1d9">Bash 路徑用正斜線</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">2 次</tspan><tspan x="556" fill="#c9d1d9">推送前先問我</tspan></text>
+    </g>
+  <g class="tab3">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#8b949e">14:05・每 30 則・3 項變動</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#4ade80">+</tspan><tspan fill="#c9d1d9"> 規則  推送前先問我</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#fbbf24">~</tspan><tspan fill="#c9d1d9"> 記憶  回覆語言</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#4ade80">+</tspan><tspan fill="#c9d1d9"> 進度  面板動畫，下一步：README</tspan></text>
+    </g>
+  <g class="tab4">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#c9d1d9">離開時保持快取</tspan><tspan x="634" fill="#7dd3fc">開</tspan><tspan x="674" fill="#8b949e">預設</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#c9d1d9">每幾則訊息整理一次</tspan><tspan x="634" fill="#7dd3fc">30</tspan><tspan x="674" fill="#8b949e">面板</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#c9d1d9">完成前驗證</tspan><tspan x="634" fill="#7dd3fc">開</tspan><tspan x="674" fill="#8b949e">預設</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#c9d1d9">到門檻自動交接</tspan><tspan x="634" fill="#7dd3fc">關</tspan><tspan x="674" fill="#8b949e">預設</tspan></text>
+    </g>
+  <text x="512" y="320" class="mono" font-size="11" fill="#6e7681">ctrl+x tab 後按 1–5 切分頁</text>
+</svg>

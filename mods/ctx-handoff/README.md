@@ -1,107 +1,111 @@
-# ctx-handoff (save-progress variant)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+    <img src="docs/assets/banner-light.svg" width="900" alt="ctx-handoff: the long-session toolkit for Claude Code">
+  </picture>
+</p>
 
-[繁體中文](README.zh-TW.md)
+<p align="center">
+  <b>Have Claude remember what you taught it, catch its usual slips,<br>and pick long sessions back up when you return.</b>
+</p>
 
-> **Origin:** modified from [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod) by cablate (MIT), based on commit [`f871109`](https://github.com/cablate/ctx-handoff-mod/commit/f871109) (2026-10-03). The original copyright notice is kept in [LICENSE](LICENSE). See [Changes from upstream](#changes-from-upstream).
+<p align="center">
+  <a href="https://github.com/cablate/ctx-handoff-mod/releases"><img src="https://img.shields.io/github/v/release/cablate/ctx-handoff-mod?include_prereleases&display_name=release&label=release&color=7dd3fc" alt="Latest release"></a>
+  <a href="https://github.com/cablate/ctx-handoff-mod/actions/workflows/check.yml"><img src="https://github.com/cablate/ctx-handoff-mod/actions/workflows/check.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Claude_Code-2.1.287%2B-a78bfa" alt="Claude Code 2.1.287 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
 
-A Claude Code mod that hands a long conversation over to a fresh one **automatically**: when the main conversation's context reaches a threshold, it has the model run the `save-progress` skill, which writes a handoff record to disk (into the Jira dev note when the branch has a Jira key, otherwise a file named after the branch). Once the file is confirmed written, it runs `/clear` and has the new conversation read that record. While you are away it keeps the prompt cache warm, then saves a record instead of clearing. You type no commands in the normal flow.
+<p align="center">
+  <b>English</b> · <a href="README.zh-TW.md">繁體中文</a> · <a href="#install">Install</a> · <a href="#whats-inside">Features</a> · <a href="docs/guide.md">Guide</a> · <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-**Who it's for:** people who run long Claude Code sessions on a 1M-context model with a Claude subscription (1-hour prompt cache) and have the `save-progress` skill installed. **Status:** experimental, built on Claude Code's early-access function-hooks API. Read [Limitations](#limitations) before relying on it.
+<p align="center">
+  <img src="docs/assets/handoff.svg" width="900" alt="Animation: a long session fills its context to the threshold; ctx-handoff writes a summary of verified work, failed attempts, your limits and the next step, clears, and a fresh session continues from it">
+</p>
 
-## Changes from upstream
+## Why
 
-| | Upstream | This variant |
+Long Claude Code sessions run into the same chores again and again. ctx-handoff takes care of them in the background, so in normal use you type no commands.
+
+| When… | Without it | With ctx-handoff |
 |---|---|---|
-| How the handoff is made | `$.model.fork` writes a ≤1500-char summary | A real turn runs the `save-progress` skill (a fork has no tools, so it cannot run a skill) |
-| Where it is kept | Full text in the mod's `$.store` (last 5) | On disk: the `## 交接紀錄` section of `{project}/.claude/{JIRA-KEY}.md`, or `{project}/.claude/handoff-{branch}.md`; `$.store` keeps only the last 5 paths |
-| What the new conversation gets | The handoff text | The record's path, which it reads itself (`/jira` reads it too) |
-| Checks before `/clear` | Clears once the fork answers | The save turn must end normally, its last line must be `HANDOFF_FILE: <absolute path>`, and the file must exist and be modified after the save started; otherwise it does **not** clear and says why in a toast |
-| Recognising the save turn | Not needed | The save prompt carries `[ctx-handoff:save]`; `turn.start` records its `turnId`. Turns you start meanwhile don't trigger a handoff. A save prompt still unrecognised after 10 minutes is dropped when the next main-loop turn ends |
-| Away handoff | Fork summary into `$.store` | Runs `save-progress`, no `/clear`; no further refresh or save once one exists |
-| Non-interactive sessions | Hand off like any other | When `session.start` reports `isInteractive: false` (`claude -p`, the SDK, scheduled runners), no automatic handoff and no idle refresh, so a caller waiting for a result never gets a save turn and `/clear` inserted; `/handoff-now yes` still works by hand |
-| Failure handling | — | A prompt blocked by another plugin or a settings hook (`{ drop }`) counts as a failure; timer-started work logs and toasts on failure instead of vanishing; after 2 consecutive failed saves, automatic handoff pauses for the session (`/handoff-now yes` still works); `/handoff-resume`／`/handoff-continue` delete the away record only after success, and a held message that cannot be sent goes back into the prompt box |
-| Tests | 9 | 24 |
+| the conversation is nearly full | You write a summary, `/clear`, paste it back | A summary is written, the conversation is cleared, and a fresh one continues |
+| you step away for an hour | Your next message rereads everything at full price | The cache is kept warm for up to about 4 hours |
+| you repeat an instruction | The next conversation forgets it | It becomes a project note, and after 3 times a line in your repo |
+| you `/clear` or reopen Claude Code | The new conversation starts blind | It's told where the last one stopped |
+| Claude retries a failing command, or says "done" untested | You find out later | Claude gets a one-line nudge right away |
 
-Threshold values, idle-refresh cadence and background-work detection are as upstream; the `/handoff-*` command names are kept, with behaviour adjusted as above.
+## Install
 
-**Code style scope:** functions and declarations added or rewritten here follow the fork author's conventions (JSDoc, STEP comments, commented variables, braced `if`); upstream functions left untouched (`runningWork`, `isRefreshOn`, `tool.call`, `prompt.submit`, `/handoff-refresh`) keep their original style for easy comparison with upstream.
-
-## What it does
-
-All three paths apply to the main conversation only. Subagent turns are ignored.
-
-| When | What happens | You do |
-|---|---|---|
-| **A turn ends and context ≥ 600k** (or 80% of the window, whichever is lower) | Waits if background shells, workflows or subagents are still running. Otherwise submits the save prompt; once the record is confirmed, runs `/clear` and the new conversation reads it, reports what it understood and waits for you. | Nothing |
-| **You've been idle 55 minutes** | Forks a tiny request to refresh the prompt cache, up to 3 times. At the 4th point it runs `save-progress` for an "away handoff" and does **not** clear. | Nothing |
-| **You come back after an away handoff** | Holds your first message and asks you to choose. | `/handoff-resume` clears and has the new conversation read the record and answer your message. `/handoff-continue` stays in the old one. |
-
-Where the record goes is decided by the `save-progress` skill (its STEP 01): `{project}/.claude/{JIRA-KEY}.md` when the branch has a Jira key, `{project}/.claude/handoff-{branch with / → -}.md` otherwise, `{project}/.claude/handoff-{folder}.md` outside git or on a detached HEAD.
-
-## Quick start
-
-Requires a Claude Code build with function hooks (mods) and a local `save-progress` skill. Developed and tested on 2.1.288.
+Requires Claude Code 2.1.287 or later. Tested up to 2.1.293.
 
 ```sh
-claude --plugin-dir ~/.claude/mods/ctx-handoff
+claude plugin marketplace add cablate/ctx-handoff-mod
+claude plugin install ctx-handoff@ctx-handoff-mod
 ```
 
-Run `/handoff-status` in the session, then `/handoff-now yes` once to walk the whole flow by hand. To load it in every session, add an absolute path to `env` in `~/.claude/settings.json` (`;` between folders on Windows, `:` on macOS/Linux):
+Start a new session and type `/handoff`. You should see:
 
-```json
-"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/Users/you/.claude/mods/ctx-handoff" }
+```
+context 12034 / threshold 600000 (window 1000000)
+Cache refresh on, refreshed 0/3 this idle period, timer not started
 ```
 
-If `claude plugin test` says `hooks modules are turned off in this process`, mods are not enabled for that account yet (server-side flag `tengu_plugin_hooks_modules`).
+That's it. Update with `claude plugin update ctx-handoff@ctx-handoff-mod`, or turn on auto-update under **Marketplaces** in `/plugin`.
 
-The mod's messages are in Traditional Chinese.
+> [!NOTE]
+> Built for Claude subscriptions and long sessions (for example on a 1M-context model). On an API key, Bedrock or Vertex the cache lasts only 5 minutes, so run `/handoff refresh off`; everything else works. ctx-handoff is experimental, because Claude Code mods are still in early access.
 
-## Commands
+## What's inside
 
-| Command | Purpose |
-|---|---|
-| `/handoff-status` | Context use, threshold, refresh state, save turn, away handoff, last record path |
-| `/handoff-refresh on\|off` | Turn idle cache refresh on or off. When off, the away handoff is saved after 55 idle minutes |
-| `/handoff-resume` | Use the away handoff: `/clear`, then have the new conversation read the record and the held message |
-| `/handoff-continue` | Drop the away handoff and send the held message in the old conversation |
-| `/handoff-now yes` | Run `save-progress` and hand off now (clears once the record is confirmed) |
+ctx-handoff is a growing toolkit for long sessions: new features for working with Claude over hours land here.
 
-## Configuration
+### Hands off before the context fills (optional)
 
-Constants at the top of [`hooks/register.ts`](hooks/register.ts):
+Off by default, so Claude Code's own compact takes over. Turn on `auto_handoff` in the panel's Settings tab and at 600k tokens it waits for Claude and its subagents to finish, writes a summary that keeps verified work apart from unverified changes, lists what failed, the limits you set in your own words and what was already found out, ends with one next step, clears, and continues in a fresh conversation. Anything you type meanwhile is carried over.
 
-| Constant | Default | Meaning |
-|---|---|---|
-| `THRESHOLD` | `600_000` | Context tokens that trigger a handoff |
-| `WINDOW_RATIO` | `0.8` | On smaller windows, the threshold becomes `window × ratio` |
-| `IDLE_MS` | 55 min | Idle time before a refresh (tuned for a 1-hour cache) |
-| `MAX_REFRESH` | `3` | Refreshes before the away handoff |
-| `MIN_TOKENS` | `30_000` | Below this, skip refresh and the away handoff |
-| `SAVE_LOST_MS` | 10 min | Give up on a save prompt still unrecognised after this long, checked when the next main-loop turn ends (not a timer) |
-| `MAX_SAVE_FAILURES` | `2` | Consecutive failed saves before automatic handoff pauses for the session |
+### Keeps the cache warm while you're away
 
-## Limitations
+<img src="docs/assets/cache.svg" width="900" alt="Animation: after you leave, the cache is refreshed at 55, 110 and 165 minutes; after that a summary is saved, and when you return you choose to resume or continue">
 
-- **Save-turn recognition is not yet verified in a real session.** It relies on `turn.start` text containing `[ctx-handoff:save]`; whether the engine keeps a mod-submitted prompt's text verbatim there cannot be simulated in tests. If it fails, the first main-loop turn ending more than 10 minutes later shows a "save turn not recognised, the record may already be written" toast; the conversation is not cleared. While you are away with no new turns, the save stays pending until you return.
-- **A message sent between the end of the save turn and `/clear` is lost from the handoff.** `/clear` runs once the session is idle, so such a turn runs in the old conversation and is then cleared; the record does not include it.
-- **Saving is a real turn.** Running `save-progress` at 600k reads the whole cached context and calls tools; whether it counts against subscription limits is unconfirmed.
-- **An away save may stop at a permission prompt** if writing the record needs your approval.
-- **Depends on `save-progress` reporting the path** as the last line `HANDOFF_FILE: <absolute path>`; a missing or relative path, or an unmodified file, cancels the handoff.
-- **5-minute cache users should turn refresh off** (`/handoff-refresh off`). The mod does not detect the TTL.
-- **The idle refresh is unverified** (whether a fork's cache read extends the main conversation's 1-hour entry).
-- **Background-work detection is partial.** Workflow and Monitor task IDs are parsed from output text; a never-ending task defers the handoff up to 12 hours. Use `/handoff-now yes` to force it.
-- **Held messages keep only their text.**
-- **Hot reloads reset** the timers, the save-turn state and the background-task tracking.
-- **The API is early access.**
+### Learns your project, then hands it to your repo
 
-## Development
+<img src="docs/assets/memory.svg" width="900" alt="Animation: the same instruction on three days becomes a project rule, then a line in CLAUDE.md for you to review">
 
-```sh
-claude plugin validate .
-claude plugin test .
-tsc -p .   # after the mod has loaded once, which writes .claude-plugin/types/
-```
+Preferences, corrections and facts become one Markdown notes file per project, loaded into every new conversation. Routines you repeat become project skills. Only the new part of the conversation is read, by Sonnet 5.5 at low effort.
+
+### Remembers where you stopped
+
+<img src="docs/assets/resume.svg" width="900" alt="Animation: after /clear, the next conversation is told the last task, its state and the next step">
+
+### Catches the usual slips
+
+<img src="docs/assets/nudges.svg" width="900" alt="Animation: nudges for the same failure twice, for saying done without checking, and for drifting out of your language">
+
+### Guards you approve, one panel for everything
+
+When a rule is already written down but keeps getting broken, ctx-handoff drafts a guard: a check on tool calls that reminds or blocks Claude. Claude asks you about it in the next conversation, and nothing applies until you say yes. `/handoff panel` opens a panel above the prompt for guards, memories, rules, the latest notes update and every setting.
+
+<img src="docs/assets/guard.svg" width="900" alt="Animation: a rule in CLAUDE.md that keeps getting broken is drafted into a guard; Claude asks whether to turn it on, you say yes, and the next git push gets a reminder. Beside it, the panel above the prompt steps through its tabs: guards, memory, rules, the last update and settings">
+
+## Settings
+
+Everything is on the panel's Settings tab (`/handoff panel`, then <kbd>5</kbd>), with where each value comes from and a reset button. The defaults are meant to be left alone. The [guide](docs/guide.md#settings) lists every setting.
+
+## Cost and privacy
+
+- **No servers of its own.** It runs on your Claude Code sign-in and sends nothing anywhere but Anthropic, like the conversation itself.
+- **Small, predictable costs.** A handoff is one request; a cache refresh reads from cache at about a tenth of the input price; a notes update sends only the new part of the conversation. The nudges cost nothing.
+- **Plain files you own.** Notes are Markdown in `~/.claude/projects/`. Check what the mod may do with `claude plugin validate`; the [guide](docs/guide.md#cost-privacy-and-permissions) explains every entry.
+
+## Documentation
+
+- [Guide](docs/guide.md): every feature in detail, settings, commands, permissions, supported environments, limitations, troubleshooting and uninstalling.
+- [Changelog](CHANGELOG.md): what changed in each version and why it's worth upgrading.
+- [Contributing](CONTRIBUTING.md): how to run it from source and send changes. Bug reports and ideas go in [issues](https://github.com/cablate/ctx-handoff-mod/issues/new/choose).
+- [Security](SECURITY.md): how to report a vulnerability privately.
 
 ## License
 
-[MIT](LICENSE). Original work Copyright (c) 2026 cablate; this variant is distributed under the same license.
+[MIT](LICENSE)

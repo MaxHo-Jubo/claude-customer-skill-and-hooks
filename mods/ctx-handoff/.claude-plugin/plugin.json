@@ -1,1 +1,20 @@
-{ "name": "ctx-handoff", "version": "0.1.0", "description": "Auto handoff + /clear at a context threshold; keep the prompt cache warm while idle, then save an away handoff" }
+{
+  "name": "ctx-handoff",
+  "version": "0.7.0",
+  "description": "Turns what you teach Claude into project notes, catches its usual slips, keeps the cache warm while you're away, and picks long sessions back up",
+  "author": {
+    "name": "CabLate",
+    "url": "https://github.com/cablate"
+  },
+  "homepage": "https://github.com/cablate/ctx-handoff-mod",
+  "repository": "https://github.com/cablate/ctx-handoff-mod",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "handoff",
+    "prompt-cache",
+    "memory",
+    "mod"
+  ],
+  "types": "./types/index.d.ts"
+}

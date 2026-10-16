@@ -10,14 +10,18 @@ import {
   buildState,
   capByParent,
   decideRoute,
+  FABLE_FALLBACK_MODEL,
   HEAD_BYTES,
   HEAD_MAX_BYTES,
   inheritsModel,
   MAX_BRIEF_CHARS,
   modelFamily,
+  type ParentState,
   parseAgentInput,
   preSkipReason,
+  readConsentFallback,
   readParentModel,
+  readParentState,
   readTier,
   resolveAgentFile,
   ROUTE_CONF_MIN,
@@ -60,6 +64,16 @@ const STUB_HANG_MS = ROUTE_TIMEOUT_MS + 1500;
 const SLOW_TEST_TIMEOUT_MS = 15000;
 /** stub 要求的假 API key */
 const FAKE_KEY = 'fake-key';
+/** fixture：Fable 額度到頂時 Claude Code 換到的模型（2026-09-17 真實記錄的 fallbackModel） */
+const FALLBACK_TO = 'claude-sonnet-5';
+/** fixture：父模型 fable 且可用 */
+const FABLE_PARENT: ParentState = { model: 'claude-fable-5-1', fableOff: false };
+/** fixture：父模型 sonnet（user 自選，fable 可用） */
+const SONNET_PARENT: ParentState = { model: 'claude-sonnet-5-5', fableOff: false };
+/** fixture：父模型讀不到 */
+const UNKNOWN_PARENT: ParentState = { model: null, fableOff: false };
+/** fixture：Fable 額度到頂被強制換到 sonnet，fable 不可用 */
+const FABLE_OFF_PARENT: ParentState = { model: FALLBACK_TO, fableOff: true };
 
 /** 測試用暫存根目錄（假 HOME 與假 agent 定義） */
 let root = '';
@@ -96,6 +110,19 @@ const identityLine = (modelId: string): string => {
 const assistantLine = (model: string): string => {
   // STEP 01: 與真實 transcript 同結構
   return JSON.stringify({ type: 'assistant', message: { model, content: [] } });
+};
+
+/**
+ * transcript 的 model_consent_fallback 系統記錄行（Fable 額度到頂、user 不用 usage credits 時 Claude Code 寫入）
+ * @param originalModel - 被換掉的模型 ID
+ * @param fallbackModel - 換到的模型 ID
+ * @returns JSON 行
+ */
+const fallbackLine = (originalModel: string, fallbackModel: string): string => {
+  // STEP 01: 與 2026-09-17 真實記錄同結構（略去 uuid／timestamp 等 hook 不看的欄位）
+  return JSON.stringify({
+    type: 'system', subtype: 'model_consent_fallback', level: 'warning', choice: 'switch_default', originalModel, fallbackModel, persistedAsDefault: true,
+  });
 };
 
 /**
@@ -354,34 +381,100 @@ describe('readParentModel', () => {
   });
 });
 
+describe('readParentState / readConsentFallback', () => {
+  /** 從 fable 被強制換到 sonnet 的 transcript（識別、對話、強制換模型、換後的 assistant 與 identity） */
+  const switched = [
+    identityLine('claude-fable-5-1'), assistantLine('claude-fable-5-1'), fallbackLine('claude-fable-5-1', FALLBACK_TO),
+    assistantLine(FALLBACK_TO), identityLine(FALLBACK_TO), assistantLine(FALLBACK_TO),
+  ];
+  test('從 fable 被強制換到 sonnet 且仍在 sonnet → fableOff', () => {
+    // STEP 01: 記錄讀得到、狀態為 fable 不可用
+    /** 假 transcript 路徑 */
+    const f = writeTranscript('s-off.jsonl', switched);
+    expect(readConsentFallback(f)).toEqual({ originalModel: 'claude-fable-5-1', fallbackModel: FALLBACK_TO });
+    expect(readParentState(f)).toEqual({ model: FALLBACK_TO, fableOff: true });
+  });
+  test('換走後 user 手動換到別的家族（opus）或換回 fable → 不是 fableOff', () => {
+    // STEP 01: 換到 opus：父模型家族不等於換到的家族
+    expect(readParentState(writeTranscript('s-opus.jsonl', [...switched, identityLine('claude-opus-5-5'), assistantLine('claude-opus-5-5')])))
+      .toEqual({ model: 'claude-opus-5-5', fableOff: false });
+    // STEP 02: 換回 fable：正在用 fable
+    expect(readParentState(writeTranscript('s-back.jsonl', [...switched, identityLine('claude-fable-5-1')])))
+      .toEqual({ model: 'claude-fable-5-1', fableOff: false });
+  });
+  test('沒有強制換模型記錄、或記錄不是從 fable 換走 → 不是 fableOff', () => {
+    // STEP 01: user 自選 sonnet
+    expect(readParentState(writeTranscript('s-plain.jsonl', [identityLine(FALLBACK_TO), assistantLine(FALLBACK_TO)])))
+      .toEqual({ model: FALLBACK_TO, fableOff: false });
+    // STEP 02: 從 opus 被換走與 fable 無關
+    expect(readParentState(writeTranscript('s-opus-off.jsonl', [identityLine('claude-opus-5-5'), fallbackLine('claude-opus-5-5', FALLBACK_TO), assistantLine(FALLBACK_TO)])))
+      .toEqual({ model: FALLBACK_TO, fableOff: false });
+  });
+  test('較晚的一行只是內容含粗篩字串（不是 system 記錄）→ 跳過、仍找到前面的真記錄', () => {
+    // STEP 01: key 名稱剛好是 subtype 的 user 記錄（JSON.stringify 不跳脫 key 引號，粗篩會命中）
+    /** 內容含粗篩字串的 user 記錄 */
+    const mention = JSON.stringify({ type: 'user', note: { subtype: 'model_consent_fallback' } });
+    /** 假 transcript 路徑 */
+    const f = writeTranscript('s-mention.jsonl', [...switched, mention, assistantLine(FALLBACK_TO)]);
+    expect(readParentState(f)).toEqual({ model: FALLBACK_TO, fableOff: true });
+  });
+  test('記錄被擠出尾端視窗（整檔掃描）→ 仍找到', () => {
+    // STEP 01: 記錄在檔頭，尾端 TAIL_BYTES 內只有填充與換後的 assistant
+    /** 假 transcript 路徑 */
+    const f = writeTranscript('s-far.jsonl', [identityLine('claude-fable-5-1'), fallbackLine('claude-fable-5-1', FALLBACK_TO), ...fillerLines(TAIL_BYTES), assistantLine(FALLBACK_TO)]);
+    expect(readParentState(f)).toEqual({ model: FALLBACK_TO, fableOff: true });
+  });
+  test('記錄是最後一行且寫到一半 → 當作沒有', () => {
+    // STEP 01: 截斷的記錄仍含粗篩字串，但解析失敗
+    /** 寫到一半的記錄行 */
+    const half = fallbackLine('claude-fable-5-1', FALLBACK_TO).slice(0, -5);
+    /** 假 transcript 路徑 */
+    const f = writeTranscript('s-half.jsonl', [identityLine(FALLBACK_TO), half], false);
+    expect(readConsentFallback(f)).toBeNull();
+    expect(readParentState(f)).toEqual({ model: FALLBACK_TO, fableOff: false });
+  });
+  test('沒帶路徑、檔案不存在 → 讀不到且不是 fableOff', () => {
+    expect(readParentState(null)).toEqual({ model: null, fableOff: false });
+    expect(readParentState(join(root, 'nope.jsonl'))).toEqual({ model: null, fableOff: false });
+  });
+});
+
 describe('capByParent / routeModel / TIER_MODEL', () => {
-  test('對照表：top 不填', () => {
+  test('對照表：top 不填；fable 不可用時 top 改填 opus', () => {
     expect(TIER_MODEL).toEqual({ light: 'haiku', small: 'sonnet', mid: 'opus', top: null });
+    expect(FABLE_FALLBACK_MODEL).toBe('opus');
   });
   test('父模型 fable：達門檻依等級填 model', () => {
-    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, 'claude-fable-5-1')).toEqual({ model: 'haiku', skip: null });
-    expect(routeModel('small', HIGH_CONF, AT_MIN_CONF, 'claude-fable-5-1')).toEqual({ model: 'sonnet', skip: null });
-    expect(routeModel('mid', HIGH_CONF, AT_MIN_CONF, 'fable')).toEqual({ model: 'opus', skip: null });
+    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, FABLE_PARENT)).toEqual({ model: 'haiku', skip: null });
+    expect(routeModel('small', HIGH_CONF, AT_MIN_CONF, FABLE_PARENT)).toEqual({ model: 'sonnet', skip: null });
+    expect(routeModel('mid', HIGH_CONF, AT_MIN_CONF, { model: 'fable', fableOff: false })).toEqual({ model: 'opus', skip: null });
   });
   test('剛好等於門檻 → 路由；低於門檻 → low_conf', () => {
-    expect(routeModel('small', AT_MIN_CONF, AT_MIN_CONF, 'fable').model).toBe('sonnet');
-    expect(routeModel('small', BELOW_MIN_CONF, AT_MIN_CONF, 'fable')).toEqual({ model: null, skip: 'low_conf' });
+    expect(routeModel('small', AT_MIN_CONF, AT_MIN_CONF, FABLE_PARENT).model).toBe('sonnet');
+    expect(routeModel('small', BELOW_MIN_CONF, AT_MIN_CONF, FABLE_PARENT)).toEqual({ model: null, skip: 'low_conf' });
   });
   test('top 即使高 confidence 也不填', () => {
-    expect(routeModel('top', MAX_CONF, AT_MIN_CONF, 'fable')).toEqual({ model: null, skip: 'top' });
+    expect(routeModel('top', MAX_CONF, AT_MIN_CONF, FABLE_PARENT)).toEqual({ model: null, skip: 'top' });
   });
   test('只降不升：候選不比父模型便宜 → would_upgrade', () => {
-    expect(routeModel('mid', HIGH_CONF, AT_MIN_CONF, 'claude-sonnet-5-5')).toEqual({ model: null, skip: 'would_upgrade' });
-    expect(routeModel('small', HIGH_CONF, AT_MIN_CONF, 'claude-sonnet-5-5')).toEqual({ model: null, skip: 'would_upgrade' });
-    expect(capByParent('haiku', 'claude-haiku-4-5')).toEqual({ model: null, skip: 'would_upgrade' });
+    expect(routeModel('mid', HIGH_CONF, AT_MIN_CONF, SONNET_PARENT)).toEqual({ model: null, skip: 'would_upgrade' });
+    expect(routeModel('small', HIGH_CONF, AT_MIN_CONF, SONNET_PARENT)).toEqual({ model: null, skip: 'would_upgrade' });
+    expect(capByParent('haiku', { model: 'claude-haiku-4-5', fableOff: false })).toEqual({ model: null, skip: 'would_upgrade' });
   });
   test('候選比父模型便宜 → 填', () => {
-    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, 'claude-sonnet-5-5')).toEqual({ model: 'haiku', skip: null });
-    expect(capByParent('sonnet', 'opus')).toEqual({ model: 'sonnet', skip: null });
+    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, SONNET_PARENT)).toEqual({ model: 'haiku', skip: null });
+    expect(capByParent('sonnet', { model: 'opus', fableOff: false })).toEqual({ model: 'sonnet', skip: null });
   });
   test('父模型讀不到或不在等級表 → parent_unknown', () => {
-    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, null)).toEqual({ model: null, skip: 'parent_unknown' });
-    expect(capByParent('haiku', 'claude-3-5-sonnet-20241022')).toEqual({ model: null, skip: 'parent_unknown' });
+    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, UNKNOWN_PARENT)).toEqual({ model: null, skip: 'parent_unknown' });
+    expect(capByParent('haiku', { model: 'claude-3-5-sonnet-20241022', fableOff: false })).toEqual({ model: null, skip: 'parent_unknown' });
+  });
+  test('fable 不可用（父模型被迫換到 sonnet）：上限放寬到 fable，top／mid 填 opus、small 填 sonnet、light 填 haiku，低 confidence 仍不填', () => {
+    expect(routeModel('top', HIGH_CONF, AT_MIN_CONF, FABLE_OFF_PARENT)).toEqual({ model: 'opus', skip: null });
+    expect(routeModel('mid', HIGH_CONF, AT_MIN_CONF, FABLE_OFF_PARENT)).toEqual({ model: 'opus', skip: null });
+    expect(routeModel('small', HIGH_CONF, AT_MIN_CONF, FABLE_OFF_PARENT)).toEqual({ model: 'sonnet', skip: null });
+    expect(routeModel('light', HIGH_CONF, AT_MIN_CONF, FABLE_OFF_PARENT)).toEqual({ model: 'haiku', skip: null });
+    expect(routeModel('top', BELOW_MIN_CONF, AT_MIN_CONF, FABLE_OFF_PARENT)).toEqual({ model: null, skip: 'low_conf' });
   });
 });
 
@@ -399,17 +492,18 @@ describe('readTier / decideRoute', () => {
   test('readTier 帶出等級、confidence 與次高', () => {
     expect(readTier(ans('small', HIGH_CONF))).toEqual({ tier: 'small', conf: HIGH_CONF, second: 'mid', secondP: PROBS.mid });
   });
-  test('decideRoute 套用 ROUTE_CONF_MIN 與父模型', () => {
-    expect(decideRoute(ans('small', ROUTE_CONF_MIN), 'claude-fable-5-1')).toEqual({
+  test('decideRoute 套用 ROUTE_CONF_MIN 與父模型狀態', () => {
+    expect(decideRoute(ans('small', ROUTE_CONF_MIN), FABLE_PARENT)).toEqual({
       tier: 'small', conf: ROUTE_CONF_MIN, second: 'mid', secondP: PROBS.mid, model: 'sonnet', skip: null,
     });
-    expect(decideRoute(ans('small', HIGH_CONF), 'claude-sonnet-5-5').skip).toBe('would_upgrade');
+    expect(decideRoute(ans('small', HIGH_CONF), SONNET_PARENT).skip).toBe('would_upgrade');
+    expect(decideRoute(ans('top', HIGH_CONF), FABLE_OFF_PARENT).model).toBe('opus');
   });
   test('標籤不在選項內 → 丟錯', () => {
     expect(() => readTier(ans('huge', HIGH_CONF))).toThrow();
   });
   test('缺答案 → 丟錯', () => {
-    expect(() => decideRoute(undefined, 'fable')).toThrow();
+    expect(() => decideRoute(undefined, FABLE_PARENT)).toThrow();
   });
 });
 
@@ -626,6 +720,8 @@ describe('子行程整合（本機 Jev stub，驗證 transport 與決策）', ()
   let fableTranscript = '';
   /** 父模型為 sonnet 的假 transcript */
   let sonnetTranscript = '';
+  /** Fable 額度到頂被強制換到 sonnet 的假 transcript（fable 不可用） */
+  let fableOffTranscript = '';
 
   /**
    * 延遲
@@ -718,6 +814,7 @@ describe('子行程整合（本機 Jev stub，驗證 transport 與決策）', ()
     server = Bun.serve({ port: 0, fetch: handle });
     fableTranscript = writeTranscript('t-fable.jsonl', [identityLine('claude-fable-5-1')]);
     sonnetTranscript = writeTranscript('t-sonnet.jsonl', [identityLine('claude-sonnet-5-5')]);
+    fableOffTranscript = writeTranscript('t-fable-off.jsonl', [identityLine('claude-fable-5-1'), fallbackLine('claude-fable-5-1', FALLBACK_TO), assistantLine(FALLBACK_TO)]);
   });
 
   afterAll(() => {
@@ -738,7 +835,7 @@ describe('子行程整合（本機 Jev stub，驗證 transport 與決策）', ()
     // STEP 03: 決策 log
     /** 本 session 唯一一筆決策紀錄 */
     const [log] = logsOf('stub-ok');
-    expect(log).toMatchObject({ tier: 'small', model_out: 'sonnet', skip: null, parent_model: 'claude-fable-5-1', subagent_type: 'Explore' });
+    expect(log).toMatchObject({ tier: 'small', model_out: 'sonnet', skip: null, parent_model: 'claude-fable-5-1', fable_off: false, subagent_type: 'Explore' });
   });
 
   test('低 confidence → stdout 空、skip=low_conf', async () => {
@@ -764,7 +861,25 @@ describe('子行程整合（本機 Jev stub，驗證 transport 與決策）', ()
     const r = await runHook('stub-up', 'ok-mid', sonnetTranscript);
     expect(r.code).toBe(0);
     expect(r.stdout).toBe('');
-    expect(logsOf('stub-up')).toEqual([expect.objectContaining({ skip: 'would_upgrade', parent_model: 'claude-sonnet-5-5', tier: 'mid' })]);
+    expect(logsOf('stub-up')).toEqual([expect.objectContaining({ skip: 'would_upgrade', parent_model: 'claude-sonnet-5-5', fable_off: false, tier: 'mid' })]);
+  });
+
+  test('fable 不可用（父模型被迫換到 sonnet）、top → stdout 填 opus、log fable_off=true', async () => {
+    // STEP 01: 執行並比對輸出與 log
+    /** hook 執行結果 */
+    const r = await runHook('stub-off-top', 'top', fableOffTranscript);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout).hookSpecificOutput.updatedInput).toEqual({ ...r.toolInput, model: 'opus' });
+    expect(logsOf('stub-off-top')).toEqual([expect.objectContaining({ tier: 'top', model_out: 'opus', skip: null, parent_model: FALLBACK_TO, fable_off: true })]);
+  });
+
+  test('fable 不可用、mid → 填 opus（對照 stub-up：同是父模型 sonnet，沒有強制換模型記錄時是 would_upgrade）', async () => {
+    // STEP 01: 執行並比對
+    /** hook 執行結果 */
+    const r = await runHook('stub-off-mid', 'ok-mid', fableOffTranscript);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout).hookSpecificOutput.updatedInput.model).toBe('opus');
+    expect(logsOf('stub-off-mid').map(skipOf)).toEqual([null]);
   });
 
   test('HTTP 500 → fail-open：stdout 空、exit 0、log 有 error', async () => {

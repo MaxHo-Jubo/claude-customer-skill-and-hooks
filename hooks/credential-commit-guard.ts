@@ -44,6 +44,7 @@
  */
 import { spawnSync } from 'child_process';
 import { isGitCommitCommand, resolveRepoRootFromCommand } from '../scripts/lib/review-marker';
+import { stripQuotedText } from '../scripts/lib/shell-text';
 
 /**
  * 疑似憑證的 ERE pattern。與 rules/common/security.md 的 pre-commit-scan、
@@ -76,18 +77,6 @@ export interface CommitInfo {
   all: boolean;
   /** 指定的 pathspec：這些路徑直接提交工作目錄版本 */
   paths: string[];
-}
-
-/**
- * 去除引號內文字與 heredoc 內容，避免 commit message 裡的 `;`、`&&`、`-a` 干擾旗標解析。
- * @param command Bash 指令字串
- * @returns 去除後的字串（引號內文字以空引號取代）
- */
-function stripQuotedText(command: string): string {
-  return command
-    .replace(/<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\s*\1\b/g, ' ')
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    .replace(/'[^']*'/g, "''");
 }
 
 /**

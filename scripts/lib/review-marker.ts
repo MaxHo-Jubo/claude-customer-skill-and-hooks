@@ -18,7 +18,7 @@
 import { homedir } from 'os';
 import { join, resolve, isAbsolute } from 'path';
 import { execSync } from 'child_process';
-import { readFileSync, unlinkSync, appendFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import { readFileSync, unlinkSync, appendFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs';
 import type { ReviewEngine } from './review-engine';
 
 /** marker 檔案存放目錄 */
@@ -143,6 +143,76 @@ export function isGitPushCommand(command: string): boolean {
  */
 export function repoRootToken(repoRoot: string): string {
   return repoRoot.replace(/[/\\]/g, '-');
+}
+
+/** codex review 報告輸出根目錄：與 scripts/codex-review.ts 的 OUTPUT_ROOT 同一路徑，兩邊必須一起改 */
+export const CODEX_REVIEW_OUTPUT_ROOT = join(homedir(), '.claude', 'state', 'codex-review');
+
+/**
+ * 判定 codex review「仍在跑」時，輸出目錄允許的最長靜止時間（毫秒）：超過視為 codex 已死。
+ * 取 codex-review.ts 的 DEFAULT_TIMEOUT_MS（900 秒）加 5 分鐘緩衝；codex 正常會持續寫面向 log，
+ * 靜止超過此值代表行程已被殺或當掉，閘門恢復原本的攔截，不能讓「進行中」變成永久放行。
+ */
+export const CODEX_RUNNING_MAX_IDLE_MS = 20 * 60 * 1000;
+
+/** 輸出目錄名（git short sha）的最短長度：git 預設縮寫下限 7，更短的名稱不可能是 commit hash，不做前綴比對 */
+const MIN_SHORT_SHA_LENGTH = 7;
+
+/** codex review 完成後才會寫入的總結檔名：存在即代表該輪已結束 */
+const CODEX_SUMMARY_FILE = 'summary.json';
+
+/**
+ * 該 commit 的 codex review 是否仍在背景執行。
+ * 判準：輸出目錄 `<root>/<repoRootToken>/<shortSha>/` 存在、尚無 summary.json、且目錄內最近一次寫入在
+ * CODEX_RUNNING_MAX_IDLE_MS 之內。輸出目錄名是 git short sha（長度由 repo 設定決定），所以用前綴比對
+ * marker 的完整 hash，不 spawn git。
+ * 任何讀取錯誤一律回 false（= 無法證明在跑，閘門照舊攔截），不會因為讀不到而放行。
+ * 限制：同一 sha 重跑時舊的 summary.json 還在，會被判為「已結束」，退回原本的攔截行為。
+ * @param repoRoot marker 記錄的 git repo 根目錄絕對路徑
+ * @param commitHash marker 記錄的 commit hash（完整或縮寫皆可）
+ * @param now 現在時間（epoch ms）
+ * @param outputRoot 輸出根目錄；預設為真實位置，測試注入臨時目錄用
+ * @returns codex review 是否仍在執行
+ */
+export function isCodexReviewRunning(
+  repoRoot: string,
+  commitHash: string,
+  now: number,
+  outputRoot: string = CODEX_REVIEW_OUTPUT_ROOT,
+): boolean {
+  try {
+    // STEP 01: 列出該 repo 的輸出目錄，找出名稱是 commitHash 前綴的子目錄
+    /** 該 repo 在輸出根目錄下的 token 目錄 */
+    const tokenDir = join(outputRoot, repoRootToken(repoRoot));
+    if (!existsSync(tokenDir)) {
+      return false;
+    }
+    for (const name of readdirSync(tokenDir)) {
+      if (name.length < MIN_SHORT_SHA_LENGTH || !commitHash.startsWith(name)) {
+        continue;
+      }
+
+      // STEP 02: 已有 summary.json 代表該輪結束，不算進行中
+      /** 這個 commit 的 codex 輸出目錄 */
+      const runDir = join(tokenDir, name);
+      if (existsSync(join(runDir, CODEX_SUMMARY_FILE))) {
+        continue;
+      }
+
+      // STEP 03: 目錄本身（建立時間）與其中檔案（面向 log／json）取最新的寫入時間
+      /** 目錄與內含檔案中最新的 mtime（epoch ms） */
+      let latest = statSync(runDir).mtimeMs;
+      for (const f of readdirSync(runDir)) {
+        latest = Math.max(latest, statSync(join(runDir, f)).mtimeMs);
+      }
+      if (now - latest <= CODEX_RUNNING_MAX_IDLE_MS) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**

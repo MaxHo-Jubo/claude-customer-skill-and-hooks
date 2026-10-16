@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-label="Animation: a rule in CLAUDE.md that Claude keeps breaking is drafted into a guard; Claude asks whether to turn it on, you say yes, and the next git push gets a reminder. Beside it, the panel above the prompt shows its tabs: guards, memory, rules, the last update and settings">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+      .t { fill: #c9d1d9; font-size: 14px; } .m { fill: #8b949e; font-size: 13px; }
+      /* 14 秒一輪：左邊 3–50% 規則變成守門並命中；右邊面板 0–58% 停在守門分頁，之後依序切到其他分頁 */
+      .s1 { animation: s1 14s linear infinite; } @keyframes s1 { 0%, 3% { opacity: 0; } 3.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s2 { animation: s2 14s linear infinite; } @keyframes s2 { 0%, 14% { opacity: 0; } 14.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s3 { animation: s3 14s linear infinite; } @keyframes s3 { 0%, 26% { opacity: 0; } 26.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s3b { animation: s3b 14s linear infinite; } @keyframes s3b { 0%, 34% { opacity: 0; } 34.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s4 { animation: s4 14s linear infinite; } @keyframes s4 { 0%, 44% { opacity: 0; } 44.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .s4b { animation: s4b 14s linear infinite; } @keyframes s4b { 0%, 47% { opacity: 0; } 47.6%, 95.5% { opacity: 1; } 96%, 100% { opacity: 0; } }
+      .tab0 { animation: tab0 14s linear infinite; } @keyframes tab0 { 0%, 57.5% { opacity: 1; } 58%, 100% { opacity: 0; } }
+      .tab1 { animation: tab1 14s linear infinite; } @keyframes tab1 { 0%, 58% { opacity: 0; } 58.6%, 68% { opacity: 1; } 68.5%, 100% { opacity: 0; } }
+      .tab2 { animation: tab2 14s linear infinite; } @keyframes tab2 { 0%, 68.5% { opacity: 0; } 69.1%, 78.5% { opacity: 1; } 79%, 100% { opacity: 0; } }
+      .tab3 { animation: tab3 14s linear infinite; } @keyframes tab3 { 0%, 79% { opacity: 0; } 79.6%, 89% { opacity: 1; } 89.5%, 100% { opacity: 0; } }
+      .tab4 { animation: tab4 14s linear infinite; } @keyframes tab4 { 0%, 89.5% { opacity: 0; } 90.1%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+      .gd { animation: gd 14s linear infinite; } @keyframes gd { 0%, 37.5% { opacity: 1; } 38%, 100% { opacity: 0; } }
+      .go { animation: go 14s linear infinite; } @keyframes go { 0%, 38% { opacity: 0; } 38.6%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+      .h0 { animation: h0 14s linear infinite; } @keyframes h0 { 0%, 47.5% { opacity: 1; } 48%, 100% { opacity: 0; } }
+      .h1 { animation: h1 14s linear infinite; } @keyframes h1 { 0%, 48% { opacity: 0; } 48.6%, 99.5% { opacity: 1; } 100% { opacity: 1; } }
+    </style>
+  </defs>
+  <rect width="960" height="360" rx="18" fill="#0d1117"/>
+  <text x="40" y="48" class="sans" font-size="17" font-weight="600" fill="#e6edf3">Rules that keep slipping become guards. You approve first.</text>
+  <text x="40" y="72" class="sans m">A guard checks tool calls and reminds or blocks Claude. One panel holds guards, memory, rules, the last update and settings.</text>
+
+  <!-- 規則變成守門 -->
+  <g class="s1"><rect x="40" y="96" width="432" height="44" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="123" class="sans t">CLAUDE.md: Ask before pushing</text><text x="456" y="123" text-anchor="end" class="sans" font-size="13" fill="#f87171">corrected again ×2</text></g>
+  <g class="s2"><rect x="40" y="150" width="432" height="60" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="174" class="sans t">Draft guard #3 · remind</text><text x="56" y="197" class="mono m">Bash matches /git push/ · trial: 2 hits</text></g>
+  <g class="s3"><rect x="40" y="220" width="432" height="44" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="247" class="sans t">Claude: Turn on guard #3?</text><text x="456" y="247" text-anchor="end" class="mono s3b" font-size="14" fill="#7dd3fc">› yes</text></g>
+  <g class="s4"><rect x="40" y="274" width="432" height="60" rx="10" fill="#161b22" stroke="#30363d"/><text x="56" y="298" class="mono t">$ git push origin main</text><g class="s4b"><rect x="50" y="306" width="412" height="22" rx="6" fill="#2a2210"/><text x="60" y="322" class="sans" font-size="13" fill="#fbbf24">→ Pushing? Confirm with the user first</text></g></g>
+
+  <!-- 輸入框上方的面板 -->
+  <rect x="496" y="96" width="424" height="238" rx="12" fill="#161b22" stroke="url(#accent)" stroke-width="1.5"/>
+  <text x="512" y="124" class="mono" font-size="13"><tspan fill="#7dd3fc" font-weight="700">ctx-handoff</tspan><tspan fill="#8b949e"> · Project notes and guards</tspan></text>
+  <g>
+    <text x="519" y="154" class="mono" font-size="12" fill="#8b949e">Guards 4</text><g class="tab0"><rect x="512" y="140" width="71.60000000000001" height="20" rx="4" fill="#1f3a52"/><text x="519" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">Guards 4</text></g>
+    <text x="596.6" y="154" class="mono" font-size="12" fill="#8b949e">Memory 52</text><g class="tab1"><rect x="589.6" y="140" width="78.80000000000001" height="20" rx="4" fill="#1f3a52"/><text x="596.6" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">Memory 52</text></g>
+    <text x="681.4000000000001" y="154" class="mono" font-size="12" fill="#8b949e">Rules 7</text><g class="tab2"><rect x="674.4000000000001" y="140" width="64.4" height="20" rx="4" fill="#1f3a52"/><text x="681.4000000000001" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">Rules 7</text></g>
+    <text x="751.8000000000001" y="154" class="mono" font-size="12" fill="#8b949e">Last update</text><g class="tab3"><rect x="744.8000000000001" y="140" width="93.20000000000002" height="20" rx="4" fill="#1f3a52"/><text x="751.8000000000001" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">Last update</text></g>
+    <text x="851.0000000000001" y="154" class="mono" font-size="12" fill="#8b949e">Settings</text><g class="tab4"><rect x="844.0000000000001" y="140" width="71.60000000000001" height="20" rx="4" fill="#1f3a52"/><text x="851.0000000000001" y="154" class="mono" font-size="12" font-weight="700" fill="#7dd3fc">Settings</text></g>
+  </g>
+  <line x1="512" y1="168" x2="904" y2="168" stroke="#30363d"/>
+  <g class="tab0">
+      <g class="gd"><text x="512" y="188" class="mono" font-size="12"><tspan fill="#fbbf24">● draft</tspan></text></g>
+      <g class="go"><text x="512" y="188" class="mono" font-size="12"><tspan fill="#4ade80">● on</tspan></text></g>
+      <g class="h0"><text x="572.4" y="188" class="mono" font-size="12" fill="#8b949e">#3 · remind · 0 hits</text></g>
+      <g class="h1"><text x="572.4" y="188" class="mono" font-size="12" fill="#8b949e">#3 · remind · 1 hit</text></g>
+      <g class="gd"><rect x="837.6" y="174" width="66.4" height="20" rx="4" fill="#1f6feb"/><text x="870.8" y="188" text-anchor="middle" class="mono" font-size="12" fill="#e6edf3">Approve</text></g>
+      <g class="go"><rect x="830.4" y="174" width="73.60000000000001" height="20" rx="4" fill="#21262d"/><text x="867.2" y="188" text-anchor="middle" class="mono" font-size="12" fill="#e6edf3">Turn off</text></g>
+      <text x="528" y="210" class="mono" font-size="12"><tspan fill="#c9d1d9">Ask before pushing</tspan></text>
+      <text x="528" y="230" class="mono" font-size="12"><tspan fill="#c9d1d9">→ Pushing? Confirm with the user first</tspan></text>
+      <text x="528" y="250" class="mono" font-size="12"><tspan fill="#8b949e">Trial match: 2 of 148 tool calls</tspan></text>
+      <text x="512" y="278" class="mono" font-size="12"><tspan fill="#4ade80">● on</tspan> <tspan fill="#8b949e">#1 · block · 5 hits</tspan></text>
+      <text x="528" y="300" class="mono" font-size="12"><tspan fill="#c9d1d9">Forward slashes in Bash paths</tspan></text>
+    </g>
+  <g class="tab1">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#8b949e">Latest 4 of 52</tspan></text>
+      <text x="512" y="214" class="mono" font-size="12"><tspan fill="#a78bfa">Correction</tspan><tspan x="596" fill="#c9d1d9">Reply in the user's language</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#a78bfa">Preference</tspan><tspan x="596" fill="#c9d1d9">Ask before committing</tspan></text>
+      <text x="512" y="258" class="mono" font-size="12"><tspan fill="#a78bfa">Fact</tspan><tspan x="596" fill="#c9d1d9">Settings live in the panel</tspan></text>
+      <text x="512" y="280" class="mono" font-size="12"><tspan fill="#a78bfa">Location</tspan><tspan x="596" fill="#c9d1d9">Release steps: CONTRIBUTING.md</tspan></text>
+    </g>
+  <g class="tab2">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">8x</tspan><tspan x="556" fill="#c9d1d9">Check the deployed version first</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">5x</tspan><tspan x="556" fill="#c9d1d9">Run the pre-push check locally</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">3x</tspan><tspan x="556" fill="#c9d1d9">Forward slashes in Bash paths</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#4ade80" font-weight="700">2x</tspan><tspan x="556" fill="#c9d1d9">Ask before pushing</tspan></text>
+    </g>
+  <g class="tab3">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#8b949e">14:05 · every 30 messages · 3 changes</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#4ade80">+</tspan><tspan fill="#c9d1d9"> rule  Ask before pushing</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#fbbf24">~</tspan><tspan fill="#c9d1d9"> memory  Reply language</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#4ade80">+</tspan><tspan fill="#c9d1d9"> progress  panel animation, next: README</tspan></text>
+    </g>
+  <g class="tab4">
+      <text x="512" y="188" class="mono" font-size="12"><tspan fill="#c9d1d9">Keep the cache warm while away</tspan><tspan x="741.9999999999999" fill="#7dd3fc">on</tspan><tspan x="781.9999999999999" fill="#8b949e">default</tspan></text>
+      <text x="512" y="212" class="mono" font-size="12"><tspan fill="#c9d1d9">Messages between notes updates</tspan><tspan x="741.9999999999999" fill="#7dd3fc">30</tspan><tspan x="781.9999999999999" fill="#8b949e">panel</tspan></text>
+      <text x="512" y="236" class="mono" font-size="12"><tspan fill="#c9d1d9">Check before &quot;done&quot;</tspan><tspan x="741.9999999999999" fill="#7dd3fc">on</tspan><tspan x="781.9999999999999" fill="#8b949e">default</tspan></text>
+      <text x="512" y="260" class="mono" font-size="12"><tspan fill="#c9d1d9">Hand off at the threshold</tspan><tspan x="741.9999999999999" fill="#7dd3fc">off</tspan><tspan x="781.9999999999999" fill="#8b949e">default</tspan></text>
+    </g>
+  <text x="512" y="320" class="mono" font-size="11" fill="#6e7681">ctrl+x tab, then 1–5 to switch tabs</text>
+</svg>

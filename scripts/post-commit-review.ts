@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import { relative } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
 import { MARKER_DIR, markerPathForRepo, resolveRepoRootFromCommand, isGitCommitCommand, isGitPushCommand, detectNewCommit, commitWindowSec, recordSeenHead, type ReviewMarker, aspectsForTier } from './lib/review-marker';
 import { computeTier } from './lib/tier';
+import { planEslintRuns } from './lib/eslint-targets';
 import { resolveEngine, buildSkillInvocation, type EngineDecision, type ReviewEngine } from './lib/review-engine';
 
 /**
@@ -21,6 +23,22 @@ import { resolveEngine, buildSkillInvocation, type EngineDecision, type ReviewEn
  * 觸發條件：Bash 執行的命令包含 `git commit`
  * 例外：命令包含 `git push` 子指令（commit and push 場景跳過）
  */
+
+/** 單一 eslint 組的執行逾時（毫秒）：超過視為卡住，該組回報「未執行」 */
+const ESLINT_TIMEOUT_MS = 30000;
+
+/**
+ * 全部 eslint 組合計可用的時間預算（毫秒）：settings.json 給整支 hook 的上限是 60 秒，
+ * 逐組同步執行時各組 30 秒會累加，超過上限 hook 被終止，後面的 Tier 判定與 writeMarker 就不會執行
+ * （commit 沒有 pending-review 閘門）。預留 20 秒給 git 查詢、Tier 判定與上鎖。
+ */
+const ESLINT_TOTAL_BUDGET_MS = 40000;
+
+/** 單一 eslint 組回報給模型的輸出字數上限：避免大量 lint 訊息灌爆 systemMessage */
+const ESLINT_OUTPUT_MAX_CHARS = 2000;
+
+/** eslint 未執行時附上的 stderr 首行字數上限：只要看得出原因，不需完整堆疊 */
+const ESLINT_STDERR_HINT_CHARS = 120;
 
 /** hook 的 stdin JSON 資料 */
 let input = '';
@@ -114,31 +132,63 @@ process.stdin.on('end', () => {
       }
     }
 
-    // STEP 08: 對修改的檔案執行 eslint
+    // STEP 08: 對修改的檔案執行 eslint——依設定檔位置分組，在各組資料夾用本機 eslint 執行。
+    // 不在 repo 根目錄跑 npx：多數 repo 的 eslint 設定與 node_modules 在子資料夾，根目錄跑會
+    // 下載錯版本並 exit 2 被當環境問題跳過（見 lib/eslint-targets.ts）
     let eslintResult = '';
     if (repoRoot && changedFiles.length > 0) {
-      try {
-        // 檔名逐一 quote：含空白的路徑不 quote 會被 shell 拆成多個引數
-        const quotedFiles = changedFiles.map((f) => `'${f.replace(/'/g, `'\\''`)}'`).join(' ');
-        execSync(`npx eslint ${quotedFiles}`, {
-          cwd: repoRoot,
-          encoding: 'utf8',
-          timeout: 30000,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        });
-        /** eslint 通過，無錯誤 */
-        eslintResult = '✅ eslint: 全部通過';
-      } catch (e: unknown) {
-        /** eslint 非 0 離開：status 1 才是真的抓到 lint 問題 */
-        const err = e as { stdout?: string; message?: string; status?: number };
-        if (err.status === 1) {
-          eslintResult = '❌ eslint 發現問題:\n' + (err.stdout || '').slice(0, 2000);
-        } else {
-          // status 2（缺 eslint.config.*）/ 127（未安裝）等屬環境問題，不是程式碼問題。
-          // 報成「發現問題」會讓 Claude 去修不存在的 lint 錯誤（本 repo 無 config，實測踩到）。
-          eslintResult = `⏭️ eslint: 未執行（無設定檔或工具不可用，exit ${err.status ?? '?'}），跳過`;
+      // STEP 08.01: 規劃分組（已刪除的檔案在此略過）
+      /** 本次 commit 的 eslint 執行規劃 */
+      const plan = planEslintRuns(repoRoot, changedFiles);
+      /** 各組與無設定檔檔案的結果行，最後串成 eslintResult */
+      const lines: string[] = [];
+
+      // STEP 08.02: 逐組執行（各組共用 ESLINT_TOTAL_BUDGET_MS，預算用完的組如實標示跳過）
+      /** 全部 eslint 組的截止時間（epoch 毫秒） */
+      const deadline = Date.now() + ESLINT_TOTAL_BUDGET_MS;
+      for (const group of plan.groups) {
+        /** 顯示用的組位置（相對於 repo 根目錄） */
+        const where = relative(repoRoot, group.dir) || '.';
+        if (group.bin === null) {
+          lines.push(`⏭️ eslint [${where}]：找不到本機 eslint（node_modules/.bin/eslint），跳過 ${group.files.length} 檔`);
+          continue;
+        }
+        /** 此組可用的剩餘預算（毫秒） */
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          lines.push(`⏭️ eslint [${where}]：總時間預算 ${ESLINT_TOTAL_BUDGET_MS / 1000} 秒已用完，跳過 ${group.files.length} 檔`);
+          continue;
+        }
+        try {
+          // execFileSync 直接傳 argv：路徑含空白或單引號也不會被 shell 拆開
+          execFileSync(group.bin, group.files, {
+            cwd: group.dir,
+            encoding: 'utf8',
+            timeout: Math.min(ESLINT_TIMEOUT_MS, remaining),
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          lines.push(`✅ eslint [${where}]：${group.files.length} 檔通過`);
+        } catch (e: unknown) {
+          /** eslint 非 0 離開：status 1 才是真的抓到 lint 問題 */
+          const err = e as { stdout?: string; stderr?: string; status?: number };
+          if (err.status === 1) {
+            lines.push(`❌ eslint [${where}] 發現問題:\n` + (err.stdout || '').slice(0, ESLINT_OUTPUT_MAX_CHARS));
+          } else {
+            // status 2（設定檔壞掉）/ 逾時（status 為 null）等屬環境問題，不是程式碼問題。
+            // 報成「發現問題」會讓 Claude 去修不存在的 lint 錯誤；附 stderr 首行讓原因看得見，
+            // 不再只留一個 exit code（舊版 stderr 丟掉，6/6 次「未執行」都沒人知道為什麼）
+            /** stderr 第一個非空行；沒有為空字串 */
+            const hint = (err.stderr || '').split('\n').find((l) => l.trim() !== '') || '';
+            lines.push(`⏭️ eslint [${where}]：未執行（exit ${err.status ?? '?'}${hint ? `：${hint.slice(0, ESLINT_STDERR_HINT_CHARS)}` : ''}），跳過 ${group.files.length} 檔`);
+          }
         }
       }
+
+      // STEP 08.03: 往上找不到任何設定檔的檔案如實列出，不假裝檢查過
+      if (plan.unconfigured.length > 0) {
+        lines.push(`⏭️ eslint：${plan.unconfigured.length} 檔找不到 eslint 設定檔，跳過`);
+      }
+      eslintResult = lines.length > 0 ? lines.join('\n') : '⏭️ eslint: 變更的檔案皆已刪除，跳過';
     } else if (!repoRoot) {
       // 與「確實沒有 JS/TS 變更」區分：這裡是根本沒查成，不可謊稱已檢查過
       eslintResult = '⚠️ eslint: 無法解析目標 repo，未執行';

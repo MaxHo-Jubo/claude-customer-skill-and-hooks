@@ -20,6 +20,13 @@ import { type Tier, TIER_LABELS, TIER_QUESTIONS } from '../scripts/lib/jev-quest
  * 該回合的派工仍以舊模型為上限，可能填出比目前主模型貴的 model（2026-10-11 實測近 30 天 1,861 個 transcript 中 2 個 session 中途換過模型家族）。
  * 已寫 model、fork、或子代理定義檔自帶固定 model 的派工都不碰。
  *
+ * fable 不可用時用 opus（2026-10-12 user 指定）：Fable 週額度到頂且 user 不用 usage credits 時，Claude Code 會寫一筆
+ * system/model_consent_fallback 把主 session 換到預設模型（2026-09-17 實例：claude-fable-5-1 → claude-sonnet-5，persistedAsDefault），
+ * 此後父模型是被迫的、不是 user 選的。readParentState 讀到「最後一筆該記錄從 fable 換走、且父模型仍是它換到的家族」就視為 fable 不可用：
+ * 上限放寬到 fable（haiku／sonnet／opus 都可填）、top 改填 FABLE_FALLBACK_MODEL。本 hook 只管子代理，主 session 跑什麼要 user 自己 /model。
+ * 已知盲區：persistedAsDefault 讓之後新開的 session 直接以預設模型啟動、transcript 沒有該記錄，那些 session 會被當成 user 自選的便宜模型（只降不升照舊）；
+ * user 在同家族內手動切換（sonnet-5 → sonnet-5-5）分不出來，仍視為 fable 不可用。
+ *
  * 錯誤處理：
  * - Jev 呼叫失敗（逾時、HTTP 錯誤、回應缺 answers）fail-open：不輸出、exit 0，錯誤由 askJev 寫入 ~/.claude/state/jev/decisions.jsonl（與 A/B/C 一致）
  * - stdin 欄位不合法：視為不可路由，不輸出、exit 0，log skip=invalid_input
@@ -63,6 +70,8 @@ export const ROUTE_TIMEOUT_MS = 4000;
 export type RoutedModel = 'haiku' | 'sonnet' | 'opus';
 /** 等級 → 要填的 model；null 表示不填（維持繼承主 session 模型） */
 export const TIER_MODEL: Record<Tier, RoutedModel | null> = { light: 'haiku', small: 'sonnet', mid: 'opus', top: null };
+/** fable 不可用時 top 等級改填的 model（2026-10-12 user 指定：無法使用 fable 時用 opus） */
+export const FABLE_FALLBACK_MODEL: RoutedModel = 'opus';
 /**
  * 模型家族由便宜到貴的等級，只降不升判斷用（capByParent）。
  * 新的模型家族要補進來；不在表內的父模型一律 parent_unknown（不改寫）
@@ -70,6 +79,8 @@ export const TIER_MODEL: Record<Tier, RoutedModel | null> = { light: 'haiku', sm
 export const MODEL_RANK = { haiku: 0, sonnet: 1, opus: 2, fable: 3 } as const;
 /** MODEL_RANK 認得的模型家族 */
 export type ModelFamily = keyof typeof MODEL_RANK;
+/** 被 Claude Code 因額度到頂強制換走時，上限要放寬到的模型家族 */
+const FABLE_FAMILY: ModelFamily = 'fable';
 /** 完整模型 ID（claude-<family>-…）取 family 的樣式 */
 const MODEL_ID_RE = /^claude-([a-z]+)-/;
 /** transcript 中非模型產生的 assistant 記錄（中斷、錯誤訊息等）的 model 值，讀父模型時跳過 */
@@ -91,6 +102,12 @@ export const HEAD_MAX_BYTES = 8 * KIB * KIB;
 const ASSISTANT_MARK = '"type":"assistant"';
 /** transcript 行的粗篩字串：模型 identity attachment */
 const IDENTITY_MARK = '"identity"';
+/** Claude Code 強制換模型的 system 記錄 subtype（Fable 額度到頂、user 不用 usage credits 時寫入） */
+const CONSENT_FALLBACK_SUBTYPE = 'model_consent_fallback';
+/** transcript 行的粗篩字串：強制換模型記錄（transcript JSON 無空白，與 ASSISTANT_MARK 同假設） */
+const CONSENT_FALLBACK_MARK = `"subtype":"${CONSENT_FALLBACK_SUBTYPE}"`;
+/** 換行字元的位元組值（在 Buffer 中找行界用） */
+const NEWLINE_BYTE = 0x0a;
 
 /** 內建、且不帶固定 model 的 subagent_type（2.1.296 binary：Explore／Plan 為 model:"inherit"） */
 const BUILTIN_ROUTABLE = new Set(['general-purpose', 'claude', 'Explore', 'Plan']);
@@ -160,6 +177,22 @@ export interface TierReading {
 
 /** 單次路由決策：tier 讀數加上路由結果 */
 export type RouteDecision = TierReading & RouteResult;
+
+/** 父 session 的模型狀態（readParentState 產出；fableOff 為 true 時 model 必有值且家族不是 fable） */
+export interface ParentState {
+  /** 父模型 ID（位置最新的 assistant 記錄或 identity）；讀不到為 null */
+  model: string | null;
+  /** fable 已不可用：最後一筆 model_consent_fallback 從 fable 換走，且目前父模型仍是它換到的家族（user 沒再手動換別的家族） */
+  fableOff: boolean;
+}
+
+/** model_consent_fallback 記錄中本 hook 用到的欄位 */
+export interface ConsentFallback {
+  /** 被換掉的模型 ID */
+  originalModel: string;
+  /** 換到的模型 ID */
+  fallbackModel: string;
+}
 
 /**
  * 是否為非 null、非陣列的物件
@@ -605,15 +638,114 @@ export function readParentModel(transcriptPath: string | null): string | null {
 }
 
 /**
- * 只降不升：候選 model 必須在 MODEL_RANK 上嚴格低於父模型才填
- * @param model - 由等級查出的候選 model
- * @param parentModel - 父模型 ID 或裸名；null 表示讀不到
- * @returns 路由結果；父模型不明 → parent_unknown，候選不比父模型便宜 → would_upgrade
+ * 取 Buffer 中包含 at 位置的那一行（不含換行）；結尾沒有換行代表該行正在寫入，仍回傳、由解析決定
+ * @param buf - 檔案內容
+ * @param at - 行內任一位元組位置
+ * @returns 該行文字
  */
-export function capByParent(model: RoutedModel, parentModel: string | null): RouteResult {
-  // STEP 01: 父模型不明時不改寫
+function lineAround(buf: Buffer, at: number): string {
+  // STEP 01: 往前找行首（前一個換行之後）、往後找行尾
+  /** 行首位元組位置 */
+  const start = buf.lastIndexOf(NEWLINE_BYTE, at) + 1;
+  /** 行尾換行位置；沒有換行為 -1 */
+  const nl = buf.indexOf(NEWLINE_BYTE, at);
+  return buf.subarray(start, nl < 0 ? buf.length : nl).toString('utf-8');
+}
+
+/**
+ * 解析一行是否為 Claude Code 強制換模型的 model_consent_fallback 記錄
+ * @param line - 一行文字
+ * @returns 原模型與換到的模型；不是該記錄、欄位缺漏或解析失敗回 null
+ */
+function parseConsentFallback(line: string): ConsentFallback | null {
+  // STEP 01: type=system、subtype 相符
+  /** 解析後的記錄；解析失敗為 null */
+  const rec = parseLineOrNull(line);
+  if (!isRecord(rec) || rec.type !== 'system' || rec.subtype !== CONSENT_FALLBACK_SUBTYPE) {
+    return null;
+  }
+  // STEP 02: 兩個模型欄位都要是字串
+  /** 記錄的原模型與換到的模型欄位 */
+  const { originalModel, fallbackModel } = rec;
+  return typeof originalModel === 'string' && typeof fallbackModel === 'string' ? { originalModel, fallbackModel } : null;
+}
+
+/**
+ * 從 transcript 找位置最後的 model_consent_fallback 記錄。整檔讀入後以 lastIndexOf 往回找
+ * （2026-10-12 實測本機最大 15.8MB 的 transcript 讀＋找 13ms），粗篩命中但解析不是該記錄的行（例如訊息內容提到這個字串）跳過繼續往前
+ * @param transcriptPath - transcript 路徑（呼叫端已確認存在）
+ * @returns 記錄；沒有回 null
+ */
+export function readConsentFallback(transcriptPath: string): ConsentFallback | null {
+  // STEP 01: 整檔讀入
+  /** transcript 內容 */
+  const buf = fs.readFileSync(transcriptPath);
+  // STEP 02: 從檔尾往前找粗篩字串，解析成功即回傳；from 降到負數前停止（負數 offset 會被當成從檔尾數）
+  /** 本輪往回找的起點 */
+  let from = buf.length;
+  while (from >= 0) {
+    /** 粗篩字串的位置；找不到為 -1 */
+    const at = buf.lastIndexOf(CONSENT_FALLBACK_MARK, from);
+    if (at < 0) {
+      return null;
+    }
+    /** 該行解析結果 */
+    const rec = parseConsentFallback(lineAround(buf, at));
+    if (rec) {
+      return rec;
+    }
+    from = at - 1;
+  }
+  return null;
+}
+
+/**
+ * 讀父 session 的模型狀態：父模型照 readParentModel；父模型不是 fable 時再查是否因 Fable 額度到頂被 Claude Code 強制換走
+ * （2026-09-17 真實記錄：system/model_consent_fallback，originalModel claude-fable-5-1 → fallbackModel claude-sonnet-5，persistedAsDefault true）。
+ * 父模型讀不到、或本來就在用 fable 時不查
+ * @param transcriptPath - stdin 的 transcript_path；沒帶時回 { model: null, fableOff: false }
+ * @returns 父模型狀態
+ */
+export function readParentState(transcriptPath: string | null): ParentState {
+  // STEP 01: 父模型；讀不到或正在用 fable 都不是「fable 不可用」
+  /** 父模型 ID；讀不到為 null */
+  const model = readParentModel(transcriptPath);
   /** 父模型的家族；讀不到或不在等級表為 null */
-  const family = parentModel ? modelFamily(parentModel) : null;
+  const family = model ? modelFamily(model) : null;
+  if (!transcriptPath || !family || family === FABLE_FAMILY) {
+    return { model, fableOff: false };
+  }
+  // STEP 02: 最後一筆強制換模型記錄是從 fable 換走、且父模型仍是它換到的家族 → fable 不可用
+  /** 最後一筆強制換模型記錄；沒有為 null */
+  const fb = readConsentFallback(transcriptPath);
+  /** 是否從 fable 換到目前父模型的家族 */
+  const fableOff = fb !== null && modelFamily(fb.originalModel) === FABLE_FAMILY && modelFamily(fb.fallbackModel) === family;
+  return { model, fableOff };
+}
+
+/**
+ * 路由上限的模型家族：fable 不可用時視為 fable（haiku／sonnet／opus 都比它低，可填），否則為父模型家族
+ * @param parent - 父模型狀態
+ * @returns 模型家族；父模型讀不到或不在等級表回 null
+ */
+function ceilingOf(parent: ParentState): ModelFamily | null {
+  // STEP 01: fable 不可用時上限視為 fable，否則取父模型家族
+  if (parent.fableOff) {
+    return FABLE_FAMILY;
+  }
+  return parent.model ? modelFamily(parent.model) : null;
+}
+
+/**
+ * 只降不升：候選 model 必須在 MODEL_RANK 上嚴格低於上限（父模型家族；fable 不可用時為 fable）才填
+ * @param model - 由等級查出的候選 model
+ * @param parent - 父模型狀態
+ * @returns 路由結果；上限不明 → parent_unknown，候選不比上限便宜 → would_upgrade
+ */
+export function capByParent(model: RoutedModel, parent: ParentState): RouteResult {
+  // STEP 01: 上限不明時不改寫
+  /** 上限的模型家族；讀不到或不在等級表為 null */
+  const family = ceilingOf(parent);
   if (!family) {
     return { model: null, skip: 'parent_unknown' };
   }
@@ -622,26 +754,26 @@ export function capByParent(model: RoutedModel, parentModel: string | null): Rou
 }
 
 /**
- * 依等級、confidence 與父模型決定填哪個 model（評估腳本共用，確保評估的就是 hook 的決策）
+ * 依等級、confidence 與父模型狀態決定填哪個 model（評估腳本共用，確保評估的就是 hook 的決策）
  * @param tier - Jev 判定的等級
  * @param conf - confidence
  * @param min - confidence 下限；hook 用 ROUTE_CONF_MIN，評估掃多個門檻
- * @param parentModel - 父模型 ID 或裸名；null 表示讀不到
+ * @param parent - 父模型狀態
  * @returns 路由結果
  */
-export function routeModel(tier: Tier, conf: number, min: number, parentModel: string | null): RouteResult {
+export function routeModel(tier: Tier, conf: number, min: number, parent: ParentState): RouteResult {
   // STEP 01: confidence 不足
   if (conf < min) {
     return { model: null, skip: 'low_conf' };
   }
-  // STEP 02: 查表；top 不填
-  /** 等級對應的候選 model；top 為 null */
-  const model = TIER_MODEL[tier];
+  // STEP 02: 查表；top 平常不填（繼承），fable 不可用時改填 FABLE_FALLBACK_MODEL
+  /** 等級對應的候選 model；top 在 fable 可用時為 null */
+  const model = TIER_MODEL[tier] ?? (parent.fableOff ? FABLE_FALLBACK_MODEL : null);
   if (!model) {
     return { model: null, skip: 'top' };
   }
   // STEP 03: 只降不升
-  return capByParent(model, parentModel);
+  return capByParent(model, parent);
 }
 
 /**
@@ -665,14 +797,14 @@ export function readTier(a: JevAnswer | undefined): TierReading {
 /**
  * 讀 Jev 的 tier 答案並決定路由
  * @param a - tier 題的原始答案（不合法時丟錯）
- * @param parentModel - 父模型 ID；null 表示讀不到
+ * @param parent - 父模型狀態
  * @returns 路由決策
  */
-export function decideRoute(a: JevAnswer | undefined, parentModel: string | null): RouteDecision {
+export function decideRoute(a: JevAnswer | undefined, parent: ParentState): RouteDecision {
   // STEP 01: 讀答案後套門檻、對照表與只降不升
   /** tier 讀數 */
   const t = readTier(a);
-  return { ...t, ...routeModel(t.tier, t.conf, ROUTE_CONF_MIN, parentModel) };
+  return { ...t, ...routeModel(t.tier, t.conf, ROUTE_CONF_MIN, parent) };
 }
 
 /**
@@ -730,9 +862,9 @@ async function main(): Promise<void> {
     logDecision({ ...agentBase, skip });
     return;
   }
-  // STEP 04: 讀父模型、問 Jev；Jev 失敗已在 askJev 內寫 log，直接放行
-  /** 父模型 ID；讀不到為 null */
-  const parent = readParentModel(stringOrNull(raw.transcript_path));
+  // STEP 04: 讀父模型狀態、問 Jev；Jev 失敗已在 askJev 內寫 log，直接放行
+  /** 父模型狀態（模型 ID 與 fable 是否不可用） */
+  const parent = readParentState(stringOrNull(raw.transcript_path));
   /** Jev 回應；呼叫失敗為 null（已寫 log） */
   const res = await askJev(HOOK_NAME, buildState(ti), TIER_QUESTIONS, ROUTE_TIMEOUT_MS);
   if (!res) {
@@ -742,7 +874,7 @@ async function main(): Promise<void> {
   /** 路由決策 */
   const d = decideRoute(res.answers.tier, parent);
   logDecision({
-    ...agentBase, parent_model: parent, ms: Math.round(res.ms), tier: d.tier, tier_conf: d.conf,
+    ...agentBase, parent_model: parent.model, fable_off: parent.fableOff, ms: Math.round(res.ms), tier: d.tier, tier_conf: d.conf,
     tier_2nd: d.second, tier_2nd_p: d.secondP, model_out: d.model, skip: d.skip,
   });
   if (d.model) {

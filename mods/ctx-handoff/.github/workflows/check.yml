@@ -1,0 +1,40 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Point Claude Code at Git Bash
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo 'CLAUDE_CODE_GIT_BASH_PATH=C:\Program Files\Git\bin\bash.exe' >> "$GITHUB_ENV"
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude --version
+      - name: Validate the plugin
+        run: claude plugin validate .
+      - name: Plugin tests
+        run: claude plugin test .
+      - name: Tool tests
+        run: node --test "tools/*.test.mjs"
+      - name: Bilingual docs match
+        run: node tools/docs.mjs check .
+      - name: Lint
+        # Same Biome version as the $schema in biome.json
+        run: npx -y @biomejs/biome@2.5.15 lint --error-on-warnings .

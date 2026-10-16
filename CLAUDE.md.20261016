@@ -98,7 +98,7 @@ naming: 區域變數短名稱，全域介面描述性名稱
 
 <commit-msg>
 
-format: "[Jira編號] 類型(專案標識): 說明" | Jira 從 branch 名取得（如 ERPD-7777/feat/max_ho/測試→[ERPD-7777]），無編號則不加
+format: "[Jira編號] 類型(專案標識): 說明" | Jira 從 branch 名取得（如 ERPD-7777/feat/max_ho/測試→[ERPD-7777]），branch 名無編號時先找這項工作對應的票（handoff／todo／inventory 等記錄），找到就帶，找不到才省略，不可拿父票／鄰近票湊數
 types: feat/fix/refactor/chore/docs/test
 desc-with-featurepath: 檔案有 FeaturePath 標註→說明以完整 FeaturePath 開頭再接描述
 desc-without-featurepath: XXApp-描述 或 系統名稱-描述

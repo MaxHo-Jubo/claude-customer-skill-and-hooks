@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execSync } from 'child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -10,7 +10,7 @@ import { join } from 'path';
  * 檔名以臨時 repo 路徑為 key，不會碰到真實 repo 的紀錄；afterAll 負責刪掉本檔寫入的那一個。
  * 需要完全隔離的 hook 層測試在 post-commit-review.test.ts，以子行程帶入 HOME。
  */
-const { detectNewCommit, recordSeenHead, lastSeenHeadPath, commitWindowSec } = await import('./review-marker');
+const { detectNewCommit, recordSeenHead, lastSeenHeadPath, commitWindowSec, isCodexReviewRunning, repoRootToken, CODEX_RUNNING_MAX_IDLE_MS } = await import('./review-marker');
 
 /** 固定時效窗（秒）：無 duration_ms 時的退路值，與 review-marker.ts 的 NEW_COMMIT_WINDOW_SEC 一致 */
 const FALLBACK_WINDOW_SEC = 120;
@@ -112,5 +112,74 @@ describe('recordSeenHead', () => {
     recordSeenHead(repo);
     expect(lastSeenHeadPath(repo).endsWith('.json')).toBe(false);
     expect(existsSync(lastSeenHeadPath(repo))).toBe(true);
+  });
+});
+
+describe('isCodexReviewRunning', () => {
+  /** 受測的完整 commit hash（40 字元） */
+  const FULL_HASH = 'abcdef0123456789abcdef0123456789abcdef01';
+  /** codex-review.ts 輸出目錄名：git short sha（此處 10 字元，與本機 core.abbrev 實況一致） */
+  const SHORT = FULL_HASH.slice(0, 10);
+  /** 假 repo 根目錄（只用來推導 token 目錄名，不需真實存在） */
+  const FAKE_REPO = '/fake/codex-guard-repo';
+  /** 距離「最近一次寫入」多少毫秒後才判死：要小於上限才算還活著，這裡取上限前 1 分鐘 */
+  const JUST_INSIDE_MS = CODEX_RUNNING_MAX_IDLE_MS - 60 * 1000;
+  /** 超過上限 1 分鐘：必判為已死 */
+  const JUST_OUTSIDE_MS = CODEX_RUNNING_MAX_IDLE_MS + 60 * 1000;
+
+  /** 臨時輸出根目錄（注入給受測函式，不碰真實 ~/.claude/state/codex-review） */
+  let root = '';
+
+  /** 建立 `<root>/<token>/<name>/`，並可選擇寫入檔案；回傳該目錄路徑 */
+  const makeRun = (name: string, files: string[] = []): string => {
+    /** 該 commit 的輸出目錄 */
+    const dir = join(root, repoRootToken(FAKE_REPO), name);
+    mkdirSync(dir, { recursive: true });
+    for (const f of files) {
+      writeFileSync(join(dir, f), '{}');
+    }
+    return dir;
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'codex-root-'));
+  });
+
+  afterAll(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('token 目錄不存在 → false', () => {
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(false);
+  });
+
+  test('目錄剛建立、還沒有任何檔案（codex 剛啟動）→ true', () => {
+    makeRun(SHORT);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(true);
+  });
+
+  test('有面向 log、沒有 summary.json → true；完整 hash 以前綴比對縮寫目錄名', () => {
+    makeRun(SHORT, ['aspect-rules.log']);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(true);
+  });
+
+  test('靜止未超過上限 → true；超過上限 → false（注入未來時間，邊界兩側）', () => {
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now() + JUST_INSIDE_MS, root)).toBe(true);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now() + JUST_OUTSIDE_MS, root)).toBe(false);
+  });
+
+  test('summary.json 已出現（該輪已結束）→ false', () => {
+    makeRun(SHORT, ['aspect-rules.log', 'summary.json']);
+    expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(false);
+  });
+
+  test('另一個 commit 的目錄不影響：hash 不同 → false', () => {
+    const other = 'fedcba9876543210fedcba9876543210fedcba98';
+    expect(isCodexReviewRunning(FAKE_REPO, other, Date.now(), root)).toBe(false);
+  });
+
+  test('目錄名短於 7 字元不做前綴比對（不可能是 commit hash）→ false', () => {
+    makeRun('abc', ['x.log']);
+    expect(isCodexReviewRunning(FAKE_REPO, 'abcdef0', Date.now(), root)).toBe(false);
   });
 });

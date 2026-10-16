@@ -55,7 +55,7 @@
 
 ---
 
-## Skills 一覽（31 個自訂 skill）
+## Skills 一覽（32 個自訂 skill）
 
 ### 自訂 Skills（有 slash command）
 
@@ -74,7 +74,8 @@
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
 | commit-review | `/commit-review [target]` | 1.5.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent；v1.5.0 agent 路徑每個 `Agent()` 明寫 `effort: "high"`（不帶時吃 `modelSettings`、不繼承主 session） |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.9.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
+| weekly-review | `/weekly-review` | 1.10.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.10.0 STEP 09 環境檢討改派 subagent 照 `retro` skill 執行；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
+| retro | `/retro [session 路徑或 uuid]` | — | 對 coding session 做環境檢討（只讀不改）：每個改善候選必附 session 檔路徑＋行號證據，產出候選清單由使用者逐項確認後另行執行；`weekly-review` STEP 09 也派 subagent 照本檔執行。`disable-model-invocation: true`。改寫自 mattpocock/skills 的 retro | 
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.0 | 同步本機 Claude 設定到 Repo（v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
 | humanizer-zh-tw | `/humanizer-zh-tw` | — | 去除文字中的 AI 生成痕跡，使其更自然，來源：[op7418/humanizer-zh](https://github.com/op7418/humanizer-zh)（fork 自 blader/humanizer） |
@@ -86,7 +87,7 @@
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
 | save-progress | `/save-progress` | 1.2.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md`；v1.2.0 新增 STEP 03 檢查 Teams 上有無未同步到 Jira 的討論 |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.2 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
+| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.3 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
@@ -103,7 +104,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 |-----|------|------|------|
 | review-band | 0.1.0 | 輸入框上方唯讀顯示有效的 pending-review marker（repo／Tier／commit／引擎／面向數／已過多久／是否本 session）；沒有 marker 不佔位，讀取失敗顯示原因；閘門與 commit-review 不經過它 | 自寫 |
 | tool-reminders | 0.1.0 | Write/Edit 成功後平行執行提醒類腳本（`inventory-drift-detector.ts`、`spec-section-validator.ts --warn-only`），非空輸出經 `tool.call` 的 `context` 送給 model（同回合送達、user 看不到）；取代送不到 model 的 PostToolUse stdout。腳本失敗時寫 transcript、跳 toast，並告知 model 結果未知 | 自寫 |
-| ctx-handoff | 0.1.0 | 互動 session 的 context 達 600k（或視窗 80%）時跑 `save-progress` 寫交接紀錄 → 驗證檔案寫好 → `/clear` → 新對話讀交接紀錄接續；閒置 55 分鐘刷新快取最多 3 次，之後存離席交接；`-p`／SDK 等非互動 session 不自動交接。指令 `/handoff-status`、`/handoff-now yes` 等，詳見 [`mods/ctx-handoff/README.zh-TW.md`](mods/ctx-handoff/README.zh-TW.md) | 修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（commit `f871109`，MIT） |
+| ctx-handoff | 0.7.0 | 互動 session 的 context 達 600k（或視窗 80%）時跑 `save-progress` 寫交接紀錄 → 驗證檔案寫好 → `/clear` → 新對話讀交接紀錄接續；閒置 55 分鐘刷新快取最多 3 次，之後存離席交接；`-p`／SDK 等非互動 session 不自動交接。指令 `/handoff-status`、`/handoff-now yes` 等，詳見 [`mods/ctx-handoff/README.zh-TW.md`](mods/ctx-handoff/README.zh-TW.md) | 修改自 [cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod)（升上游 0.7.0 後重新移植 `save-progress` 交接；`auto_handoff` 上游預設關，本機靠 `settings.json` 開；MIT） |
 
 ## Hooks 一覽
 
@@ -115,6 +116,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 | PreToolUse | 工具執行前 | Read | `big-read-guard.sh` | 大檔（行數 ≥ 門檻）整檔 Read（無 offset/limit）時 deny 一次，提示改用 smart_outline；同檔每 session 只擋一次；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Bash | `commit-gate-guard.ts` | pending-review 閘門：該 repo 有 Tier 2/3 commit 的 review 尚未完成（存在 marker）時，deny 開新 commit；放行 `--amend`/`push`/commit message 含 `[skip-review]`；marker 逾 4 小時自動清除放行；擋下時寫 `DENIALS.jsonl` |
 | PreToolUse | 工具執行前 | Bash | `credential-commit-guard.ts` | git commit 前憑證掃描：只在指令含 `git commit` 時觸發，只掃**新增行**（暫存區；`-a`／`--all` 另掃未暫存的已追蹤變更；指定 pathspec 另掃該些路徑的工作目錄內容），移除或替換憑證的清理 commit 不會被擋；pattern 與 `rules/common/security.md` 的 pre-commit-scan 相同（測試機械檢查三處逐字一致）；命中即 deny、reason 只列檔名不印內容；commit 指令含 `[skip-credential-scan]` 放行（測試 fixture 假憑證用）；hook 自身錯誤（無效 JSON、欄位型別不符、git 掃描失敗）不擋 commit 但 exit 1 + stderr 交 `hook-error-wrapper` 記錄；擋下寫 `DENIALS.jsonl`。限制：同一個 Bash 指令內先 add 再 commit 時掃不到剛 add 的檔；指令解析是 shell 的近似 |
+| PreToolUse | 工具執行前 | Bash | `sed-inplace-guard.ts` | 機械禁止 `sed -i`（CLAUDE.md 文字規則擋不住，2 個 session 用了 4 次）：先去除引號與 heredoc 內文字再找 sed 指令，`grep "sed -i"`、commit message 提到不算；指令含 `[allow-sed-i]` 放行；`stripQuotedText` 與 `credential-commit-guard.ts` 共用 `scripts/lib/shell-text.ts` |
 | PreToolUse | 工具執行前 | Agent | `agent-model-router.ts` | 派工模型路由（Jev D 掛載點）：主模型派 subagent 沒寫 `model` 時，brief 送 Jev 分級 light／small／mid／top → 填 haiku／sonnet／opus，top 不填；只降不升由執行期保證：從 `transcript_path` 讀父模型，候選必須嚴格低於父模型（否則 `would_upgrade`，讀不到 `parent_unknown`）；以 `updatedInput` 整包取代工具輸入；conf < 0.3 不填；已寫 model／`fork`／定義檔固定 model（專案層優先）／找不到定義檔不碰；決策寫 `decisions.jsonl`（`D-route`）；Jev 失敗 fail-open，自身錯誤 exit 1 進 `ERRORS.jsonl` |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `spec-section-validator.ts` | spec 缺必要區段時 block（空骨架警告改由 `tool-reminders` mod 處理） |
 | PostToolUse | 寫入/編輯後 | Write\|Edit | `skill-version-check.ts` | SKILL.md 被編輯時提醒進版號 |
@@ -148,7 +150,7 @@ Function hooks plugin（Claude Code 的 mod），放在 `~/.claude/mods/`，由 
 
 | 分類 | 數量 | 說明 |
 |------|------|------|
-| Plugins（啟用） | 9 | atlassian、frontend-design、typescript-lsp、context7、pr-review-toolkit、claude-mem、playwright、mcp-outline、cc-plugin-you-should-know（Claude Code 內建） |
+| Plugins（啟用） | 10 | atlassian、frontend-design、typescript-lsp、context7、pr-review-toolkit、claude-mem、playwright、mcp-outline、cc-plugin-you-should-know（Claude Code 內建）、ask-better（prompt 教練，試用至 10-22） |
 | Plugins（停用） | 10 | github、everything-claude-code、document-skills、superpowers、claude-hud、claude-md-management、gopls-lsp、jdtls-lsp、code-simplifier、code-review |
 | MCP Servers | 3 | pr-watcher、codebase-memory-mcp、luna-web-readonly（獨立於 plugins 的 MCP Server 設定） |
 
@@ -260,6 +262,18 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-16: weekly-review 環境檢討改善（codex 放行／分組 eslint／憑證掃描腳本／sed -i hook／ctx-handoff 誤報）
+
+- **`hooks/stop-review-guard.ts` + `scripts/lib/review-marker.ts`**：codex review 在背景跑時放行 Stop 且不計入保險絲（新增 `isCodexReviewRunning`）；靜止逾 20 分鐘視為 codex 已死、恢復攔截。起因：4 個 session 連擋 3 次耗盡 `MAX_STOP_BLOCKS`。已知限制：同一 sha 重跑時舊 `summary.json` 會被當已結束。
+- **`scripts/post-commit-review.ts` + `scripts/lib/eslint-targets.ts`（新增）**：eslint 改成各檔往上找最近的 eslint 設定資料夾、用該處本機 eslint，不退回 npx。起因：根目錄跑 npx 會下載 ESLint 10 並 exit 2，被當環境問題跳過，lint 實際沒跑。
+- **`scripts/lib/codex-aspects.ts` + `CODE-REVIEW-RULE.md`（本機）**：rules 面向 prompt 加 3 行，`r15-legacy/` 逐行搬遷檔不要求補註解（5 個 session 重現 codex 報十餘項 IMPORTANT 被駁回）。
+- **`scripts/credential-scan.ts`（新增）+ `rules/common/security.md`**：手動掃描一律用腳本（import 同一份 `CREDENTIAL_PATTERN`），不手打 pattern（8 次手打 5 次縮水）；`git add X && git commit` 同指令 hook 掃不到時，把腳本串在 add 與 commit 之間。
+- **`hooks/sed-inplace-guard.ts`（新增，PreToolUse Bash）+ `scripts/lib/shell-text.ts`（新增）**：`sed -i` 由文字規則升級為機械禁止；`stripQuotedText` 從 `credential-commit-guard.ts` 抽出共用。
+- **`mods/ctx-handoff`（0.7.0）**：done-check 的 `CHECK_WORDS` 邊界改為前後非英數字（`check_deps_exist.py` 這類底線檔名認不出），scratchpad／`/tmp` 的寫入不算改檔；`claude plugin test .` 289 pass。
+- **`skills/retro`（新增）**、`weekly-review` 1.10.0、`r15-r18-migrate` 1.1.3（消費端 import `r15-legacy/` 元件前必讀元件註解）。
+- **`settings.json`**：註冊 `sed-inplace-guard`；啟用 `ask-better` plugin（試用至 10-22）；`modelSettings` 加 `claude-fable-5-1`；新增 `pluginConfigs."ctx-handoff@inline".options.auto_handoff: true`（上游 0.7.0 預設關）與 `idleCompaction: false`。
+- **同步注意**：`skills/.trash` 與 `__pycache__` 本次手動排除（rsync 指令尚未列入排除）；zsh 下 `$B` 未加引號不斷詞，`*.bak` 排除一度失效，43 個備份檔誤進工作樹，commit 前已清除。
 
 ### 2026-10-11: Jev 掛載點 D — 派工模型路由（PreToolUse `Agent`）
 

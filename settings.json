@@ -346,6 +346,12 @@
             "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/credential-commit-guard.ts",
             "timeout": 30,
             "statusMessage": "Scanning staged changes for credentials..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/hook-error-wrapper.sh PreToolUse bun /Users/maxhero/.claude/hooks/sed-inplace-guard.ts",
+            "timeout": 10,
+            "statusMessage": "Checking for sed -i..."
           }
         ]
       },
@@ -417,7 +423,8 @@
     "claude-mem@thedotmack": true,
     "playwright@claude-plugins-official": true,
     "mcp-outline@mcp-outline": true,
-    "cc-plugin-you-should-know@builtin": true
+    "cc-plugin-you-should-know@builtin": true,
+    "ask-better@ask-better": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -431,6 +438,12 @@
         "source": "github",
         "repo": "Vortiago/mcp-outline"
       }
+    },
+    "ask-better": {
+      "source": {
+        "source": "github",
+        "repo": "muchblack/ask-better"
+      }
     }
   },
   "language": "繁體中文",
@@ -441,11 +454,22 @@
     },
     "claude-sonnet-5-5": {
       "effortLevel": "high"
+    },
+    "claude-fable-5-1": {
+      "effortLevel": "high"
     }
   },
   "advisorModel": "opus",
+  "pluginConfigs": {
+    "ctx-handoff@inline": {
+      "options": {
+        "auto_handoff": true
+      }
+    }
+  },
   "autoDreamEnabled": true,
   "skipDangerousModePermissionPrompt": true,
+  "idleCompaction": false,
   "remoteControlAtStartup": false,
   "skipAutoPermissionPrompt": true
 }

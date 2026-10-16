@@ -1,0 +1,15 @@
+{
+  "name": "ctx-handoff-mod",
+  "description": "ctx-handoff, a Claude Code mod for long sessions",
+  "owner": {
+    "name": "CabLate",
+    "url": "https://github.com/cablate"
+  },
+  "plugins": [
+    {
+      "name": "ctx-handoff",
+      "source": "./",
+      "description": "Turns what you teach Claude into project notes, catches its usual slips, keeps the cache warm while you're away, and picks long sessions back up"
+    }
+  ]
+}
