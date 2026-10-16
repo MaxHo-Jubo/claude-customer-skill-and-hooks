@@ -374,6 +374,44 @@ describe('credential-commit-guard 放行', () => {
 });
 
 /** `sk-` 金鑰在各種前綴下仍必須被擋（前綴限制只排除「接在英數字／_／- 之後」的長名稱） */
+describe('credential-commit-guard：引號與 heredoc 內的文字不是指令（2026-10-16 誤擋重現）', () => {
+  /** 暫存區放一個含假憑證的檔，讓「被誤判成 commit 就會被擋」可觀察 */
+  const stageFakeCredential = (): void => {
+    reset(repo);
+    writeFileSync(join(repo, 'secret.txt'), `token=${FAKE_TOKEN}\n`);
+    git(repo, 'add', 'secret.txt');
+  };
+
+  test('heredoc 說明文字含 `&& git commit` 與 `git -C <其他 repo>`，本身不是 commit → 放行、不掃描', () => {
+    stageFakeCredential();
+    /** 執行前的 DENIALS 列數 */
+    const before = denialRows().length;
+    /** 模擬當天被擋的指令：Python heredoc 內是中文說明文字，裡面提到 git commit 與別的 repo 的 git -C */
+    const command = [
+      "python3 - <<'E'",
+      "print('pending-review 閘門把 heredoc 內 `&& git commit` 誤判；另見 git -C /tmp/other-repo status')",
+      'E',
+    ].join('\n');
+    expectPass(runGuard(command, repo), before);
+  });
+
+  test('echo 的引號引數含 `&& git commit` → 放行', () => {
+    stageFakeCredential();
+    /** 執行前的 DENIALS 列數 */
+    const before = denialRows().length;
+    expectPass(runGuard('echo "先 add 再 && git commit -m x" > /dev/null', repo), before);
+  });
+
+  test('真的 git commit 仍被擋（遮罩不能讓真指令漏掉），即使後面還有 heredoc 說明文字', () => {
+    stageFakeCredential();
+    /** 真正的 commit 指令加上一段含 git commit 字樣的 heredoc */
+    const command = ['git commit -F - <<\'MSG\'', 'fix: 說明 && git commit 的誤判', 'MSG'].join('\n');
+    /** 執行結果 */
+    const run = runGuard(command, repo);
+    expect(run.reason).not.toBeNull();
+  });
+});
+
 const SK_KEY_FORMS: Array<[string, string]> = [
   ['等號後', 'OPENAI=sk-' + 'a'.repeat(FAKE_TOKEN_BODY_LENGTH)],
   ['引號後（sk-proj- 形態）', 'k: "sk-proj-' + 'b'.repeat(FAKE_TOKEN_BODY_LENGTH) + '"'],

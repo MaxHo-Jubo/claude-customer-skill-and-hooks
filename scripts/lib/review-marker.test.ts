@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -10,7 +10,7 @@ import { join } from 'path';
  * 檔名以臨時 repo 路徑為 key，不會碰到真實 repo 的紀錄；afterAll 負責刪掉本檔寫入的那一個。
  * 需要完全隔離的 hook 層測試在 post-commit-review.test.ts，以子行程帶入 HOME。
  */
-const { detectNewCommit, recordSeenHead, lastSeenHeadPath, commitWindowSec, isCodexReviewRunning, repoRootToken, CODEX_RUNNING_MAX_IDLE_MS } = await import('./review-marker');
+const { detectNewCommit, recordSeenHead, lastSeenHeadPath, commitWindowSec, isCodexReviewRunning, repoRootToken, CODEX_RUNNING_MAX_IDLE_MS, isGitCommitCommand, isGitPushCommand, resolveRepoRootFromCommand } = await import('./review-marker');
 
 /** 固定時效窗（秒）：無 duration_ms 時的退路值，與 review-marker.ts 的 NEW_COMMIT_WINDOW_SEC 一致 */
 const FALLBACK_WINDOW_SEC = 120;
@@ -197,5 +197,80 @@ describe('isCodexReviewRunning', () => {
     // STEP 02: 仍判為進行中
 
     expect(isCodexReviewRunning(FAKE_REPO, FULL_HASH, Date.now(), root)).toBe(true);
+  });
+});
+
+describe('isGitCommitCommand／isGitPushCommand：只認真正的指令，不認引號與 heredoc 內的文字', () => {
+  /** 應判為 git commit 的指令 */
+  const COMMITS = [
+    'git commit -m "x"',
+    'git -C /tmp/r commit -q -m x',
+    'git -C "/tmp/a b" commit -m x',
+    'cd /tmp/r && git commit --amend --no-edit',
+    'git add a && git commit -m "feat: x && y"',
+    "git commit -F - <<'EOF'\nmsg\nEOF",
+  ];
+  /** 不應判為 git commit 的指令（commit 字樣只在文字裡） */
+  const NOT_COMMITS = [
+    'git status',
+    'git log --grep commit',
+    'echo "a && git commit -m x"',
+    "echo 'a; git commit'",
+    "python3 - <<'E'\n說明 `&& git commit` 誤判\nE",
+    "cat <<EOF\ngit commit -m x\nEOF",
+    'git commit-tree HEAD^{tree}',
+  ];
+
+  for (const c of COMMITS) {
+    test(`commit：${JSON.stringify(c).slice(0, 60)}`, () => {
+      expect(isGitCommitCommand(c)).toBe(true);
+    });
+  }
+  for (const c of NOT_COMMITS) {
+    test(`非 commit：${JSON.stringify(c).slice(0, 60)}`, () => {
+      expect(isGitCommitCommand(c)).toBe(false);
+    });
+  }
+
+  test('git push 同理：真指令命中，commit message 與 heredoc 內的 push 字樣不算', () => {
+    expect(isGitPushCommand('git commit -m x && git push')).toBe(true);
+    expect(isGitPushCommand('git commit -m "移除 && git push 設定"')).toBe(false);
+    expect(isGitPushCommand("cat <<'E'\ngit push origin main\nE")).toBe(false);
+  });
+});
+
+describe('resolveRepoRootFromCommand：引號與 heredoc 內的 git -C 不改變目標 repo', () => {
+  /** 兩個互相獨立的臨時 git repo：cwd 所在的 A 與文字裡提到的 B */
+  let repoA = '';
+  let repoB = '';
+
+  beforeAll(() => {
+    repoA = realpathSync(mkdtempSync(join(tmpdir(), 'resolve-a-')));
+    repoB = realpathSync(mkdtempSync(join(tmpdir(), 'resolve-b-')));
+    execSync('git init -q', { cwd: repoA });
+    execSync('git init -q', { cwd: repoB });
+  });
+
+  afterAll(() => {
+    rmSync(repoA, { recursive: true, force: true });
+    rmSync(repoB, { recursive: true, force: true });
+  });
+
+  test('真的 git -C <B> 指向 B', () => {
+    expect(resolveRepoRootFromCommand(`git -C ${repoB} commit -m x`, repoA)).toBe(repoB);
+  });
+
+  test('帶引號的真 git -C 路徑也能讀出', () => {
+    expect(resolveRepoRootFromCommand(`git -C "${repoB}" commit -m x`, repoA)).toBe(repoB);
+  });
+
+  test('heredoc 說明文字裡的 git -C <B> 不算 → 仍回 cwd 的 A', () => {
+    /** 說明文字提到 B 的 git -C，但真正的指令是在 A 做的 */
+    const command = `python3 - <<'E'\nnote: git -C ${repoB} status\nE\ngit commit -m x`;
+    expect(resolveRepoRootFromCommand(command, repoA)).toBe(repoA);
+  });
+
+  test('引號引數裡的 git -C <B> 不算 → 仍回 A', () => {
+    expect(resolveRepoRootFromCommand(`echo "git -C ${repoB} x" && git commit -m y`, repoA)).toBe(repoA);
   });
 });

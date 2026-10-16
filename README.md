@@ -263,6 +263,13 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 
 ## 變更紀錄
 
+### 2026-10-16（三）: commit 指令偵測不再被引號與 heredoc 內的文字誤觸發
+
+- **`scripts/lib/shell-text.ts`**：新增 `maskQuotedText`（單趟掃描，處理單／雙引號、反斜線跳脫、heredoc 本體與結尾分隔字須獨占一行、here-string `<<<`、一行多個 heredoc、無結尾分隔字），回傳等長字串，位置可對回原字串；新增 `shell-text.test.ts`（8 案）。
+- **`scripts/lib/review-marker.ts`**：`isGitCommitCommand`、`isGitPushCommand` 改在遮罩後的字串上比對；`resolveRepoRootFromCommand` 在遮罩字串上定位真正的 `git -C`，再從原字串讀路徑。三者是 `credential-commit-guard`、`commit-gate-guard`、`post-commit-review` 共用，一次修好。
+- **起因**：存檔時 Bash heredoc 的說明文字含 `&& git commit` 與另一個 repo 的 `git -C <路徑>`，`credential-commit-guard` 把它當成 commit，並掃描那個 repo 的暫存區而誤擋。
+- **測試**：`review-marker.test.ts`（偵測函式 14 案、`-C` 解析 4 案）、`credential-commit-guard.test.ts`（重現情境 3 案）；`denial-guards.test.ts` 的隔離相依清單補 `shell-text.ts`。突變對照（偵測改回原字串、`-C` 定位改回原字串、heredoc 不遮罩）各讓 7／2／8 案轉紅。
+
 ### 2026-10-16（二）: sync-my-claude-setting 1.9.2 — 補排除規則
 
 - **`skills/sync-my-claude-setting/SKILL.md`**：`skills/`、`hooks/`、`scripts/` 的 rsync／diff 指令補排除 `__pycache__`，`skills/` 另補 `.trash`（STEP 01／02、restore R1／R2 共 12 行）；注意事項新增「排除規則一律逐字寫在指令上，禁止放進未加引號的 shell 變數」——zsh 不對變數斷詞，`*.bak` 排除靜默失效，同日首次同步有 43 個備份檔被複製進工作樹（commit 前清掉，未進歷史）。

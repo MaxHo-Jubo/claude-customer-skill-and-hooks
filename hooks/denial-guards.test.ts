@@ -178,7 +178,7 @@ describe.each(['r15-syntax-guard', 'big-read-guard', 'commit-gate-guard'])('%s',
     mkdirSync(join(root, 'hooks'));
     mkdirSync(join(root, 'scripts/lib'), { recursive: true });
     copyFileSync(join(HOOKS, c().script), join(root, 'hooks', c().script));
-    for (const lib of ['review-marker.ts', 'review-engine.ts']) {
+    for (const lib of ['review-marker.ts', 'review-engine.ts', 'shell-text.ts']) {
       copyFileSync(join(HOOKS, '../scripts/lib', lib), join(root, 'scripts/lib', lib));
     }
     try {

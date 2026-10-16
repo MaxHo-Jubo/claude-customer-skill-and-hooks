@@ -20,6 +20,7 @@ import { join, resolve, isAbsolute } from 'path';
 import { execSync } from 'child_process';
 import { readFileSync, unlinkSync, appendFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs';
 import type { ReviewEngine } from './review-engine';
+import { maskQuotedText } from './shell-text';
 
 /** marker 檔案存放目錄 */
 export const MARKER_DIR = join(homedir(), '.claude', 'state', 'pending-review');
@@ -115,9 +116,14 @@ export function readMarkerRaw(path: string): ReviewMarker | null {
  * @returns 是否為 git commit 指令
  */
 export function isGitCommitCommand(command: string): boolean {
-  // git 必須位於「指令起始位置」（字串開頭，或 shell 分隔符 && || ; | ( 換行 之後），
-  // 才不會把 `git log --grep "git commit"`、`echo git commit` 這類字串/引數裡的 git 誤判為指令。
-  return /(?:^|[\n;&|(])\s*git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*commit(?![\w-])/.test(command);
+  // STEP 01: 先遮掉引號與 heredoc 內的文字——commit message、heredoc 說明文字、echo 的引數裡出現的
+  // `&& git commit` 不是指令（2026-10-16 實測：交接紀錄的說明文字被當成 git commit 而誤觸發憑證掃描）
+  /** 遮罩後的指令（等長，只剩真正的指令結構） */
+  const masked = maskQuotedText(command);
+
+  // STEP 02: git 必須位於「指令起始位置」（字串開頭，或 shell 分隔符 && || ; | ( 換行 之後），
+  // 才不會把 `git log --grep commit`、`echo git commit` 這類引數裡的 git 誤判為指令。
+  return /(?:^|[\n;&|(])\s*git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*commit(?![\w-])/.test(masked);
 }
 
 /**
@@ -129,7 +135,10 @@ export function isGitCommitCommand(command: string): boolean {
  * @returns 是否包含 git push 子指令
  */
 export function isGitPushCommand(command: string): boolean {
-  return /(?:^|[\n;&|(])\s*git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*push(?![\w-])/.test(command);
+  // STEP 01: 與 isGitCommitCommand 相同，先遮掉引號與 heredoc 內的文字再比對
+  /** 遮罩後的指令 */
+  const masked = maskQuotedText(command);
+  return /(?:^|[\n;&|(])\s*git\s+(?:-C\s+\S+\s+|-c\s+\S+\s+|--[\w-]+(?:=\S+)?\s+)*push(?![\w-])/.test(masked);
 }
 
 /**
@@ -419,9 +428,15 @@ function normalizeDir(dir: string, base: string): string {
  * @returns 目標 repo 根目錄絕對路徑；解析不出回傳 null
  */
 export function resolveRepoRootFromCommand(command: string, fallbackCwd: string): string | null {
-  // STEP 01: 擷取 git -C <path>（引號或裸路徑）
+  // STEP 01: 擷取 git -C <path>（引號或裸路徑）。先在遮罩後的字串上定位真正的 `git -C`
+  // （引號與 heredoc 內的 `git -C <別的 repo>` 文字不算），再從原字串（等長，位置對得上）讀出路徑
+  /** 遮罩後的指令：用來找真正的 git -C 位置 */
+  const masked = maskQuotedText(command);
+  /** 遮罩字串上第一個真正的 `git -C ` 位置；沒有為 null */
+  const cAt = /\bgit\s+-C\s+/.exec(masked);
+  /** 從原字串在該位置之後讀出的路徑（引號或裸路徑）；沒有為 null */
+  const cMatch = cAt ? command.slice(cAt.index + cAt[0].length).match(/^(?:"([^"]+)"|'([^']+)'|(\S+))/) : null;
   let targetDir = fallbackCwd;
-  const cMatch = command.match(/\bgit\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
   if (cMatch) {
     targetDir = normalizeDir(cMatch[1] || cMatch[2] || cMatch[3] || fallbackCwd, fallbackCwd);
   } else {
