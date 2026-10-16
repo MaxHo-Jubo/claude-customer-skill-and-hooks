@@ -110,4 +110,44 @@ describe('planEslintRuns', () => {
 
     expect(planEslintRuns(repo, ['pkg/gone.js'])).toEqual({ groups: [], unconfigured: [] });
   });
+
+  test('設定寫在 package.json 的 eslintConfig：視為設定檔資料夾，成一組', () => {
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'x', eslintConfig: { root: true } }));
+    const bin = touch(repo, 'node_modules/.bin/eslint');
+    touch(repo, 'src/a.js');
+
+    const plan = planEslintRuns(repo, ['src/a.js']);
+
+    expect(plan.unconfigured).toEqual([]);
+    expect(plan.groups).toEqual([{ dir: repo, bin, files: ['src/a.js'] }]);
+  });
+
+  test('package.json 沒有 eslintConfig → 不算設定，繼續往上找；找不到則列為 unconfigured', () => {
+    // STEP 01: 子資料夾的 package.json 只有一般欄位，上層才有真正的設定
+    touch(repo, '.eslintrc.json');
+    mkdirSync(join(repo, 'pkg'), { recursive: true });
+    writeFileSync(join(repo, 'pkg/package.json'), JSON.stringify({ name: 'pkg', scripts: {} }));
+    touch(repo, 'pkg/a.js');
+    expect(planEslintRuns(repo, ['pkg/a.js']).groups.map((g) => g.dir)).toEqual([repo]);
+
+    // STEP 02: 整個 repo 都沒有設定 → unconfigured
+    rmSync(join(repo, '.eslintrc.json'));
+    expect(planEslintRuns(repo, ['pkg/a.js'])).toEqual({ groups: [], unconfigured: ['pkg/a.js'] });
+  });
+
+  test('eslintConfig 不是物件（null、字串）或 package.json 壞掉 → 不算設定，也不拋錯', () => {
+    touch(repo, 'a.js');
+    for (const body of [JSON.stringify({ eslintConfig: null }), JSON.stringify({ eslintConfig: 'strict' }), '{ not json', 'null']) {
+      writeFileSync(join(repo, 'package.json'), body);
+      expect(planEslintRuns(repo, ['a.js'])).toEqual({ groups: [], unconfigured: ['a.js'] });
+    }
+  });
+
+  test('獨立設定檔與 package.json eslintConfig 並存 → 仍是同一組（不重複分組）', () => {
+    touch(repo, 'app/.eslintrc.json');
+    writeFileSync(join(repo, 'app/package.json'), JSON.stringify({ eslintConfig: {} }));
+    touch(repo, 'app/a.js');
+    touch(repo, 'app/b.js');
+    expect(planEslintRuns(repo, ['app/a.js', 'app/b.js']).groups).toHaveLength(1);
+  });
 });

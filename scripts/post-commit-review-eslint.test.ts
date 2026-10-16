@@ -144,6 +144,15 @@ describe('post-commit-review eslint 分組：實際執行位置', () => {
     expect(message).toContain('✅ eslint [app]：1 檔通過');
   });
 
+  test('設定寫在 package.json 的 eslintConfig → 同樣在該資料夾執行（不再被當成沒有設定檔）', () => {
+    put('app/package.json', JSON.stringify({ name: 'app', eslintConfig: { root: true } }));
+    installFakeEslint('app');
+    put('app/src/a.js', 'a\n');
+    const message = commitAndRunHook(['app/src/a.js']);
+    expect(eslintCalls()).toEqual([{ cwd: join(repo, 'app'), argv: 'src/a.js' }]);
+    expect(message).toContain('✅ eslint [app]：1 檔通過');
+  });
+
   test('兩個子專案各有設定檔與 eslint → 各組在自己的資料夾執行一次，不在 repo 根目錄跑', () => {
     put('app/.eslintrc.json', '{}');
     installFakeEslint('app');

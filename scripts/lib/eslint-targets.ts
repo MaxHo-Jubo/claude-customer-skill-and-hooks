@@ -11,7 +11,7 @@
  * node_modules/.bin/eslint；同一資料夾的檔案併成一組、路徑改成相對於該資料夾。
  * 找不到設定檔或本機執行檔時如實回報，不退回 npx（避免下載錯版本、也避免把 exit 1 的語意搞混）。
  */
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 
 /** eslint 設定檔名單：舊式 eslintrc 與 flat config 兩種格式 */
@@ -27,6 +27,39 @@ const ESLINT_CONFIG_NAMES = [
   'eslint.config.cjs',
   'eslint.config.ts',
 ];
+
+/** package.json 內嵌 eslint 設定的欄位名（ESLint 8 的 eslintrc 格式支援，非獨立檔案） */
+const PACKAGE_JSON_ESLINT_KEY = 'eslintConfig';
+
+/**
+ * 資料夾是否有 eslint 設定：獨立設定檔，或 package.json 內有物件型的 `eslintConfig` 欄位。
+ * package.json 讀不到、不是合法 JSON、或沒有該欄位都視為「這一層沒有設定」，繼續往上找，
+ * 不拋錯：壞掉的 package.json 不該讓整個 commit 的 lint 規劃失敗。
+ * @param dir 要檢查的資料夾絕對路徑
+ * @returns 這個資料夾是否有 eslint 設定
+ */
+function hasEslintConfig(dir: string): boolean {
+  // STEP 01: 獨立設定檔
+  if (ESLINT_CONFIG_NAMES.some((n) => existsSync(join(dir, n)))) {
+    return true;
+  }
+
+  // STEP 02: package.json 內嵌的 eslintConfig（必須是物件；null、字串等不算）
+  /** package.json 路徑 */
+  const pkgPath = join(dir, 'package.json');
+  if (!existsSync(pkgPath)) {
+    return false;
+  }
+  try {
+    /** 解析後的 package.json */
+    const pkg: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    /** eslintConfig 欄位值 */
+    const cfg = pkg !== null && typeof pkg === 'object' ? (pkg as Record<string, unknown>)[PACKAGE_JSON_ESLINT_KEY] : undefined;
+    return cfg !== null && typeof cfg === 'object';
+  } catch {
+    return false;
+  }
+}
 
 /** 一組要一起執行 eslint 的檔案（同一個設定檔資料夾） */
 export interface EslintGroup {
@@ -95,8 +128,7 @@ export function planEslintRuns(repoRoot: string, changedFiles: string[]): Eslint
 
     // STEP 02: 往上找最近的 eslint 設定檔資料夾
     /** 最近含 eslint 設定檔的資料夾 */
-    const cfgDir = findUp(dirname(abs), repoRoot, (d) =>
-      ESLINT_CONFIG_NAMES.some((n) => existsSync(join(d, n))) ? d : null);
+    const cfgDir = findUp(dirname(abs), repoRoot, (d) => (hasEslintConfig(d) ? d : null));
     if (cfgDir === null) {
       unconfigured.push(rel);
       continue;
