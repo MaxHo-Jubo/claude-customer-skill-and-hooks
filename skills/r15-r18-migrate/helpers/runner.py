@@ -289,6 +289,10 @@ CHECKPOINT_MERGE_LOG_PREFIX = "git-merge-cp-"
 CHECKPOINT_ID_RULE = "不可含 `--` 或 `/`，也不可以 `-` 開頭"
 # run 在 pre-flight 之前發現 queue 裡有不合規斷點 id 的暫停原因（要人改 queue.json 與盤點檔，重啟不會自己好）
 CHECKPOINT_ID_INVALID_REASON = "checkpoint_id_invalid"
+# cmd_run 在判定「佇列全部完成」之前發現 done 的不變量被破壞（有 entry 是 done、還沒蓋章，卻取不到 commit 標題：
+# 缺 last_commit 或 last_commit 在 repo 裡讀不到）的暫停原因：不帶簽名、不鎖定（hold）——人工補好 modules[].last_commit 後
+# 下次重啟會依 auto 門檻補看一次斷點（cmd_run STEP 03.03.02，沒到門檻就不開）再宣告完成；重啟不會自己好
+DONE_MISSING_COMMIT_REASON = "done_missing_last_commit"
 # 呼叫序號佔號檔（sessions/<entry>-<n>.claim）的權限：檔案是空的、只當「這一號已被用過」的紀錄，擁有者讀寫即可
 CLAIM_FILE_MODE = 0o600
 # 工作樹髒污／未追蹤檔清單放進 detail 時最多列幾行，其餘只給總數（通知會截尾，前幾行比尾端有用）
@@ -341,7 +345,8 @@ GH_OUTPUT_TAIL_CHARS = 200
 STDERR_EXCERPT_CHARS = 200
 # PR 標題取自範圍內第一個 commit 標題；範圍內不只一個 commit 時，在後面接上這個後綴（%d＝commit 總數），讓人看得出不只一個
 PR_TITLE_MORE_COMMITS_SUFFIX = "（等 %d 個 commit）"
-# PR 標題改用 commit 標題失敗而退回舊標題時寫進 runner.log.jsonl 的事件名
+# 斷點 PR 標題「沒有涵蓋的 entry、交給呼叫端用預設標題」時寫進 runner.log.jsonl 的事件名（pr_title_from_entry_commits 的唯一記錄點；
+# 取 commit 標題失敗不再退回舊標題、也不記這個事件，而是拋 PrTitleError）
 PR_TITLE_FALLBACK_EVENT = "pr_title_fallback"
 # stderr_excerpt 標示「中間省略」的分隔符
 STDERR_EXCERPT_ELLIPSIS = "…"
@@ -2869,28 +2874,39 @@ def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_
     return url, None
 
 
-def pr_title_from_commits(config, base_ref, head_ref, fallback):
+class PrTitleError(RuntimeError):
+    """PR 標題取不到：commit 標題讀不到（git 失敗）、範圍內沒有 commit、或已完成的 entry 缺 last_commit。
+
+    繼承 RuntimeError：標題是 PR 的一部分，取不到代表 queue／Git 資料不對，不能退回一個看似正常的舊標題繼續開 PR。
+    沒接住的呼叫端走 cmd_run 的 crash 流程暫停（與 git_out_or_raise 同一類）；push_branch_and_open_pr 接住後改回 (None, 錯誤)，
+    走頁面 PR 既有的 pr_error 路徑（不 raise：CLI 已跑完，raise 會重燒一輪 CLI）。
+    """
+
+
+def pr_title_from_commits(config, base_ref, head_ref):
     """PR 標題取自 `base_ref..head_ref` 範圍內的 commit 標題（不含 merge commit，由舊到新）。
 
     只有一個 commit 時標題與該 commit 的標題逐字相同（`[CUP-227] feat(FE): …`，審查者在 PR 清單就能對上 commit）；
-    不只一個時取最舊的那個，後面接 PR_TITLE_MORE_COMMITS_SUFFIX。範圍內沒有 commit 或 git 失敗時回傳 fallback，
-    並寫一筆 PR_TITLE_FALLBACK_EVENT：標題只是顯示用，不值得為它中斷開 PR，但不能靜默退回——否則 runner 又開出
-    與 commit 對不上的標題而沒人知道。
+    不只一個時取最舊的那個，後面接 PR_TITLE_MORE_COMMITS_SUFFIX。git 失敗或範圍內沒有 commit 時拋 PrTitleError，
+    不回傳舊標題：標題取不到代表 entry 分支與整合分支的關係不對，照樣開 PR 只會得到與 commit 對不上的標題（或根本開不成）。
 
     @param config runner 設定
     @param base_ref 範圍起點（不含），例如 `origin/<pr_base>`
     @param head_ref 範圍終點（含），例如 entry 分支或整合分支
-    @param fallback 取不到 commit 標題時的舊標題
     @return PR 標題字串
+    @raises PrTitleError git log 失敗（訊息含退出碼與 stderr 尾端），或範圍內沒有 commit
     """
-    # STEP 01: 讀範圍內的 commit 標題
-    code, out, err = git(config, "log", "--no-merges", "--reverse", "--format=%s", "%s..%s" % (base_ref, head_ref))
-    subjects = [line.strip() for line in out.splitlines() if line.strip()] if code == 0 else []
-    # STEP 02: 取不到就退回舊標題並留紀錄
+    # 要讀的 commit 範圍（錯誤訊息也用）
+    commit_range = "%s..%s" % (base_ref, head_ref)
+    # STEP 01: 讀範圍內的 commit 標題；git 失敗與「合法的空結果」分開報，不混為一談
+    code, out, err = git(config, "log", "--no-merges", "--reverse", "--format=%s", commit_range)
+    if code != 0:
+        raise PrTitleError("git log 失敗（範圍 %s，退出碼 %d）: %s" % (commit_range, code, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)))
+    # 範圍內由舊到新的 commit 標題
+    subjects = [line.strip() for line in out.splitlines() if line.strip()]
+    # STEP 02: 範圍內沒有 commit
     if not subjects:
-        reason = "git log 失敗（退出碼 %d）: %s" % (code, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)) if code != 0 else "範圍內沒有 commit"
-        log_event(config, None, PR_TITLE_FALLBACK_EVENT, detail={"range": "%s..%s" % (base_ref, head_ref), "reason": reason})
-        return fallback
+        raise PrTitleError("範圍 %s 內沒有 commit，取不到 PR 標題" % commit_range)
     # STEP 03: 一個 commit 逐字照用；多個加後綴
     return join_commit_subjects(subjects)
 
@@ -2902,45 +2918,131 @@ def join_commit_subjects(subjects):
     return subjects[0] + PR_TITLE_MORE_COMMITS_SUFFIX % len(subjects)
 
 
-def pr_title_from_entry_commits(config, queue, fallback):
+def uncovered_done_entries(queue):
+    """尚未納入任何斷點的 done entry：`status` 為 done 且沒有 `checkpoint_id`（還沒被斷點蓋章）。
+
+    這個判準只有這一份：斷點 PR 標題的涵蓋集合（pr_title_from_entry_commits）、auto 門檻的模組計數（auto_checkpoint_needed）、
+    凍結涵蓋集合（begin_checkpoint_opening 寫進 covered_entries）、蓋章（stamp_covered_entries）都從這裡取，不各自維護。
+    四處原本的前置檢查／後置防護都在各自呼叫端：標題的 last_commit 檢查、凍結只寫一次（`frozen_sha`）、蓋章的 covered_entries 過濾，
+    判準本身沒有別的附加條件，所以 helper 只含這一個篩選。
+
+    @param queue 整份 queue（讀 modules；沒有 modules 欄位視為空）
+    @return 新的 list，順序同 queue；元素是 queue 裡的原 entry 物件（不複製：蓋章要就地改它，見 stamp_covered_entries）
+    """
+    # STEP 01: 依 queue 順序篩選
+    return [entry for entry in queue.get("modules", []) if entry.get("status") == "done" and not entry.get("checkpoint_id")]
+
+
+def unattempted_done_entries(queue):
+    """done、沒蓋章，而且不在任何「已開始開啟」的斷點的涵蓋集合（covered_entries）裡的 entry：沒有斷點嘗試過涵蓋它們。
+
+    只回答「有沒有斷點嘗試過涵蓋」，不判斷「該不該開」（那是 auto_checkpoint_needed 的事）。開啟斷點的 write-ahead 會同一次
+    寫入 covered_entries（begin_checkpoint_opening；讀不到整合分支 tip 凍結不了時也先記），之後不論開成功、failed、停在 opening
+    或被 released，這份紀錄都還在；只有嘗試在 write-ahead 之前就拋錯（取標題的 PrTitleError、crash）才不留紀錄。
+    所以真的進了 open_checkpoint 的那一批，這個集合會把它們排除，不會因為開失敗而每次重啟都再推一支新 id 的 cp 分支。
+    沒到 auto 門檻時 handle_checkpoints 什麼都沒嘗試，集合維持非空，呼叫端每次重算、結果相同（見 cmd_run STEP 03.03.02）。
+    pending 的斷點還沒開始開啟，不算。沒有 covered_entries 的記錄（只剩這版之前寫的舊記錄）不涵蓋任何 entry——
+    最壞多補開一次，補開的新記錄帶著涵蓋集合，之後不會再重複；OPENED／MERGED 的舊記錄涵蓋的 entry 當時已蓋過章，本來就不在這裡。
+    RELEASED 的舊記錄同理（release 不蓋章）：會多補開一次，這是舊記錄才有的取捨。
+
+    @param queue 整份 queue（讀 modules、checkpoints）
+    @return 新的 list，順序同 queue；元素是 queue 裡的原 entry 物件
+    """
+    # STEP 01: 已開始開啟的斷點的涵蓋集合聯集
+    # 已被嘗試涵蓋的 entry id
+    covered_ids = set()
+    for checkpoint in queue.get("checkpoints", []):
+        if checkpoint.get("status") == CheckpointStatus.PENDING:
+            continue
+        covered_ids.update(checkpoint.get("covered_entries") or [])
+    # STEP 02: 還沒蓋章的 done entry 扣掉已被涵蓋的
+    return [entry for entry in uncovered_done_entries(queue) if entry.get("id") not in covered_ids]
+
+
+def failed_checkpoints_with_unstamped_entries(queue):
+    """開失敗（failed）、而且它涵蓋的 entry 至今沒蓋章的斷點 id：這些模組沒有任何 PR（宣告佇列完成時要帶在通知裡）。
+
+    failed 不會再被重開（不在 CHECKPOINT_OPENABLE_STATUSES），涵蓋的 entry 也不會自動補上 PR，只剩 mark_checkpoint_failed 當時的一則通知；
+    完成通知若只寫「共 N 個模組」，看起來就像全部都有 PR。
+
+    @param queue 整份 queue（讀 modules、checkpoints）
+    @return 斷點 id 的 list，順序同 queue；沒有回空 list
+    """
+    # STEP 01: 還沒蓋章的 done entry id
+    unstamped = {entry.get("id") for entry in uncovered_done_entries(queue)}
+    # STEP 02: failed 的斷點裡，涵蓋集合和它有交集的
+    return [
+        checkpoint["id"]
+        for checkpoint in queue.get("checkpoints", [])
+        if checkpoint.get("status") == CheckpointStatus.FAILED and unstamped.intersection(checkpoint.get("covered_entries") or [])
+    ]
+
+
+def done_title_problem(config, queue):
+    """done 的不變量檢查：「done 且還沒蓋章」的 entry 的 commit 標題讀不讀得到（cmd_run 判定佇列完成之前，以及暫停後重啟時用）。
+
+    直接走 open_checkpoint 取標題的同一條路徑（pr_title_from_entry_commits），所以斷點開啟時會拋的 PrTitleError——缺 last_commit
+    （queue 被人手改或寫入中斷）、last_commit 在 repo 裡不存在或 git show 失敗——這裡一律抓得到，不必逐一列舉原因（只檢查
+    last_commit 是否為空會漏掉「有值但讀不到」，第三輪 review 實測：crash 暫停後重啟照樣通知佇列完成、斷點永久漏開）。
+    範圍刻意只取 uncovered_done_entries（done 且沒蓋章）：只有這些 entry 的標題要靠 last_commit 取；已蓋章的 entry 它涵蓋的
+    斷點已經開過、PR 已存在，不會因此漏掉任何東西，擋它只會讓舊資料被誤暫停。
+
+    @param config runner 設定（git 讀 commit 標題用）
+    @param queue 已載入的 queue 內容
+    @return 標題讀不到時回問題描述（PrTitleError 的訊息，列出每個有問題的 entry id 與原因）；都讀得到、或沒有涵蓋的 entry 回 None
+    """
+    # STEP 01: 與開斷點取標題同一條路徑；只接 PrTitleError，其他例外（程式錯誤）照常往外拋
+    try:
+        pr_title_from_entry_commits(config, queue)
+    except PrTitleError as exc:
+        return str(exc)
+    return None
+
+
+def pr_title_from_entry_commits(config, queue):
     """斷點 PR 標題取自「這個斷點涵蓋的 entry」的 commit 標題（1.1.5）。
 
-    涵蓋集合與 begin_checkpoint_opening 寫進 covered_entries 的判準相同：status 為 done 且還沒蓋章（沒有 checkpoint_id）。
+    涵蓋集合用 uncovered_done_entries，與 begin_checkpoint_opening 寫進 covered_entries 的判準同一份。
     不用 `origin/<pr_base>..<凍結點>` 的 git 範圍——前一個斷點被關閉不合併（released）時，它的 commit 還留在整合分支上、
     卻不在 pr_base 裡，範圍會把前一個 entry 的 commit 也算進來，標題變成別的模組（2026-10-19 #11364 實際發生）。
-    commit 由舊到新排序（依 commit 時間，同時間照 queue 順序）。任何一個涵蓋的 entry 沒有 last_commit 或讀不到標題、
-    或根本沒有涵蓋的 entry，都整個退回 fallback 並寫 PR_TITLE_FALLBACK_EVENT，不拿剩下的湊——湊出來的標題會少一個模組。
+    commit 由舊到新排序（依 commit 時間，同時間照 queue 順序）。
+
+    done 的 entry 一定有 last_commit（finish_done_entry 與 mark-done 都在把狀態寫成 done 的同一次寫入記下它）；缺了、或 commit 讀不到，
+    是 queue／Git 資料異常，拋 PrTitleError（一次列出全部有問題的 entry），不退回舊標題也不拿剩下的湊——湊出來的標題會少一個模組。
+    沒有任何涵蓋的 entry 不是異常（例如宣告的斷點到期時，它的 entry 已被前一個 auto 斷點蓋章）：回 None、寫一筆
+    PR_TITLE_FALLBACK_EVENT，由呼叫端用自己的預設標題。
 
     @param config runner 設定
     @param queue 已載入的 queue 內容
-    @param fallback 取不到時的舊標題
-    @return PR 標題字串
+    @return PR 標題字串；沒有涵蓋的 entry 回 None
+    @raises PrTitleError 涵蓋的 entry 缺 last_commit，或它的 commit 讀不到標題（git show 失敗）
     """
-    # STEP 01: 找涵蓋的 entry 與它們的 commit
-    covered = [entry for entry in queue.get("modules", []) if entry.get("status") == "done" and not entry.get("checkpoint_id")]
+    # STEP 01: 找涵蓋的 entry；沒有就回 None（不是錯誤）
+    covered = uncovered_done_entries(queue)
+    if not covered:
+        log_event(config, None, PR_TITLE_FALLBACK_EVENT, detail={"covered": [], "reason": "沒有涵蓋的 entry"})
+        return None
+    # STEP 02: 逐一讀涵蓋 entry 的 commit 時間與標題
+    # 有問題的 entry 說明（全部收齊再一次拋）
     problems = []
+    # (commit 時間, commit 標題)
     rows = []
     for entry in covered:
+        # STEP 02.01: done 的不變量：一定有 last_commit
         sha = entry.get("last_commit")
         if not sha:
             problems.append("%s 沒有 last_commit" % entry.get("id"))
             continue
-        # STEP 02: 讀 commit 時間與標題（%ct 是 unix 時間，tab 分隔以免標題內有空白）
+        # STEP 02.02: 讀 commit 時間與標題（%ct 是 unix 時間，tab 分隔以免標題內有空白）
         code, out, err = git(config, "show", "-s", "--format=%ct%x09%s", sha)
         parts = out.strip().split("\t", 1)
         if code != 0 or len(parts) != 2 or not parts[1].strip():
             problems.append("%s 的 commit %s 讀不到標題（退出碼 %d）: %s" % (entry.get("id"), sha[:GIT_SHA_SHORT_CHARS], code, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)))
             continue
         rows.append((int(parts[0]), parts[1].strip()))
-    # STEP 03: 沒有涵蓋的 entry 或有任何一個取不到 → 退回舊標題並留紀錄
-    if not covered or problems:
-        log_event(
-            config,
-            None,
-            PR_TITLE_FALLBACK_EVENT,
-            detail={"covered": [entry.get("id") for entry in covered], "reason": "；".join(problems) if problems else "沒有涵蓋的 entry"},
-        )
-        return fallback
+    # STEP 03: 任何一個取不到就拋錯
+    if problems:
+        raise PrTitleError("斷點涵蓋的 entry 取不到 commit 標題：%s" % "；".join(problems))
     # STEP 04: 依 commit 時間由舊到新（sorted 穩定，同時間保留 queue 順序），組標題
     return join_commit_subjects([subject for _time, subject in sorted(rows, key=lambda row: row[0])])
 
@@ -2987,7 +3089,11 @@ def push_branch_and_open_pr(config, entry, enter_deferral=None, expected_head=No
 
     # STEP 04: 組 PR 內文（只放統計與路徑，不放檔案內容），進入延後區間後開 PR：create 返回到連結落盤之間被訊號打斷就是 (a)
     body = pr_body_for_entry(config, entry)
-    title = pr_title_from_commits(config, integration, entry["branch"], "%s R18 升級: %s" % (entry.get("jira") or "", entry["id"]))
+    # 標題取不到是 queue／Git 資料異常：不開 PR，回 (None, 錯誤) 走呼叫端既有的 pr_error 路徑（合併照做、記 pr_failed），不 raise
+    try:
+        title = pr_title_from_commits(config, integration, entry["branch"])
+    except PrTitleError as exc:
+        return None, "取得 PR 標題失敗，未開 PR: %s" % exc
     log_path = session_log_path(config, "gh-pr-create")
     if enter_deferral is not None:
         enter_deferral()
@@ -3133,10 +3239,8 @@ def auto_checkpoint_needed(config, queue):
     """
     # STEP 01: 找出上一個已開、本機分支真的存在的斷點分支當比較基準
     base_ref = latest_checkpoint_base_ref(config, queue)
-    modules_since = 0
-    for entry in queue.get("modules", []):
-        if entry.get("status") == "done" and not entry.get("checkpoint_id"):
-            modules_since += 1
+    # 距離上一個斷點還沒進斷點的 done 模組數
+    modules_since = len(uncovered_done_entries(queue))
     if modules_since >= config["checkpoint_max_modules"]:
         return True, "累積 %d 個模組未進斷點" % modules_since
     # STEP 02: 行數門檻（沒有基準分支就跳過行數判斷）
@@ -3238,10 +3342,11 @@ def open_checkpoint(config, checkpoint_id, auto_title=None):
 
     @param config runner 設定
     @param checkpoint_id 斷點 id
-    @param auto_title auto 斷點的 PR 標題退路（宣告的斷點用自己的 title）。1.1.4 起第一次開時標題改取斷點涵蓋的 commit 標題
-        （1.1.5 起取涵蓋 entry 的 last_commit，見 pr_title_from_entry_commits），取不到才用這個
+    @param auto_title auto 斷點的 PR 標題預設（宣告的斷點用自己的 title）。1.1.4 起第一次開時標題改取斷點涵蓋的 commit 標題
+        （1.1.5 起取涵蓋 entry 的 last_commit，見 pr_title_from_entry_commits），只有「沒有涵蓋的 entry」時才用這個
     @return True 已開（opened），或補完時發現已合併（merged）；False 開啟失敗（hard 仍是 opening、soft／auto 已是 failed——
         開啟途中被 release 的維持 released）
+    @raises PrTitleError 第一次開時，涵蓋的 entry 缺 last_commit 或 commit 讀不到（write-ahead 之前拋，queue 未動）
     """
     integration = config["integration_branch"]
     # 這個斷點凍結出來的分支
@@ -3255,8 +3360,12 @@ def open_checkpoint(config, checkpoint_id, auto_title=None):
     current_tip = out.strip() if code == 0 else None
     # PR 標題：記錄還沒有標題（第一次開）時，改用這個斷點涵蓋的 entry 的 commit 標題（與 commit 逐字相同），
     # 取代 auto 標題與「R18 遷移斷點 <id>」；宣告的斷點自己有 title 時 begin_checkpoint_opening 不會用到它
+    # 標題資料異常時 pr_title_from_entry_commits 拋 PrTitleError：在 write-ahead 之前，queue 沒有任何改動（pending 的斷點維持 pending、
+    # auto 斷點不進 queue），不接，由 cmd_run 的 crash 流程暫停；不走 checkpoint_open_failed——這時斷點狀態仍是 pending 而不是 opening，settle_checkpoints 只在 hard 斷點是 opening 時才暫停，閘門會被放行
     if not previous.get("title"):
-        auto_title = pr_title_from_entry_commits(config, load_queue(config), auto_title or ("R18 遷移斷點 %s" % checkpoint_id))
+        derived_title = pr_title_from_entry_commits(config, load_queue(config))
+        # 沒有涵蓋的 entry（None）才用預設標題；有涵蓋就一定用 commit 標題
+        auto_title = derived_title if derived_title is not None else (auto_title or ("R18 遷移斷點 %s" % checkpoint_id))
     checkpoint = begin_checkpoint_opening(config, checkpoint_id, branch, auto_title, current_tip)
     if not checkpoint.get("frozen_sha"):
         return checkpoint_open_failed(config, checkpoint, "讀取整合分支 %s 的 tip 失敗: %s" % (integration, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)))
@@ -3377,9 +3486,7 @@ def stamp_covered_entries(queue_data, target):
     # 要蓋章的 entry id；None＝舊記錄
     covered = target.get("covered_entries")
     # STEP 01: 逐一蓋（已被別的斷點蓋過的不動）
-    for entry in queue_data.get("modules", []):
-        if entry.get("status") != "done" or entry.get("checkpoint_id"):
-            continue
+    for entry in uncovered_done_entries(queue_data):
         if covered is None or entry.get("id") in covered:
             entry["checkpoint_id"] = target["id"]
 
@@ -3464,7 +3571,8 @@ def begin_checkpoint_opening(config, checkpoint_id, branch, auto_title, frozen_s
     凍結點（review 112i）：記錄還沒有 frozen_sha 時，同一次寫入記下 frozen_sha（呼叫端讀到的整合分支 tip）與 covered_entries
     （此刻已 done、還沒蓋章的 entry id）；已有的一律沿用、重試時不跟著整合分支前進——凍結是這個斷點的意圖（涵蓋哪些模組），
     重試前整合分支若又前進（auto 斷點在下一個模組完成後才被沿用），往前移就是把新模組蓋進可能已在審的 PR（BONUS-1 同一類），
-    而且「已合併」判斷與蓋章集合都以它為準。
+    而且「已合併」判斷與蓋章集合都以它為準。讀不到 tip（frozen_sha 是 None）凍結不了時，covered_entries 也先記下當下的集合
+    （unattempted_done_entries 靠它認出這批嘗試過了）；之後凍結成功會以凍結當下的集合覆寫。
 
     @param config runner 設定
     @param checkpoint_id 斷點 id
@@ -3492,11 +3600,16 @@ def begin_checkpoint_opening(config, checkpoint_id, branch, auto_title, frozen_s
         target["status"] = CheckpointStatus.OPENING
         target["branch"] = branch
         # STEP 03: 凍結點與涵蓋集合只寫一次（已有就沿用）
-        if not target.get("frozen_sha") and frozen_sha:
-            target["frozen_sha"] = frozen_sha
-            target["covered_entries"] = [
-                entry["id"] for entry in queue_data.get("modules", []) if entry.get("status") == "done" and not entry.get("checkpoint_id")
-            ]
+        if not target.get("frozen_sha"):
+            # 此刻已 done、還沒蓋章的 entry id（涵蓋集合）
+            covered = [entry["id"] for entry in uncovered_done_entries(queue_data)]
+            if frozen_sha:
+                target["frozen_sha"] = frozen_sha
+                target["covered_entries"] = covered
+            elif target.get("covered_entries") is None:
+                # STEP 03.01: 讀不到整合分支 tip、凍結不了：涵蓋集合照樣先記下來（unattempted_done_entries 靠它認出「這批嘗試過了」，
+                # 沒記的話這筆 failed 記錄會讓完成出口把同一批 entry 當成從沒嘗試過）；之後凍結成功會以凍結當下的集合覆寫
+                target["covered_entries"] = covered
         return dict(target)
 
     # STEP 01: 在資料鎖下寫入
@@ -5173,9 +5286,11 @@ def handle_checkpoints(config, include_auto=True):
     據此以 CHECKPOINT_OPEN_FAILED_REASON 暫停；只看回傳值的話會以為是 soft 斷點而往下跑。
 
     @param config runner 設定
-    @param include_auto 是否也看自動保險門檻。啟動時給 False：auto 斷點開成功之前不在 queue 裡，開失敗不留任何紀錄，
-        啟動時也看的話 launchd 每次重啟（暫停狀態下每 300 秒）都會再推一支新 id 的 cp 分支；auto 是 soft、沒有閘門，
-        留到下一個模組完成時再看只是晚一個模組
+    @param include_auto 是否也看自動保險門檻。啟動時只在對帳補了 done 才給 True，其餘給 False：auto 斷點開失敗（write-ahead 之後）
+        會留下 failed 記錄，但 entry 沒蓋章、auto 門檻仍成立，啟動時也看的話 launchd 每次重啟（暫停狀態下每 300 秒）都會用新 id 再推一支
+        cp 分支；auto 是 soft、沒有閘門，留到下一個模組完成時再看只是晚一個模組。write-ahead 之前就失敗（取標題的 PrTitleError、crash）
+        不推任何分支、也不留記錄；最後一個模組之後沒有「下一個模組」，由 cmd_run 的完成出口（STEP 03.03.02）用 unattempted_done_entries
+        判斷是否補看
     """
     queue = load_queue(config)
     # STEP 01: 先看宣告的斷點
@@ -6590,8 +6705,8 @@ def cmd_run(config, args):
         if code != 0:
             return code
         # STEP 02.01: 記住「本次是不是從暫停狀態被 launchd 重啟的」
-        # resumed_pause_reason 只用來控制「續跑通知」何時發送，第一個模組真的 done 時
-        # 在 finish_done_entry 被清掉；startup_paused_reason 與 startup_crash_signature 是 enter_paused 去重用的
+        # resumed_pause_reason 控制「續跑通知」何時發送（第一個模組真的 done 時在 finish_done_entry 被清掉），也抑制從暫停重啟時的
+        # runner_started 通知（STEP 02.03）；startup_paused_reason 與 startup_crash_signature 是 enter_paused 去重用的
         # (原因, 簽名)，在模組執行中途不清（見 R2：模組執行中途才觸發的暫停原因要靠它判斷是否重複），
         # 只在有 entry 真的 done（先前的暫停已確認解除）時由 finish_done_entry 一起清掉
         queue = load_queue(config)
@@ -6640,7 +6755,8 @@ def cmd_run(config, args):
         # 還是 pending——主迴圈只在模組完成後才看，不在這裡看的話 hard 閘門被繞過一個模組。只開 pending 的，不會與
         # STEP 03.02 重複（那裡只等 opened／opening 的）。auto 斷點只在這次對帳真的補了 done 時才看（等同那個模組剛完成；
         # 被補的是最後一個 entry、或之後佇列停滯的話，不看就永遠不開，第五批 review P1）；沒補的話不看，
-        # 否則 auto 開失敗時每次重啟都再推一支新 id 的 cp 分支（見 handle_checkpoints 的 include_auto）
+        # 否則 auto 開失敗時每次重啟都再推一支新 id 的 cp 分支（見 handle_checkpoints 的 include_auto）。
+        # 「最後一個 entry 完成時 auto 斷點取標題失敗（斷點意圖沒落盤）」的漏開，不在這裡補，在完成出口（STEP 03.03.02）依佇列現況補
         code = settle_checkpoints(config, include_auto=reconciled is not None)
         if code is not None:
             return code
@@ -6675,7 +6791,37 @@ def cmd_run(config, args):
             if not ready:
                 counts = count_status(queue)
                 if counts.get("done", 0) == len(queue.get("modules", [])) and queue.get("modules"):
-                    notify(config, "queue_complete", "佇列全部完成", "共 %d 個模組" % counts.get("done", 0))
+                    # STEP 03.03.01: 宣告完成之前的狀態不變量（cmd_run 唯一的完成出口）：done 缺 last_commit 就不得宣告完成。
+                    # 標題讀不到時，STEP 03.03.02 補看 auto 斷點會再拋 PrTitleError、走 crash 流程；這裡先把它換成可辨識的暫停原因，
+                    # 避免暫停原因在 runner_crashed 與 done_missing_last_commit 之間來回翻（不重複通知），也不保存斷點意圖
+                    problem = done_title_problem(config, queue)
+                    if problem:
+                        return enter_paused(
+                            config,
+                            DONE_MISSING_COMMIT_REASON,
+                            "佇列看起來全部完成，但有 done 的 entry 取不到 commit 標題（done 的不變量被破壞，斷點 PR 會開不出來）：%s。"
+                            "請在 queue.json 的 modules[] 把這些 entry 的 last_commit 補成它們在遠端整合分支上存在的 commit"
+                            "（mark-done 只收 pending／blocked／failed，補不了 done）；補好重啟後會依自動斷點門檻補看一次再宣告完成"
+                            % problem,
+                        )
+                    # STEP 03.03.02: 標題讀得到了，但有 done 的 entry 沒被任何斷點嘗試涵蓋（上一輪 auto 斷點在 write-ahead 之前就 crash，
+                    # 之後不論暫停原因是 runner_crashed、unblock --runner 清成 idle、還是 git 暫時失敗，資料好了都會走到這裡）：依佇列現況補看
+                    # auto 斷點，不看上次的暫停原因。真的嘗試過（開成功或失敗）covered_entries 就落盤，unattempted_done_entries 把那批排除，
+                    # 所以失敗不會每次重啟都再推一支新 id 的 cp 分支。不 continue 回主迴圈：開不起來又沒留紀錄時會空轉。
+                    # 已知並接受的行為（1.2.2）：沒到 auto 門檻時 handle_checkpoints 什麼都不嘗試、集合維持非空，宣告完成之後 launchd 的 KeepAlive
+                    # 每 300 秒重啟都會重算一次門檻（含 `git diff --shortstat`）；那個 git 呼叫暫時失敗，已完成的佇列會改走 crash 暫停（同簽名第二次 hold）；
+                    # 另外人清掉本機最新的 cp 分支後，行數基準退回較舊的分支，可能在宣告完成之後才冒出一支 auto PR（只會一次，之後被涵蓋）。
+                    # settle_checkpoints 回非 None 只剩宣告的 hard 斷點這條路，實務上啟動的 STEP 02.07 與 STEP 03.02 會先處理，這裡是保險
+                    if unattempted_done_entries(queue):
+                        code = settle_checkpoints(config, include_auto=True)
+                        if code is not None:
+                            return code
+                    # STEP 03.03.03: 完成通知帶出開失敗而沒有 PR 的模組（failed 不會自動重開，只靠失敗當下那一則通知很容易被完成通知蓋過）
+                    complete_detail = "共 %d 個模組" % counts.get("done", 0)
+                    failed_ids = failed_checkpoints_with_unstamped_entries(load_queue(config))
+                    if failed_ids:
+                        complete_detail += "；注意：斷點 %s 開失敗，它涵蓋的模組沒有 PR，需人工處理（failed 不會自動重開，要自行開 PR）" % "、".join(failed_ids)
+                    notify(config, "queue_complete", "佇列全部完成", complete_detail)
                     set_runner_state(config, "idle")
                     return EXIT_OK
                 if not stalled_notified:

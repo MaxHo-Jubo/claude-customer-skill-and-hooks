@@ -316,21 +316,24 @@ def write_fake_gh(directory, remote, output=FAKE_PR_URL):
     return script_path, calls_path, tips_path
 
 
-def reject_entry_branch_push(remote, branch=ENTRY_BRANCH):
+def reject_entry_branch_push(remote, branch=ENTRY_BRANCH, prefix=False):
     """在 bare 遠端裝一支 pre-receive hook：拒絕指定分支的推送，其餘分支照常接受。
 
     用來造出「某一支分支推不上去、其餘推得上去」的真實情境，不必 mock git；預設拒絕 entry 分支。
 
     @param remote bare 遠端 repo 的路徑
-    @param branch 要拒絕的分支名稱
+    @param branch 要拒絕的分支名稱；prefix 為 True 時是分支名稱的開頭
+    @param prefix True＝拒絕所有以 branch 開頭的分支（例如斷點分支 `r18-migration/cp-` 開頭的每一支，id 每次不同）
     @return None
     """
     # STEP 01: hook 從 stdin 逐行收到「舊值 新值 ref 名稱」，命中就以非零結束
     hook_path = os.path.join(remote, "hooks", "pre-receive")
+    # 比對條件：精確相等，或開頭相符
+    condition = '"${ref#refs/heads/%s}" != "$ref"' % branch if prefix else '"$ref" = "refs/heads/%s"' % branch
     hook_lines = [
         "#!/bin/bash",
         "while read -r _old _new ref; do",
-        '  if [ "$ref" = "refs/heads/%s" ]; then echo "rejected by test hook" >&2; exit 1; fi' % branch,
+        '  if [ %s ]; then echo "rejected by test hook" >&2; exit 1; fi' % condition,
         "done",
         "exit 0",
     ]
@@ -396,6 +399,10 @@ def build_fixture(root, entry_overrides=None):
         r18_dir="pages/e1",
         r15_paths=[R15_RELATIVE_PATH],
         status="running",
+        # done 的不變量：runner 把狀態寫成 done 的同一次寫入一定記下 last_commit（finish_done_entry 與 mark-done）。
+        # 不少測試是 build_fixture 之後才用 mutate_queue 把 status 改成 done，所以 fixture 的 entry 預設就帶 entry 的 commit；
+        # 否則取 PR 標題會依不變量被破壞而拋 PrTitleError。要刻意造「缺 last_commit」時，在 entry_overrides 明寫 last_commit=None
+        last_commit=entry_sha,
     )
     # 覆寫欄位疊在預設之上（可以覆寫 status 這類預設已經給值的欄位）
     entry = {**base_entry, **(entry_overrides or {})}
@@ -435,6 +442,28 @@ def remote_tip(fixture, branch):
         check=False,
     )
     return result.stdout.strip() or None
+
+
+def clear_last_commit(fixture):
+    """把 queue 裡測試用 entry 的 last_commit 清成 None，並確認落盤後真的是 None（寫回流程測試的起算點）。
+
+    build_fixture 的 entry 預設 last_commit 就等於 entry_sha（其他測試需要）；驗證「完成流程把 commit 寫回 last_commit」的測試
+    若不先清掉，初始值已等於預期值，刪掉寫回的程式碼斷言照樣過（codex 第二輪 review 以記憶體內突變確認）。
+    用 mutate_queue 而不是改 fixture 的記憶體 entry：驗的是落盤狀態，且不改變共用 setUp。
+
+    @param fixture build_fixture 的回傳值
+    @return None
+    @raises AssertionError 清完之後 last_commit 不是 None（前置條件不成立，後面的斷言沒有意義）
+    """
+
+    def mutator(queue):
+        """把測試用 entry 的 last_commit 設成 None（mutate_queue 鎖內重讀的私有副本，就地改是它的寫入契約）。"""
+        # STEP 01: 找 entry 後清欄位
+        runner.find_entry(queue, ENTRY_ID)["last_commit"] = None
+
+    # STEP 01: 落盤並重讀驗證
+    runner.mutate_queue(fixture["config"], mutator)
+    assert queue_entry(fixture)[1]["last_commit"] is None, "前置條件：last_commit 應已清成 None"
 
 
 def queue_entry(fixture):

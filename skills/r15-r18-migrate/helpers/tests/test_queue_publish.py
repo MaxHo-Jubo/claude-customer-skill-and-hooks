@@ -46,6 +46,7 @@ from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-positi
     write_fake_gh,
     reject_entry_branch_push,
     build_fixture,
+    clear_last_commit,
     remote_tip,
     queue_entry,
     git_with_failure,
@@ -158,7 +159,9 @@ class PublishVerifiedEntryTest(unittest.TestCase):
     def test_success_writes_tip_and_done_together(self):
         """成功路徑：遠端整合分支前進到 entry commit，queue 的 tip 與 done 在同一次寫入裡出現。"""
         fixture = self.fixture
-        # STEP 01: 包住 mutate_queue，每次寫入後記下「tip 是否已前進、entry 是否已 done」
+        # STEP 01: 起算點——last_commit 先清成 None，後面斷言它被寫成 entry 的 commit 才是「完成流程寫回」的證據；
+        # 再包住 mutate_queue，每次寫入後記下「tip 是否已前進、entry 是否已 done」
+        clear_last_commit(fixture)
         # 每次落盤後的 (tip 是否已前進, entry 狀態) 記錄器
         recorder = mock.Mock()
         # 被替換前的 mutate_queue，spy_mutate 轉發給它（真的寫入）

@@ -411,7 +411,7 @@ R15 與 R18 有**兩個**會讓同一份 CSS 看起來大小不同的差異，�
 3. 每個保留的 `rem` 行加 `rem-ok: 對齊 activityList` 標記，並在報告 ⚠ 清單寫「手機實機尚未與 R15 並排比對」。
 4. 無基準頁可對照（沒有同類 R18 手機頁面）→ `blocked(needs_human)`，不要自行決定尺寸。
 
-**自檢（Phase 4 必跑）**：對本 entry 複製或新增的所有 scss／css／js／jsx／ts／tsx 檔執行 `python3 helpers/scan_rem.py <檔…>`，exit 0 才算過。腳本沒有的環境用等價指令：`git grep -n -E '(^|[^0-9A-Za-z_.])[0-9]+(\.[0-9]+)?rem\b' -- <檔…>`（會連註解內的一起列出，自行排除）。
+**自檢（Phase 4 必跑）**：對本 entry 複製或新增的所有 scss／css／js／jsx／ts／tsx 檔執行 `python3 helpers/scan_rem.py <檔…>`，exit 0 才算過。腳本沒有的環境用等價指令：`git grep -n -E '(^|[^0-9A-Za-z_.])([0-9]+(\.[0-9]+)?|\.[0-9]+)rem\b' -- <檔…>`（會連註解內的一起列出，自行排除）。
 
 **先例與事故**：
 

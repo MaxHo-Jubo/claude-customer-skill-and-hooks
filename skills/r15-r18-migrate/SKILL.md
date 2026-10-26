@@ -1,7 +1,7 @@
 ---
 name: r15-r18-migrate
 description: 把一個 React 15 頁面 entry 以最小改動遷移到 React 18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），一次處理一個 entry 並產出 commit 與結構化結果；觸發語 `/r15-r18-migrate <entry-id> [--resume]`。
-version: 1.2.1
+version: 1.2.2
 ---
 
 # R15 → R18 最小改動遷移（單 entry）
@@ -220,9 +220,9 @@ tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要�
 3. 紅燈**最多修 2 次**，仍紅 → `blocked(build_failed)`，`notes` 附錯誤首行與檔案位置。修法只允許修正遷移造成的錯（漏 import、路徑錯、prop 名稱錯），不准為了讓建置過而改行為或砍功能。
 4. **eslint 走基準比對閘門（1.2.0 起）**：對本 entry 每個「R15 檔→R18 落點檔」成對執行 `python3 helpers/eslint_gate.py --repo <REPO_DIR> --write --pair <R15 檔>=<R18 檔> [--pair …]`（`helpers/` 在 skill 根目錄；從 repo 目錄執行時用 skill 目錄的絕對路徑。只處理 js／jsx／ts／tsx，scss 等會略過）。閘門把 R15 原檔當成放在 R18 落點，用 R18 的 eslint 設定跑一次得到每條規則的基準數量；搬遷後再跑一次；**只容忍 R15 原檔本來就有的違規**。
    - exit 0：通過，需要的檔最前面已由腳本寫入 `/* eslint-disable <實際觸發的規則> */` 檔頭（只列實際觸發的規則，不整檔關閉）。輸出裡每一行 `RISK:`（被關掉的規則可能掩蓋真問題，如 `no-undef`、`no-unused-vars`、`eqeqeq`、未宣告依賴）都要逐行寫進報告 ⚠ 清單。
-   - exit 1：有檔的某條規則數量**超過 R15 基準**（翻譯新引入的錯），或出現 parse error／`import/no-unresolved`；沒有任何檔被改。依輸出的規則與行號修**遷移造成的錯**（漏 import、路徑錯、prop 名稱錯），修完重跑；**最多修 2 次**，仍 exit 1 → `blocked(build_failed)`，`notes` 首行寫「eslint_gate」並貼輸出。
+   - exit 1：有檔的某條規則數量**超過 R15 基準**（翻譯新引入的錯）、R18 手寫的 `eslint-disable`／`eslint-enable` 指令比 R15 原檔多（輸出的違規規則名是「手寫 eslint-disable/enable 指令」，要刪掉手寫的指令），或出現 parse error／`import/no-unresolved`；沒有任何檔被改。依輸出的規則與行號修**遷移造成的錯**（漏 import、路徑錯、prop 名稱錯），修完重跑；**最多修 2 次**，仍 exit 1 → `blocked(build_failed)`，`notes` 首行寫「eslint_gate」並貼輸出。
    - exit 2：環境問題（找不到 eslint、檔案不存在、eslint 自己出錯、檔案被 eslint 忽略）→ `blocked(build_env)`，`notes` 貼輸出。
-   - **不得手寫 `eslint-disable`、不得用 `--fix`**：手寫的沒有基準比對，會讓翻譯新引入的錯被放過；`--fix` 會對 R15 原碼大範圍重排、破壞逐行比對。warning 不動。重跑（`--resume`）時閘門會先去掉自己寫過的檔頭再算，不會疊加。
+   - **不得手寫 `eslint-disable`、不得用 `--fix`**：閘門以 `--no-inline-config` 忽略檔內停用指令，且 R18 手寫的指令數量超過 R15 原檔就列為違規（手寫的停用不會被基準比對驗證，會讓翻譯新引入的錯被放過）；`--fix` 會對 R15 原碼大範圍重排、破壞逐行比對。warning 不動。重跑（`--resume`）時閘門會先去掉自己寫過的檔頭再算，不會疊加。
 
 ### 步驟 6：無對照項目盤點
 

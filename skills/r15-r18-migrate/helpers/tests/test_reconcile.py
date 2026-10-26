@@ -41,6 +41,7 @@ from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-positi
     INTEGRATION_BRANCH,
     R15_RELATIVE_PATH,
     build_fixture,
+    clear_last_commit,
     queue_entry,
     reject_entry_branch_push,
     remote_tip,
@@ -257,8 +258,9 @@ class ReconcileAfterPushTest(RestartHarness):
 
         @return None
         """
-        # STEP 01: 中斷 → 重啟
+        # STEP 01: 中斷 → last_commit 清成 None（對帳補 done 才是寫回它的唯一來源）→ 重啟
         publish(self.fixture, kill_before_done=True)
+        clear_last_commit(self.fixture)
         self.assertEqual(self.restart(), runner.EXIT_OK)
         # STEP 02: done 與收尾資料
         queue, entry = queue_entry(self.fixture)

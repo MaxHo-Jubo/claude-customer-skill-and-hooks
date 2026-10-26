@@ -9,13 +9,20 @@
 2. 搬遷後：把 R18 檔（先去掉本腳本之前寫過的檔頭）再跑一次；
 3. 判定：
    - parse error、`import/no-unresolved` 必須為 0（那是真的壞檔／壞 import，不能蓋）；
-   - `PATH_DEPENDENT` 內的 import 規則（遷移後路徑必然不同，沒有意義的基準）放行；
+   - `PATH_DEPENDENT` 內的 import 規則（遷移後路徑必然不同，沒有意義的基準）放行，不做基準比對；
    - 其餘每條規則，搬遷後的數量不得超過 R15 基準，超過就是「翻譯新引入」→ 不過；
+   - 搬遷後的檔（去掉本腳本檔頭後）手寫的 eslint-disable／enable 指令，按 R15 原檔的指令數量基準比較：
+     R18 超過 R15 數量才列違規，但不證明個別指令相同（只比數量，不比內容）。指令只計入實際的 JS／TS 註解 token，
+     字串、模板字串、正規表示式字面值內的文字不算；遇到無法判定的語法偏向不計入（漏報代價小、誤報會擋掉正確遷移）。
+     執行 eslint 時一律帶 `--no-inline-config`，基準與搬遷後都不吃檔案內的 inline 設定，
+     所以手寫的停用指令藏不住錯，且 R15 原檔本來就有的指令照搬不會被誤擋；
 4. 全部檔對都過，才在每個需要的檔最前面寫檔頭 `/* eslint-disable <實際觸發的規則> */`（只列實際觸發的規則，不整檔關閉）。
    任何一個檔不過就一個檔都不寫（全有或全無，重跑結果才一致）。
+   檔頭只代表「已通過規則數量的基準比對」：不證明逐筆違規都源自 R15；路徑相關規則是直接放行、沒有基準比對，
+   檔頭會另用一行點名這些規則。
 5. 被關掉的規則裡有「可能掩蓋真問題」的（`RISK_RULES`）逐行印 `RISK:`，請寫進報告的 ⚠ 清單。
 
-檔頭只能由本腳本產生：手寫的 eslint-disable 沒有基準比對，會讓翻譯新引入的錯被放過。
+檔頭只能由本腳本產生：手寫的 eslint-disable 指令只按 R15 數量基準比較、不證明個別指令相同，在基準數量內仍可能讓翻譯新引入的錯被放過。
 本腳本不修任何程式碼、不用 `--fix`（會對 R15 原碼大範圍重排，破壞逐行比對）。
 
 用法（在 skill 根目錄）：
@@ -30,12 +37,17 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
 # 本腳本寫的檔頭的第一行（用來辨識並在重跑時整段換掉，避免重複疊加）
 HEADER_MARK = '// R15 原碼逐字搬遷：'
-HEADER_REASON = HEADER_MARK + '下列規則的違規是 R15 既有寫法，保留以利逐行比對（只列本檔實際觸發的規則）\n'
+# 檔頭第一行：只宣稱「已通過規則數量的基準比對」，不宣稱逐筆違規都源自 R15
+HEADER_REASON = HEADER_MARK + '下列規則已通過 eslint_gate 的 R15 基準數量比對（搬遷後每條規則的 error 數量不超過 R15 基準；只列本檔實際觸發的規則）\n'
+
+# 路徑相關規則出現在檔頭時的補充說明前綴（後面接規則名單）；說明這些規則沒有基準比對
+HEADER_PATH_NOTE = '// 其中路徑相關規則（遷移後路徑必然不同）沒有基準比對、直接放行：'
 
 # 會被檢查的副檔名
 LINT_EXTS = ('.js', '.jsx', '.ts', '.tsx')
@@ -58,6 +70,24 @@ RISK_RULES = frozenset([
     'react-hooks/exhaustive-deps',
 ])
 
+# 手寫的 eslint 停用／啟用指令：套用在「註解內容」（不含 `//`、`/*`、`*/`）的開頭，
+# 內容以 eslint-disable／eslint-enable（含 -line／-next-line 變體）開頭，後面接空白或結尾（與 eslint 自己的判斷一致）
+DIRECTIVE_PATTERN = re.compile(r'\s*eslint-(?:disable|enable)(?:-next-line|-line)?(?:\s|$)')
+
+# 之後的 `/` 是正規表示式開頭（不是除法）的關鍵字
+REGEX_PRECEDING_KEYWORDS = frozenset([
+    'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await',
+])
+
+# 識別字／數字／正規表示式旗標：連續的字母、數字、底線、`$`（含非 ASCII 字母）
+WORD_PATTERN = re.compile(r'[\w$]+')
+
+# 手寫指令違規在違規清單與行號表中使用的名稱（不是 eslint 規則 id）
+DIRECTIVE_RULE = '手寫 eslint-disable/enable 指令'
+
+# 手寫指令違規的原因說明
+DIRECTIVE_WHY = '手寫的停用指令超過 R15 指令數量基準（只比數量，不證明個別指令相同）；閘門不接受'
+
 # eslint 對被忽略檔案給的訊息關鍵字（被忽略 = 沒檢查，必須當成環境錯誤，不能當成「0 error」）
 IGNORED_MARKER = 'File ignored'
 
@@ -78,8 +108,169 @@ def strip_header(text):
 
 
 def build_header(rules):
-    """組檔頭：一行原因註解 + 每條規則一行的 eslint-disable 區塊。"""
-    return HEADER_REASON + '/* eslint-disable\n' + ',\n'.join('  ' + r for r in rules) + '\n*/\n'
+    """組檔頭：一行原因註解 + （有路徑相關規則時）一行豁免說明 + 每條規則一行的 eslint-disable 區塊。"""
+    # STEP 01: 挑出名單中沒有基準比對的路徑相關規則
+    path_rules = [r for r in rules if r in PATH_DEPENDENT]
+    # STEP 02: 有才多一行豁免說明，沒有就維持原本的一行原因
+    note = HEADER_PATH_NOTE + '、'.join(path_rules) + '\n' if path_rules else ''
+    return HEADER_REASON + note + '/* eslint-disable\n' + ',\n'.join('  ' + r for r in rules) + '\n*/\n'
+
+
+def skip_quoted(text, start):
+    """跳過以 text[start]（單引號或雙引號）開頭的字串字面值，回傳字串結束後的位置。
+
+    字串不跨行：遇到未跳脫的換行就在換行處結束（未結束的字串不會吞掉後面的行）；遇到檔尾回傳檔尾。
+    """
+    quote = text[start]
+    n = len(text)
+    j = start + 1
+    # STEP 01: 逐字元找結束引號
+    while j < n:
+        ch = text[j]
+        # STEP 01.01: 反斜線連同下一個字元一起跳過（含跳脫的引號與行尾續行）
+        if ch == '\\':
+            j += 2
+        elif ch == quote:
+            return j + 1
+        elif ch == '\n':
+            return j
+        else:
+            j += 1
+    return n
+
+
+def scan_template(text, start, depths):
+    """掃模板字串本文，從 start（開頭反引號之後，或 `${ }` 的結尾 `}` 之後）到結尾反引號或下一個 `${`。
+
+    depths 是每層尚未結束的 `${ }` 運算式內、未配對 `{` 的數量（最內層在最後）；不修改傳入的 depths。
+    回傳 (新位置, 之後的 `/` 能否是正規表示式開頭, 新 depths)：遇到 `${` 就回到程式碼狀態並多一層；
+    遇到結尾反引號或檔尾就結束這個模板字串。
+    """
+    n = len(text)
+    j = start
+    # STEP 01: 逐字元找結尾反引號或 `${`
+    while j < n:
+        ch = text[j]
+        # STEP 01.01: 反斜線連同下一個字元一起跳過（含跳脫的反引號與 `\${`）
+        if ch == '\\':
+            j += 2
+        elif ch == '`':
+            return j + 1, False, depths
+        elif ch == '$' and text.startswith('{', j + 1):
+            return j + 2, True, depths + (0,)
+        else:
+            j += 1
+    return n, False, depths
+
+
+def skip_regex(text, start):
+    """嘗試把 text[start] 的 `/` 當成正規表示式字面值開頭並跳過，回傳（含旗標）結束後的位置；
+    同一行內找不到結尾就回傳 None（呼叫端改當除法處理，偏向不吞掉後面的文字）。
+    """
+    n = len(text)
+    j = start + 1
+    in_class = False
+    # STEP 01: 逐字元找結尾斜線（字元集合 [...] 內的斜線不算結尾）
+    while j < n:
+        ch = text[j]
+        # STEP 01.01: 反斜線連同下一個字元一起跳過；跳脫換行或直接換行都不是合法的正規表示式
+        if ch == '\\':
+            if text[j + 1:j + 2] == '\n':
+                return None
+            j += 2
+        elif ch == '\n':
+            return None
+        elif ch == '[':
+            in_class = True
+            j += 1
+        elif ch == ']':
+            in_class = False
+            j += 1
+        elif ch == '/' and not in_class:
+            flags = WORD_PATTERN.match(text, j + 1)
+            return flags.end() if flags else j + 1
+        else:
+            j += 1
+    return None
+
+
+def scan_comments(text):
+    """依序產出文字中每個 JS／TS 註解 token：(註解起始位置, 註解內容（不含 `//`、`/*`、`*/`）)。
+
+    只做純 Python 的輕量掃描，不是完整的 parser：會跳過單雙引號字串、模板字串（含 `${ }` 巢狀）與正規表示式字面值，
+    其內的 `//`、`/*` 不算註解。`/` 判斷為正規表示式或除法靠「前一個有意義的 token」的啟發式；
+    無法判定時偏向不吞字元／不產出註解（漏報代價小，誤報會擋掉正確遷移）。未結束的區塊註解算到檔尾。
+    已知限制：JSX 文字節點（標籤之間的純文字）不辨識，其中的 `//` 與 `/* */`（例如網址、被當成文字的區塊註解寫法）都會被當成註解；
+    只有該文字緊接 eslint-disable／enable 才會誤報（例如 `<div>/* eslint-disable */</div>` 會算成指令；2026-10-26 對
+    react_15、react_18 共 1905 個 JS／TS 檔、48035 個註解與 @babel/parser 逐一比對，只有 2 個檔的 JSX 網址文字多算註解，
+    590 個指令行號完全一致）。
+    """
+    n = len(text)
+    i = 0
+    # 目前位置若遇到 `/`，能否是正規表示式開頭（檔案開頭與運算子之後可以；識別字、數字、字串、`)`、`]`、`}` 之後是除法）
+    regex_ok = True
+    # 每層尚未結束的 `${ }` 運算式內，未配對 `{` 的數量（最內層在最後）；空 tuple = 不在任何 `${ }` 內
+    depths = ()
+    # STEP 01: 逐 token 前進
+    while i < n:
+        ch = text[i]
+        pair = text[i:i + 2]
+        # STEP 01.01: 註解（程式碼狀態下 `//`、`/*` 一定是註解，不會是正規表示式）；不改變 regex_ok
+        if pair == '//':
+            end = text.find('\n', i)
+            end = n if end < 0 else end
+            yield i, text[i + 2:end]
+            i = end
+        elif pair == '/*':
+            end = text.find('*/', i + 2)
+            yield i, text[i + 2:n if end < 0 else end]
+            i = n if end < 0 else end + 2
+        # STEP 01.02: 空白與 `++`／`--`（後置遞增後的 `/` 是除法，所以不改變 regex_ok）
+        elif ch.isspace():
+            i += 1
+        elif pair in ('++', '--'):
+            i += 2
+        # STEP 01.03: 單雙引號字串與模板字串
+        elif ch in '"\'':
+            i = skip_quoted(text, i)
+            regex_ok = False
+        elif ch == '`':
+            i, regex_ok, depths = scan_template(text, i + 1, depths)
+        # STEP 01.04: 大括號：只在 `${ }` 內才需要配對，最內層的 `}` 配完就回到模板字串本文
+        elif ch == '{':
+            depths = depths[:-1] + (depths[-1] + 1,) if depths else depths
+            regex_ok = True
+            i += 1
+        elif ch == '}' and depths and depths[-1] == 0:
+            i, regex_ok, depths = scan_template(text, i + 1, depths[:-1])
+        elif ch == '}':
+            depths = depths[:-1] + (depths[-1] - 1,) if depths else depths
+            regex_ok = False
+            i += 1
+        # STEP 01.05: `/`：前一個 token 允許時嘗試當正規表示式；`</`（JSX 閉合標籤）、同一行找不到結尾都當除法
+        elif ch == '/':
+            end = skip_regex(text, i) if regex_ok and text[i - 1:i] != '<' else None
+            i = i + 1 if end is None else end
+            regex_ok = end is None
+        # STEP 01.06: 識別字／數字（部分關鍵字之後可接正規表示式）或其他標點（`)`、`]` 之後是除法）
+        else:
+            word = WORD_PATTERN.match(text, i)
+            if word:
+                i = word.end()
+                regex_ok = word.group() in REGEX_PRECEDING_KEYWORDS
+            else:
+                i += 1
+                regex_ok = ch not in ')]'
+
+
+def find_directive_lines(text):
+    """找出文字中手寫的 eslint-disable／enable 指令，回傳各自所在的行號（1 起算）清單；沒有就回空清單。
+
+    只計入實際的註解 token（見 scan_comments），字串、模板字串、正規表示式內長得像指令的文字不算；
+    指令必須在註解內容的開頭（與 eslint 一致），註解中途提到指令文字不算。
+    """
+    # STEP 01: 掃出所有註解，留下內容以指令開頭的，轉成起始位置所在的行號
+    return [text.count('\n', 0, start) + 1 for start, body in scan_comments(text) if DIRECTIVE_PATTERN.match(body)]
 
 
 def count_errors(messages):
@@ -117,8 +308,9 @@ def make_eslint_runner(repo):
         raise GateError('找不到 eslint：%s（react_18 的 node_modules 沒裝？）' % eslint_bin)
 
     def lint(text, filename):
+        # --no-inline-config：不吃檔案內的 eslint-disable／設定註解，否則手寫的停用指令會讓未檢查的程式碼回報 0 error
         proc = subprocess.run(
-            ['node', eslint_bin, '--stdin', '--stdin-filename', filename, '--no-ignore', '-f', 'json'],
+            ['node', eslint_bin, '--stdin', '--stdin-filename', filename, '--no-ignore', '--no-inline-config', '-f', 'json'],
             input=text, capture_output=True, text=True, cwd=app,
         )
         # eslint 結束碼：0 = 沒有 error、1 = 有 error、2 = eslint 自己出錯
@@ -166,6 +358,12 @@ def check_pairs(pairs, lint):
         for m in after_msgs:
             if m.get('severity') == 2:
                 lines.setdefault(m.get('ruleId'), []).append(m.get('line'))
+        # 手寫指令：比 R15 原檔多就是違規（行號進 lines，與規則違規同一個回報路徑）
+        r15_directives = find_directive_lines(r15_text)
+        after_directives = find_directive_lines(body)
+        if len(after_directives) > len(r15_directives):
+            violations.append((DIRECTIVE_RULE, len(after_directives), len(r15_directives), DIRECTIVE_WHY))
+            lines[DIRECTIVE_RULE] = after_directives
         results.append({
             'r18': r18_path, 'text': r18_text, 'body': body, 'disable': disable,
             'violations': violations, 'lines': lines, 'baseline': baseline, 'after': after,

@@ -185,6 +185,7 @@ runner 把「失敗當下的全部證據」凍結成一個目錄，人只要把�
     - **abort 之後的事後驗證不通過**：abort 回報成功但 MERGE_HEAD 還在（或讀不到）時，合併沒收完，記錄**保留**，先在 repo 看 `git status` 查明、照上面的人工步驟收拾；MERGE_HEAD 已不在、但 HEAD 或分支不是合併前的、或工作樹不乾淨（例如 abort 清不掉的未追蹤檔）時，合併已結束、記錄**已刪**，細節列出哪幾項沒回到合併前，看過、收乾淨後等 runner 重啟即可。
     - **合併記錄讀不懂**（被手動改壞、磁碟錯誤）：有 MERGE_HEAD 就不動 repo、照人工步驟處理；沒有 MERGE_HEAD 時 runner 直接刪掉記錄續跑（原始內容摘要進 `merge_intent_cleared` 事件）。**讀不到 MERGE_HEAD**（`git rev-parse` 本身失敗）不當成沒有合併：保留記錄、暫停，先查 repo 本身（路徑、權限、`git status`）。
     - 第 7 點「有衝突但 abort 失敗」的那種暫停，記錄一樣保留，下次重啟照這裡的條件自動收拾（年齡上限 900 秒內；超過就照上面的人工步驟自己 `git merge --abort`）。記錄寫不進去（狀態目錄滿、權限）時 runner 不做那次合併，照原本的合併失敗路徑暫停（細節寫「寫合併記錄失敗，未執行合併」，附註「合併未開始」），在 CLI 之前、不燒預算。收拾本身與收拾失敗的暫停都在 CLI 之前、沒有佔呼叫序號，不計入第 12 點的 CLI 後暫停計數；鎖定（hold）中不收拾。
+14. **暫停原因是 `done_missing_last_commit`**（1.2.2）：佇列看起來全部完成，但有 `done`、還沒蓋章（沒有 `checkpoint_id`）的 entry 取不到它的 commit 標題——`last_commit` 缺漏，或有值但在遠端整合分支上讀不到（`git show` 失敗）。斷點 PR 的標題靠這個欄位取，繼續下去斷點會開不出來，所以 runner 不宣告完成，改暫停並通知一次（不帶簽名、不鎖定；之後重啟同原因只安靜退出）。通知內文列出每個有問題的 entry id 與原因。處理：直接改 `queue.json` 的 `modules[].last_commit`，補成該 entry 在遠端整合分支上存在的 commit（`mark-done` 只收 pending／blocked／failed，補不了 done）；已蓋章的 done entry 不受影響。補好後重啟：runner 會依 auto 門檻補看一次斷點（沒到門檻就不開）再宣告完成。補開失敗時斷點標 failed，不會再自動重開，完成通知會註明哪個斷點、它涵蓋的模組要人工開 PR。
 
 ## launchd 常駐與重啟行為
 

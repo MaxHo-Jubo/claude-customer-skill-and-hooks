@@ -93,6 +93,41 @@ class ScanFileTest(unittest.TestCase):
     def test_decimal_values_hit(self):
         self.assertEqual(len(scan_rem.scan_file(write(self.tmp, 'a.css', '.a { width: calc(100% - 0.375rem); }\n'))), 1)
 
+    def test_leading_dot_decimal_values_hit(self):
+        """省略前導零的小數（`.5rem`、`-.5rem`）是合法 CSS 值，必須命中（codex A3）。"""
+        # STEP 01: 每個樣本都是「單獨一行、預期恰好命中 1 行」的合法寫法
+        samples = [
+            '.a { margin: .5rem; }\n',
+            '.a { margin: -.5rem; }\n',
+            '.a { margin:.5rem; }\n',
+            '.a { width: calc(1px + .5rem); }\n',
+            '.a { width: calc(1px+.5rem); }\n',
+            "  fontSize: '.5rem',\n",
+            "  marginTop: '-.5rem',\n",
+        ]
+        for i, content in enumerate(samples):
+            with self.subTest(content=content):
+                hits = scan_rem.scan_file(write(self.tmp, f'lead{i}.scss', content))
+                self.assertEqual(len(hits), 1)
+
+    def test_malformed_or_embedded_numbers_are_not_flagged(self):
+        """識別字夾帶與畸形數值不命中：這是既有邊界，新增小數分支後不得退化。"""
+        # STEP 01: 每個樣本都不該命中
+        samples = [
+            'foo.5rem;\n',  # 識別字後接 `.5rem`（成員存取形式）
+            'a.b.5rem;\n',
+            'x3rem;\n',  # 識別字結尾是 rem
+            '.a { margin: 1.2.3rem; }\n',  # 多個小數點
+            '.a { margin: .5.5rem; }\n',  # 省略前導零但仍有第二個小數點
+            '.a { margin: 1..5rem; }\n',
+            '.a { margin: 1.rem; }\n',  # 小數點後沒有數字
+            '.a { margin: .rem; }\n',  # 只有小數點
+            '.a { margin: .5remx; }\n',  # rem 後緊接英數字
+        ]
+        for i, content in enumerate(samples):
+            with self.subTest(content=content):
+                self.assertEqual(scan_rem.scan_file(write(self.tmp, f'bad{i}.scss', content)), [])
+
     def test_identifier_ending_in_rem_is_not_flagged(self):
         self.assertEqual(scan_rem.scan_file(write(self.tmp, 'a.js', 'const x3rem = 1;\n')), [])
 

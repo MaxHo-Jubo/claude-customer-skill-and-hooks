@@ -35,6 +35,7 @@ from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-positi
     ENTRY_ID,
     INTEGRATION_BRANCH,
     build_fixture,
+    clear_last_commit,
     queue_entry,
     run_git,
 )
@@ -125,9 +126,10 @@ class MarkDoneTest(unittest.TestCase):
 
         @return None
         """
-        # STEP 01: entry 已合併並推上遠端
+        # STEP 01: entry 已合併並推上遠端；last_commit 先清成 None，後面斷言它被寫成 entry 的 commit 才是 mark-done 寫回的證據
         fixture = self.make_fixture()
         self.merge_entry(fixture)
+        clear_last_commit(fixture)
         # STEP 02: 標記
         code, _out, _err = self.call_mark_done(fixture, note="本機處理，PR 已合併")
         self.assertEqual(code, EXIT_OK)
