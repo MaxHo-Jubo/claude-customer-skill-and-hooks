@@ -71,6 +71,26 @@ describe('isWaitingForBackground', () => {
   test('只看結尾：等待字樣在很前面、結尾是完成宣告 → 不算等待', () => {
     expect(isWaitingForBackground(`先前在等探針通知。${'已確認。'.repeat(120)}全部完成，測試通過。`)).toBe(false);
   });
+  test('否定：「不必等待 agent 回報，已修好」→ 不算等待', () => {
+    expect(isWaitingForBackground('不必等待 agent 回報，已修好，測試 12 pass')).toBe(false);
+  });
+  test('否定的其他寫法（不用／無需／不需／毋須／不再）→ 不算等待', () => {
+    for (const neg of ['不用', '無需', '不需', '毋須', '不再']) {
+      expect(isWaitingForBackground(`${neg}等探針通知，結果已確認`)).toBe(false);
+    }
+  });
+  test('狀態已改變：「原本在等探針通知，現在已全部完成」→ 不算等待', () => {
+    expect(isWaitingForBackground('原本在等探針通知，現在已全部完成')).toBe(false);
+  });
+  test('等待字樣在前一句、最後一句是完成宣告（短訊息，不靠長度推出窗口）→ 不算等待', () => {
+    expect(isWaitingForBackground('先前在等探針通知。全部完成，測試通過。')).toBe(false);
+  });
+  test('同一句內等待字樣與完成宣告並存 → 不算等待（寧可多檢查一次，不放行未驗證的宣告）', () => {
+    expect(isWaitingForBackground('等 agent 回報，另外 X 已修好，測試全綠')).toBe(false);
+  });
+  test('最後一句才是等待、前面有別的敘述 → 仍算等待', () => {
+    expect(isWaitingForBackground('已讀完三個檔案，找到兩個候選。agent 還在跑，等通知')).toBe(true);
+  });
 });
 
 describe('shouldSkip：等待背景任務', () => {

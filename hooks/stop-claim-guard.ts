@@ -10,7 +10,7 @@ import { CLAIM_QUESTIONS } from '../scripts/lib/jev-questions';
  * 宣稱了但沒證據（兩題 confidence 都達行動下限）→ 以 `{"decision":"block"}` 擋下回合結束，
  * reason 依 harness/judgment-matrix.md §2 完成判準要求補證據或改成「待確認」。
  * 防迴圈：stop_hook_active 為真（已被 Stop hook 擋過、正在續跑）一律放行；同一 session 最多擋 MAX_BLOCKS 次。
- * 中途回報略過：回覆結尾自述還在等背景任務／子 agent 的通知（isWaitingForBackground）時放行，因為那不是完成宣告（2026-10-23 retro：「修正進行中、等探針通知」被判完成宣告，多耗一輪）。
+ * 中途回報略過：回覆結尾自述還在等背景任務／子 agent 的通知（isWaitingForBackground）時放行，因為那不是完成宣告（2026-10-23 retro：「修正進行中、等探針通知」被判完成宣告，多耗一輪）。只看結尾最後一句；該句被否定（「不必等…」）、屬已過去的狀態（「原本在等…」）或同句已有完成宣告時不略過（2026-10-26 codex review：「不必等待 agent 回報，已修好」曾被放行）。
  * 任何錯誤一律 fail-open：放行、不輸出，錯誤寫入 ~/.claude/state/jev/decisions.jsonl。
  * kill switch：環境變數 JEV_HOOKS_DISABLED=1。
  *
@@ -36,6 +36,19 @@ const WAITING_TAIL_CHARS = 300;
  * 刻意不單獨比對「進行中」：Jira 狀態字樣（「狀態：進行中」）會讓真正的完成宣告被誤放行
  */
 const WAITING_PATTERN = /等(?:待)?[^。\n，,、]{0,12}(?:通知|回報|回來|跑完)|(?:背景|探針|子\s*agent|agent)[^。\n，,、]{0,10}(?:進行中|執行中|還在跑|跑中)/;
+
+/** 切句：中英文句末標點、換行、英文句點後接空白 */
+const SENTENCE_SPLIT = /[。！？!?\n]|\.\s/;
+/**
+ * 讓等待字樣失效的字樣：否定（不必／不用／無需／不需／毋須／不再）、已過去的狀態（原本／先前／之前／剛才／曾）、
+ * 狀態已改變（已(全部)收到／回來／回報／跑完／完成）。命中表示那句不是「現在還在等」
+ */
+const WAITING_VOIDED = /不必|不用|無需|不需|毋須|不再|原本|先前|之前|剛才|曾經?|已經?(?:全部)?(?:收到|回來|回報|跑完|完成)/;
+/**
+ * 同一句內的完成宣告字樣：同句並存時不當中途回報略過，交給 Jev 判定有沒有附證據。
+ * 兩種判錯的代價不對稱：多檢查一次只多耗一輪，漏放行則是沒證據的完成宣告直接過關，所以寧可偏向檢查
+ */
+const COMPLETION_MARK = /已修好|修好了|已解決|已完成|完成了|全部完成|全綠|測試通過|根因是/;
 
 /** 單題判定 */
 interface Verdict {
@@ -88,8 +101,10 @@ export function canBlock(blocks: number): boolean {
  * @returns true 表示正在等背景任務
  */
 export function isWaitingForBackground(msg: string): boolean {
-  // STEP 01: 只比對結尾（見 WAITING_TAIL_CHARS）
-  return WAITING_PATTERN.test(msg.slice(-WAITING_TAIL_CHARS));
+  // STEP 01: 只看結尾（見 WAITING_TAIL_CHARS）的最後一個句子：等待要是「現在的最後狀態」才算中途回報
+  const last = msg.slice(-WAITING_TAIL_CHARS).split(SENTENCE_SPLIT).map((s) => s.trim()).filter(Boolean).pop() ?? '';
+  // STEP 02: 最後一句要有等待字樣，且沒被否定／已過去（WAITING_VOIDED），同句也沒有完成宣告（COMPLETION_MARK）
+  return WAITING_PATTERN.test(last) && !WAITING_VOIDED.test(last) && !COMPLETION_MARK.test(last);
 }
 
 /**
