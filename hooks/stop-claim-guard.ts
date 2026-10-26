@@ -10,6 +10,7 @@ import { CLAIM_QUESTIONS } from '../scripts/lib/jev-questions';
  * 宣稱了但沒證據（兩題 confidence 都達行動下限）→ 以 `{"decision":"block"}` 擋下回合結束，
  * reason 依 harness/judgment-matrix.md §2 完成判準要求補證據或改成「待確認」。
  * 防迴圈：stop_hook_active 為真（已被 Stop hook 擋過、正在續跑）一律放行；同一 session 最多擋 MAX_BLOCKS 次。
+ * 中途回報略過：回覆結尾自述還在等背景任務／子 agent 的通知（isWaitingForBackground）時放行，因為那不是完成宣告（2026-10-23 retro：「修正進行中、等探針通知」被判完成宣告，多耗一輪）。
  * 任何錯誤一律 fail-open：放行、不輸出，錯誤寫入 ~/.claude/state/jev/decisions.jsonl。
  * kill switch：環境變數 JEV_HOOKS_DISABLED=1。
  *
@@ -28,6 +29,13 @@ const ACTION_MIN_CONF = 0.3;
 const MAX_MESSAGE_CHARS = 6000;
 /** state 檔的子目錄名稱：~/.claude/state/jev/claim/<session>.json */
 const STATE_NAME = 'claim';
+/** 判斷「等背景任務」只看回覆最後幾個字元：等待自述通常在結尾，全文比對會被前文的舊字樣誤傷 */
+const WAITING_TAIL_CHARS = 300;
+/**
+ * 回覆自述「還在等背景任務／子 agent 的通知」的字樣：「等…通知／回報／回來／跑完」，或「背景／探針／agent…進行中／執行中／還在跑」。
+ * 刻意不單獨比對「進行中」：Jira 狀態字樣（「狀態：進行中」）會讓真正的完成宣告被誤放行
+ */
+const WAITING_PATTERN = /等(?:待)?[^。\n，,、]{0,12}(?:通知|回報|回來|跑完)|(?:背景|探針|子\s*agent|agent)[^。\n，,、]{0,10}(?:進行中|執行中|還在跑|跑中)/;
 
 /** 單題判定 */
 interface Verdict {
@@ -75,12 +83,22 @@ export function canBlock(blocks: number): boolean {
 }
 
 /**
+ * 回覆結尾是否自述「還在等背景任務的通知」：這是中途回報，不是完成宣告
+ * @param msg - Claude 最後一則回覆的文字
+ * @returns true 表示正在等背景任務
+ */
+export function isWaitingForBackground(msg: string): boolean {
+  // STEP 01: 只比對結尾（見 WAITING_TAIL_CHARS）
+  return WAITING_PATTERN.test(msg.slice(-WAITING_TAIL_CHARS));
+}
+
+/**
  * 是否整個略過檢查（不呼叫 Jev）
  * @param input - Stop hook stdin
  * @returns true 表示略過
  */
 export function shouldSkip(input: StopInput): boolean {
-  return input.hook_event_name !== 'Stop' || input.stop_hook_active === true || !input.last_assistant_message?.trim();
+  return input.hook_event_name !== 'Stop' || input.stop_hook_active === true || !input.last_assistant_message?.trim() || isWaitingForBackground(input.last_assistant_message);
 }
 
 /**

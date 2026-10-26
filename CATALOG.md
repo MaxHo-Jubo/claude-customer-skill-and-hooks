@@ -1,7 +1,7 @@
 # 快速查詢目錄
 
 > 所有自訂 skill、hook、script 的一頁式參考。
-> 上次更新：2026-10-16（新增 `retro` skill、PreToolUse `sed-inplace-guard.ts`、`scripts/credential-scan.ts`、`lib/eslint-targets.ts`、`lib/shell-text.ts`；`stop-review-guard` 遇 codex 背景執行放行；`post-commit-review` eslint 分組執行；`ctx-handoff` mod 升 0.7.0；`weekly-review` 1.10.0、`r15-r18-migrate` 1.1.3）；以下為前次紀錄——2026-10-11（新增 PreToolUse `Agent` hook `agent-model-router.ts`：Jev 掛載點 D 派工模型路由；`jev-questions.ts` 加 `TIER_QUESTIONS`；`jev-client.ts` 的 `askJev` 加可選 timeoutMs；新增 `jev-eval/extract-d-route.ts`、`run-eval-d.ts`）；前次 2026-10-05（新增 mod `review-band`：唯讀顯示 pending-review marker；三支 PreToolUse guard 擋下時寫 `DENIALS.jsonl`；`weekly-review` 1.9.0 加擋下統計；新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
+> 上次更新：2026-10-26（`weekly-review` 1.11.0 新增 STEP 10 模型使用效率報告與 `scripts/model-efficiency.py`；harness 新增 advisor 閘門；`save-progress` 1.3.0；`r15-r18-migrate` 1.2.1；`stop-claim-guard` 等背景任務時放行；ctx-handoff 門檻 400k）；以下為前次紀錄——2026-10-16（新增 `retro` skill、PreToolUse `sed-inplace-guard.ts`、`scripts/credential-scan.ts`、`lib/eslint-targets.ts`、`lib/shell-text.ts`；`stop-review-guard` 遇 codex 背景執行放行；`post-commit-review` eslint 分組執行；`ctx-handoff` mod 升 0.7.0；`weekly-review` 1.10.0、`r15-r18-migrate` 1.1.3）；以下為前次紀錄——2026-10-11（新增 PreToolUse `Agent` hook `agent-model-router.ts`：Jev 掛載點 D 派工模型路由；`jev-questions.ts` 加 `TIER_QUESTIONS`；`jev-client.ts` 的 `askJev` 加可選 timeoutMs；新增 `jev-eval/extract-d-route.ts`、`run-eval-d.ts`）；前次 2026-10-05（新增 mod `review-band`：唯讀顯示 pending-review marker；三支 PreToolUse guard 擋下時寫 `DENIALS.jsonl`；`weekly-review` 1.9.0 加擋下統計；新增 mod `tool-reminders`：Write/Edit 後提醒經 `tool.call` 的 `context` 送給 model；`inventory-drift-detector` 改讀 stdin 並移出 settings.json；`spec-section-validator` 新增 `--warn-only`）；前次 2026-10-03（StatusLine 框線下半改為 pace／cache／code，移除 token 預估金額；新增 `## Mods`：`ctx-handoff`；`sync-my-claude-setting` 1.9.0 納入 `mods/`；`save-progress` 1.1.0 交接紀錄改寫進 Jira 筆記／`handoff-{branch}.md`；`jira` 1.2.0；`post-commit-review` 支援 `-q` commit；`r15-r18-migrate` 部署試點後修正；前次 2026-09-24 TypeSafe Jev 語意路由，見 README.md 變更紀錄）
 
 ---
 
@@ -122,11 +122,12 @@
 - **不觸碰的範圍**：iOS/Android 正式發布一律使用者自己到 App Store Connect／Google Play Console 網頁手動點擊；曾規劃過的 fastlane lane（`release_pending_ios_version`／`release_pending_android_version`）已於 2026-09-04 全部放棄
 - **依賴**：`gh` CLI（PR 查詢/merge）、`jira-release-sync` skill（STEP 04 直接呼叫其完整流程，含它自己的候選清單確認 gate，不跳過）
 
-#### `/weekly-review` — 每週工作回顧（v1.10.0）
+#### `/weekly-review` — 每週工作回顧（v1.11.0）
 
-- **位置**：`~/.claude/skills/weekly-review/SKILL.md`
+- **位置**：`~/.claude/skills/weekly-review/SKILL.md`（STEP 10 的統計腳本在 `scripts/model-efficiency.py`）
 - **用法**：`/weekly-review`、`/weekly-review --days 14`
-- **功能**（8 步驟）：
+- **STEP 10 模型使用效率報告（v1.11.0）**：獨立步驟、只統計不改檔；Haiku subagent 執行 `python3 -I scripts/model-efficiency.py --days N` 並原樣轉貼 stdout。報告含模型×主/子 session 占比、專案占比、主 session context 長度分桶、Agent 呼叫的 model 分布、advisor 次數、Haiku 任務清單（只列事實，是否為機械性工作由使用者判斷）、自檢。快捷觸發：「模型效率報告」。測試：`scripts/test_model_efficiency.py`（10 項已知答案，涵蓋同 id 取最後 chunk、後面 chunk 的工具呼叫、期間篩選、壞行、null 欄位、跨期間 session、失敗路徑）。
+- **功能**（STEP 01~09，另有上述 STEP 10）：
   1. Git 工作摘要（按專案分組）— **v1.8.0 起改用 `multi-repo-commit-scanner` agent 平行掃描**（8 實體 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE），主 agent 等聚合 JSON 後組裝週報
   2. 觀察記錄回顧（claude-mem timeline/search）
   3. Auto Memory 變動掃描
@@ -418,7 +419,9 @@
   - 產出結構化報告並修復發現的 bug
 - **依賴**：git repository
 
-#### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.1.3）
+#### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.2.1）
+
+- **v1.2.0／v1.2.1 新增**：`helpers/eslint_gate.py`（對每個 R15→R18 檔對先用 R18 的 eslint 設定跑 R15 原文取基準，parse error 與 `import/no-unresolved` 必須為 0，其餘規則數量不得超過基準）、`helpers/scan_select.py`（react-select v1→v5 的 `clearable`／`isClearable` 預設值差異掃描）；`docs/api-mapping.md` 的動態欄位顯示開關改用 `hideColumnByCss`。詳見該 skill 的 `CHANGELOG.md`。
 
 - **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`event_log.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness／`tests/` 單元測試）、`CHANGELOG.md`）
 - **用法**：`/r15-r18-migrate <entry-id>`、`/r15-r18-migrate <entry-id> --resume`

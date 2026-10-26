@@ -1,7 +1,7 @@
 ---
 name: save-progress
 description: 手動存檔當前工作進度，寫成可交接給新 session 的交接紀錄（有 Jira 票寫進 Jira 開發筆記、沒有就依 branch 名稱另存），檢查 Teams 上有無未同步到 Jira 的討論，並把未存的記憶寫入磁碟，適合在 session 結束前、預感 rate limit、或長時間離開前使用
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Save Progress — 手動存檔工作進度
@@ -32,7 +32,7 @@ version: 1.2.0
 
 1. 收集事實，**用指令觀測，不要憑記憶**：
    - `git -C "<主要工作目錄>" status --short` 與 `git -C "<主要工作目錄>" diff --stat HEAD` → 未 commit 的修改
-   - `git -C "<主要工作目錄>" log --oneline -10` → 本次 session 的 commit（只列本 session 做的）
+   - `git -C "<主要工作目錄>" log --oneline -10` → 本次 session 的 commit（只列本 session 做的）。**只取 subject 與分支，不要把 hash 抄進交接檔**（見 STEP 02 格式）
    - 呼叫 `TaskList` 取得任務狀態；沒有這個工具或沒有任務 → 回顧本次 session 對話整理
 2. 依下方格式寫入 STEP 01 決定的目標。沒有內容的項目寫「無」，不要刪掉標題；沒跑過驗證就寫「未驗證」，不可寫成 pass：
 
@@ -48,7 +48,7 @@ version: 1.2.0
    - 決策：…｜理由：…｜否決的方案與原因：…
 
    ### 已修改檔案與關鍵變更
-   - `path/to/file` — 改了什麼、為什麼（已 commit 標 commit hash，未 commit 標「未 commit」）
+   - `path/to/file` — 改了什麼、為什麼（已 commit 標「已 commit」加 commit subject 關鍵字；**不寫 hash**，amend／rebase 後 hash 會失效，接手者用 `git log -1 <branch>` 取最新；未 commit 標「未 commit」）
 
    ### 驗證狀態
    - `執行的指令` → pass / fail（附關鍵輸出末幾行）

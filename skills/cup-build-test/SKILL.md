@@ -167,6 +167,8 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 | `--only A1` | 階段 4 只跑特定 prefix |
 | `--resume` | 從 `.claude/{ISSUE_KEY}-progress.md` 第一個未勾選 case 續跑（跳過階段 1-3，省 token） |
 
+**旗標回報紀律**：回報旗標效果（`--with-graph`、`--focus equivalence` 等）只說可數的事實，例如「用了 N 次 trace_path / search_graph，找到 M 條 indirect dep」；不寫「已啟用圖譜強化分析」這類模糊話。自問：帶旗標是否比不帶多產出具體資訊？沒有 → 在報告明說該旗標形同無效，不要包裝成有效。
+
 ---
 
 ## 階段 0：開場提醒（每次必跑）
@@ -357,6 +359,7 @@ npx playwright install chromium      # ~92MB chromium driver to ~/Library/Caches
 3. **依 `--focus` 旗標決定 test-plan 範圍**：
    - `auto`（預設）：依 inferredFeatures 拆大功能段（A、B、C），列舉全功能
    - `equivalence`：只圈出 commit 訊息中含「修正/修復/解決 R18」類字眼的範圍。例：`fix(FE): ...修正 R18 升級後 modal 不會自動關閉` → test-plan 大功能段聚焦「modal 自動關閉」這一點，其他功能放「附錄：未列入測試（已驗證等價）」
+   - **`equivalence` 不可只在前言宣告**：產出後逐段自查，test-plan 的每個大功能段都必須對得到 commit 訊息中某個「修正/修復/解決」字眼；對不到的段落移進附錄。只在前言寫「採 equivalence」、內文仍是全功能列舉，等於旗標沒生效
 4. **TEMPLATE-CASE-BLOCK 處理（核心步驟，不可跳過）**：
    - template 中所有被 `<!-- TEMPLATE-CASE-BLOCK ... -->` 與 `<!-- /TEMPLATE-CASE-BLOCK -->` 包夾的區塊，**整段重寫**，不是替換 placeholder
    - 重寫時依 coverage 推導實際操作步驟，例：

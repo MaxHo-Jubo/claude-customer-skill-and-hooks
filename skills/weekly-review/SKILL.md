@@ -1,7 +1,7 @@
 ---
 name: weekly-review
 description: "每週工作回顧與記憶整理。彙整 commit、Jira 活動、觀察記錄、auto memory，產出週報並清理過期記憶。當使用者提到 /weekly-review、「週報」、「整理記憶」、「回顧這週」、「本週環境檢討」時觸發。"
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Weekly Review — 週回顧與記憶整理
@@ -21,6 +21,7 @@ version: 1.10.0
 - 使用者說「整理記憶」— 只執行步驟 5（記憶整理），不檢查 MCP
 - 使用者說「review skill errors」— 只執行步驟 6~8（錯誤分析循環），不檢查 MCP
 - 使用者說「本週環境檢討」— 只執行步驟 9（retro），不檢查 MCP
+- 使用者說「模型效率報告」— 只執行步驟 10，不檢查 MCP
 
 ## Busboy 紀律（執行所有步驟時遵守）
 
@@ -555,6 +556,21 @@ Context 格式：skill:{name} / hook:{name} / {file-path} / unknown
 
 ---
 
+### STEP 10: 模型使用效率報告
+
+> 獨立步驟，不依賴 STEP 01~09。只統計、不改任何檔案；只列事實，不下「該換模型」的結論（busboy 紀律）。
+
+1. **派工**：一個 subagent，`general-purpose`、`model: haiku`、**不帶 `name`**。prompt 照 `~/.claude/harness/delegation-templates.md` §1 三件套填空：
+   - 目標：執行 `python3 -I ~/.claude/skills/weekly-review/scripts/model-efficiency.py --days {回顧天數}`，取得 markdown 報告，唯讀。
+   - 驗收：exit code 為 0，且回報含「### 自檢」段。exit 非 0 → 原樣回報 stderr，不得自行估算數字。
+   - 回報：stdout 原樣貼回，不改寫、不摘要、不加評論。
+2. **呈現**：主 session 原樣呈現報告。「Haiku 任務清單」只列清單，是否為機械性工作由使用者判斷，不代為分類。自檢壞行非 0 時標註「統計可能不完整」。
+3. **口徑備忘**（避免日後誤讀）：token 以 message.id 去重只算一次，工具呼叫掃全部 chunk；advisor 的 block 類型是 `server_tool_use`，不是 `tool_use`；期間以訊息時間戳篩選，不是檔案修改時間。
+
+輸出格式：腳本 stdout 即報告，heading 由腳本定義（模型×主/子 session、專案占比、主 session context 長度、Agent 呼叫、advisor 呼叫、Haiku 任務清單、自檢），不另加段落。
+
+---
+
 ## Subagent 執行策略
 
 ```
@@ -573,6 +589,7 @@ STEP 07 (Subagent C, 可多個) ← 每個 skill 一個 subagent，平行
 STEP 09 (Subagent D, 每個 session 一個) ← 主 agent 直接派，同一則訊息並行
   ↓ 全部回流（或標明降級）
 主 agent 彙整、與 STEP 05/07 去重，等待使用者逐項確認
+STEP 10 (Subagent E, 單一) ← 獨立步驟，可單獨觸發
 ```
 
 **Subagent 一覽**：
@@ -584,6 +601,7 @@ STEP 09 (Subagent D, 每個 session 一個) ← 主 agent 直接派，同一則�
 | Subagent B（amendment 追蹤） | STEP 08 | 與 A 平行 |
 | Subagent C（修補建議，N 個） | STEP 07 | 每個 skill 一個，平行 |
 | Subagent D（retro，N 個） | STEP 09 | 每個 session 一個，平行（每批 ≤ 5） |
+| Subagent E（模型效率報告） | STEP 10 | 單一 |
 
 ## 注意事項
 
@@ -595,6 +613,7 @@ STEP 09 (Subagent D, 每個 session 一個) ← 主 agent 直接派，同一則�
 - 步驟 8 的成效判定需要使用者確認才更新 AMENDMENTS.md
 - 步驟 7~8 確認完畢後進入步驟 9；步驟 9 的每項環境變更需使用者逐項確認才執行
 - 如果使用者只說「本週環境檢討」，直接跳到步驟 9
+- 步驟 10 只統計不改檔；使用者說「模型效率報告」時直接跳到步驟 10
 - 如果使用者只說「整理記憶」，直接跳到步驟 5
 - 如果使用者只說「review skill errors」，直接跳到步驟 6~8
 - `ERRORS.jsonl` 不存在或為空時，步驟 6~8 全部跳過並告知使用者

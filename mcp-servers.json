@@ -15,7 +15,7 @@
     "type": "stdio",
     "command": "node",
     "args": [
-      "/Users/maxhero/Documents/Compal/luna_web/mongodb-mcp/server.js"
+      "/Users/maxhero/Documents/Compal/luna_web-mongodb-mcp/mongodb-mcp/server.js"
     ]
   }
 }

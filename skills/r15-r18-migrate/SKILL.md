@@ -1,7 +1,7 @@
 ---
 name: r15-r18-migrate
 description: 把一個 React 15 頁面 entry 以最小改動遷移到 React 18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），一次處理一個 entry 並產出 commit 與結構化結果；觸發語 `/r15-r18-migrate <entry-id> [--resume]`。
-version: 1.1.3
+version: 1.2.1
 ---
 
 # R15 → R18 最小改動遷移（單 entry）
@@ -30,7 +30,7 @@ version: 1.1.3
 - **命名沿用 R15**：action 常數 identifier 與字串、reducer 檔名與函式名、state 欄位名、action creator 函式名一律照搬，不加前綴。
 - **機制沿用 R18**：saga 基礎層（`baseSaga` / `api.js` / `actionCreator`）零改動，照 R18 既有樣板接線。
 - **註解逐字照搬**：不補 STEP 註解、不補 JSDoc、不修錯字、不重排；原本沒有註解的就沒有。
-- 所有**建立或修改**的檔案，檔頭 `Modified` 欄位加一行 `YYYY/MM/DD Claude subscribe by Max Ho`（署名固定這串，表示由 Max Ho 訂閱的 Claude 執行，不自行改寫）。
+- 所有**建立或修改**的檔案，檔頭 `Modified` 欄位加一行 `YYYY/MM/DD Max Ho`（署名固定這串，不自行改寫）。
 - 禁止順手重構、禁止改名、禁止換套件（例如把 moment 換掉）、禁止調整與本次無關的檔案。
 - **R15 檔案一律不刪**，`frontend/react_15/routes.js` 一行都不改。回退手段是把 feature flag 關回 `false`。
 
@@ -65,6 +65,7 @@ version: 1.1.3
 - `docs/api-mapping.md` — 第三方 API 對照（react-bootstrap、表格、react-select、router、React 15→18、樣式、i18n）
 - `docs/route-and-flag.md` — 路由開關三層（後端前綴、機構預設、R18 guard）、子頁 tab、flag 命名、前綴碰撞、sidebar
 - `docs/environment.md` — 環境需求與狀態目錄佈局
+- `helpers/eslint_gate.py`、`helpers/scan_select.py`、`helpers/scan_rem.py` — 步驟 5／Phase 4 用的機械檢查腳本（用法與結束碼在各檔開頭的 docstring）
 
 ## 2. Phase 0：輸入契約（五項檢查，任一不過就結束本輪）
 
@@ -179,7 +180,7 @@ action 表若出現對照表列為「不支援」的欄位（`headers`、`author
 
 tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要複製。
 
-把 `r15_paths` 的元件檔複製到 `entry.r18_dir`（R18 落點是 R15 相對路徑原樣對映，不切檔、不合併；**目標路徑已有同名檔時一律不覆寫**——那是 R18 已在使用的元件，覆寫會讓既有 R18 頁面壞掉而 build 照樣綠。遇到就停：`blocked(needs_human)`，`notes` 列出撞到的每一個檔，由人決定改 import 沿用 R18 版還是把該檔移出 entry），再依 `docs/api-mapping.md` 做機械式對照替換：`React.PropTypes` → `prop-types`；`componentWillX` → `UNSAFE_componentWillX`；string refs 保留；bootstrap 元件與 prop 改名；表格套件 v1 → next（`filterFormatted` → `filterValue`、`sortFunc` 由 row 改吃 cell）；react-select 1 → 5 的 props 改名與 value adapter；`this.props.location` → `withLocation`、`this.props.router.push/replace` → dispatch 對應的導頁 action；i18n HOC 改名並保留 `{ wait: true }`；同層 css/scss 照搬並保留 import。
+把 `r15_paths` 的元件檔複製到 `entry.r18_dir`（R18 落點是 R15 相對路徑原樣對映，不切檔、不合併；**目標路徑已有同名檔時一律不覆寫**——那是 R18 已在使用的元件，覆寫會讓既有 R18 頁面壞掉而 build 照樣綠。遇到就停：`blocked(needs_human)`，`notes` 列出撞到的每一個檔，由人決定改 import 沿用 R18 版還是把該檔移出 entry），再依 `docs/api-mapping.md` 做機械式對照替換：`React.PropTypes` → `prop-types`；`componentWillX` → `UNSAFE_componentWillX`；string refs 保留；bootstrap 元件與 prop 改名；表格套件 v1 → next（`filterFormatted` → `filterValue`、`sortFunc` 由 row 改吃 cell）；react-select 1 → 5 的 props 改名與 value adapter；`this.props.location` → `withLocation`、`this.props.router.push/replace` → dispatch 對應的導頁 action；i18n HOC 改名並保留 `{ wait: true }`；同層 css/scss 照搬並保留 import（**`rem` 不是原樣照搬**：R15 根字級 10px、R18 是 13px，且 R15 沒有 viewport meta、R18 有。桌機頁 `Nrem` 換成 `N×10 px`；手機瀏覽器頁（`isRWDWeb`、家屬 App 開的頁面）不可套 ×10，要對照既有 R18 手機頁面；css/scss 與 JS 行內 style 字串都要處理，見 `docs/api-mapping.md` §8.5）。
 
 落點計算：**以 `r18_dir` 本身判定，不看 `type`**。`r18_dir` 為 `frontend/react_18/src/r15-legacy/` 的 entry **只去掉 `frontend/react_15/`、保留完整相對路徑**（`daycase/actions.js` → `r15-legacy/daycase/actions.js`，七支同名的模組級 `actions.js` 殼才不會互撞）；其他任何 entry（不論 `type` 是 `page` 或 `shared`）把 `r15_path` 去掉 `frontend/react_15/<模組>/`（`<模組>` 是 R15 的第一段目錄）後接在 `entry.r18_dir` 之後。shared 層搬過來的檔（`r18_dir` 為 `r15-legacy/` 者，由盤點填好）與 R18 既有同名元件並存、不覆寫；消費者的 import 路徑一律取 `shared_deps.r18_equivalent`，**不要自己推 R18 路徑**。跨 entry 的 import（消費檔在本 entry、被 import 的檔屬於另一個 entry）只要複製後相對路徑會改變，盤點都已列進 `shared_deps`，`r18_equivalent` 就是依上述規則算出的提供者落點；相對路徑不變（同根落點）的不列。
 
@@ -217,7 +218,11 @@ tab-reuse entry（見 Phase 0 (2)）整個步驟 2 跳過：沒有元件檔要�
 1. 先 `pgrep -f "vite.*--watch"`。有 watcher 在跑 → `blocked(build_env)`：無人看管環境不該有人開著 watch，建置結果不可信。
 2. 在 `frontend/react_18` 跑 `node --max_old_space_size=4096 ./node_modules/vite/bin/vite.js build`。
 3. 紅燈**最多修 2 次**，仍紅 → `blocked(build_failed)`，`notes` 附錯誤首行與檔案位置。修法只允許修正遷移造成的錯（漏 import、路徑錯、prop 名稱錯），不准為了讓建置過而改行為或砍功能。
-4. eslint 只跑本次變更的檔、只修 error 等級；warning 不動（避免把既有程式碼改出範圍外的 diff）。eslint error 同樣**最多修 2 次**，仍有 error → `blocked(build_failed)`，`notes` 首行寫「eslint」並附規則名與檔案位置，不得用 `eslint-disable` 註解壓掉。
+4. **eslint 走基準比對閘門（1.2.0 起）**：對本 entry 每個「R15 檔→R18 落點檔」成對執行 `python3 helpers/eslint_gate.py --repo <REPO_DIR> --write --pair <R15 檔>=<R18 檔> [--pair …]`（`helpers/` 在 skill 根目錄；從 repo 目錄執行時用 skill 目錄的絕對路徑。只處理 js／jsx／ts／tsx，scss 等會略過）。閘門把 R15 原檔當成放在 R18 落點，用 R18 的 eslint 設定跑一次得到每條規則的基準數量；搬遷後再跑一次；**只容忍 R15 原檔本來就有的違規**。
+   - exit 0：通過，需要的檔最前面已由腳本寫入 `/* eslint-disable <實際觸發的規則> */` 檔頭（只列實際觸發的規則，不整檔關閉）。輸出裡每一行 `RISK:`（被關掉的規則可能掩蓋真問題，如 `no-undef`、`no-unused-vars`、`eqeqeq`、未宣告依賴）都要逐行寫進報告 ⚠ 清單。
+   - exit 1：有檔的某條規則數量**超過 R15 基準**（翻譯新引入的錯），或出現 parse error／`import/no-unresolved`；沒有任何檔被改。依輸出的規則與行號修**遷移造成的錯**（漏 import、路徑錯、prop 名稱錯），修完重跑；**最多修 2 次**，仍 exit 1 → `blocked(build_failed)`，`notes` 首行寫「eslint_gate」並貼輸出。
+   - exit 2：環境問題（找不到 eslint、檔案不存在、eslint 自己出錯、檔案被 eslint 忽略）→ `blocked(build_env)`，`notes` 貼輸出。
+   - **不得手寫 `eslint-disable`、不得用 `--fix`**：手寫的沒有基準比對，會讓翻譯新引入的錯被放過；`--fix` 會對 R15 原碼大範圍重排、破壞逐行比對。warning 不動。重跑（`--resume`）時閘門會先去掉自己寫過的檔頭再算，不會疊加。
 
 ### 步驟 6：無對照項目盤點
 
@@ -271,6 +276,10 @@ tab-reuse entry 只回填表五（shared_deps 對照）——沒有其他合約�
    - [ ] 沒有把 feature flag 臨時硬開成 `true`（預設一律 `false`）
    - [ ] 沒有任何憑證、連線字串、機構實際設定值
    - [ ] 沒有範圍外檔案；R15 只有允許的兩處改動、`routes.js` 沒被碰
+   - [ ] 本 entry 複製或新增的 scss／css／js／jsx／ts／tsx 沒有未處理的 `rem`：對這些檔跑 `python3 helpers/scan_rem.py <檔…>`，exit 0 才算過（刻意保留的行要有 `rem-ok` 註解並進報告 ⚠ 清單；見 `docs/api-mapping.md` §8.5）
+   - [ ] 本 entry 的 react-select：對成對檔跑 `python3 helpers/scan_select.py [--scss <同層 scss> …] <R15 檔>=<R18 檔> …`，exit 0 才算過（R15 單選沒寫 `clearable={false}` 的都有 `isClearable`、同層 scss 沒有殘留 v1 class；見 `docs/api-mapping.md` §6.3）
+   - [ ] 本 entry 的表格欄位沒有動態的 `hidden`：對 R18 落點檔跑 `grep -nE 'hidden:' <檔…> | grep -vE 'hidden:[[:space:]]*true'`，**輸出必須是空的**；有輸出的（`hidden: !flag`、`hidden: 運算式`）逐一改成 `hideColumnByCss(column, !flag)`，只有字面 `true` 的永久隱藏欄位才留 `hidden: true`（見 `docs/api-mapping.md` §5.2.1；`tableColumnUtil.ts` 不存在就 `blocked(no_mapping)`）。欄位顯示開關另列為必測項目
+   - [ ] eslint 檔頭只由 `helpers/eslint_gate.py` 產生（沒有手寫的 `eslint-disable`），輸出裡每一行 `RISK:` 都在報告 ⚠ 清單
    - [ ] 共用註冊檔每個 key 只出現一次（resume 最容易在這裡寫出重複行）
    - [ ] 所有新增或修改的檔都補了 `Modified` 一行
 2. `git add` 僅限 §0 允許的範圍。
@@ -294,10 +303,10 @@ tab-reuse entry 只回填表五（shared_deps 對照）——沒有其他合約�
 | `inventory_incomplete` | Phase 0 (1)(2) | entry 不存在或必要欄位缺漏；盤點要補，skill 不補 |
 | `too_large` | Phase 0 (3) | 檔數或行數超過 `limits`；要人工重新拆分 entry |
 | `git_state` | Phase 0 (4) | 分支不符，或工作目錄有本 entry 範圍外的髒檔 |
-| `build_env` | Phase 2 步驟 5 | 偵測到 vite watcher 在跑，建置結果不可信 |
+| `build_env` | Phase 2 步驟 5 | 偵測到 vite watcher 在跑，建置結果不可信；或 `eslint_gate.py` 回報環境問題（exit 2） |
 | `no_mapping` | Phase 2 步驟 6 | 對照表查無且 R18 無先例，需要人工決定轉換方式 |
 | `unsupported_ajax_field` | Phase 2 步驟 1 | action 用到 R18 saga 基礎層不支援的欄位 |
-| `build_failed` | Phase 2 步驟 5 | 修兩次後建置仍紅 |
+| `build_failed` | Phase 2 步驟 5 | 修兩次後建置仍紅，或 `eslint_gate.py` 修兩次後仍 exit 1（翻譯新引入的 eslint 錯） |
 | `needs_human` | 任何階段 | 其他無法在無人看管下決定的情況；`notes` 必須寫清楚卡點 |
 
 blocked 時仍要：更新 progress（勾到卡住前的最後一項）、把已完成的工作保留在工作目錄（**不要回退、不要清理**）、輸出結構化結果。已經 commit 過才發現要 blocked 的情況，保留該 commit，在 `notes` 說明。
@@ -351,7 +360,7 @@ blocked 時仍要：更新 progress（勾到卡住前的最後一項）、把已
 | 無 progress 檔 | 當作全新一輪，從 Phase 1 開始 |
 | 合約表存在但 Phase 1 未勾完 | 重跑 Phase 1 的未完成分群，已完成的表格保留不重抽 |
 
-## 10. 會靜默壞掉的九個地方（動手前先看一遍）
+## 10. 會靜默壞掉的十個地方（動手前先看一遍）
 
 這些全部是「改錯了但建置照過、畫面看起來正常」的類型，靠 Phase 3 才抓得到，抓不到就會帶進 production。
 
@@ -366,3 +375,7 @@ blocked 時仍要：更新 progress（勾到卡住前的最後一項）、把已
 | 7 | 畫面顯示 i18n key 而不是文字 | R18 的翻譯 HOC 只解析第一個 namespace、沒有 fallback | 依 `docs/api-mapping.md` §9.2 處理非首 namespace 的 key |
 | 8 | 儲存成功但 Modal 不自動關 | entity 的 success handler 漏抄 reducer 原本的 `modal: false` | Phase 3(b) MUST-CHECK 1 逐列比對 reducer 表 |
 | 9 | 共用註冊檔出現重複 key / 重複 route | `--resume` 重做了已完成的步驟 3 | resume 先看 `git log`，有 commit 就直接跳 Phase 3 |
+| 10 | 字體、間距比 R15 大（桌機頁 30%、手機瀏覽器頁約 2.5 倍），建置與 smoke 都綠 | `rem` 原樣照搬：R15 根字級 10px、R18 13px；R15 無 viewport meta（手機上整頁縮小）、R18 有（CUP-228 用餐紀錄頁 `4rem` 在 App 上由約 16px 變 52px） | 步驟 2 依 `docs/api-mapping.md` §8.5 分 A（×10 px）、B（對照 R18 手機頁面）；Phase 4 跑 `helpers/scan_rem.py` |
+| 11 | 單選下拉選了值之後沒有清除鈕、或多選已選項目很多時撐開版面，建置、eslint 與 smoke 都綠 | react-select v1 省略 `clearable` 預設可清、v5 單選預設不可清；scss 針對 v1 class（`.Select--multi .Select-control` 等）在 v5 不命中（CUP-225 `caselist-modals`） | 步驟 2 依 `docs/api-mapping.md` §6.3；Phase 4 跑 `helpers/scan_select.py` |
+| 12 | runner 停在 `build_failed`，eslint 幾百個 error | R15 原檔本來就違反 R18 的格式／結構規則（2026-10-23 估算：76 個 entry 的 283 個 R15 檔，281 個有 error） | 步驟 5.4：`helpers/eslint_gate.py` 只容忍 R15 基準內的違規並自動寫檔頭；超過基準才是翻譯新引入的錯，會被擋下並指出規則與行號 |
+| 13 | 欄位顯示開關（`TableColumnSelect`）在 R18 沒作用，或隱藏後再顯示時篩選勾選被重設，建置與 smoke 都綠 | 把 R15 的 `hidden={!flag}` 照搬成 table-next 的 `hidden: !flag`：table-next 只在表格建構時判斷有沒有 hidden 欄位，且 `hidden` 會卸載表頭（R15 是 `display:none`，不卸載）；<TICKET> 同源 | 步驟 2 依 `docs/api-mapping.md` §5.2.1 改用 `hideColumnByCss`；Phase 4 的 `grep 'hidden:'` 檢查項會攔下 |

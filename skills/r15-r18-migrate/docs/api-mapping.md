@@ -43,7 +43,7 @@
 | 改用 R18 新式共用元件 | 例如把表格改寫成 `frontend/react_18/src/containers/Table/TableContainer`（見 §5.5）——那是重寫不是遷移。 |
 | 補「防護性 fallback」 | 對照表沒有的東西就 `blocked(no_mapping)`，不要用 `?? 預設值` 糊過去。 |
 
-**註解規則**：R15 原有註解逐字照搬（含錯字、含 `FeaturePath` 檔頭）；所有建立或修改的檔在檔頭 JSDoc 追加一行 `Modified: YYYY/MM/DD Claude subscribe by Max Ho`（署名固定這串）。
+**註解規則**：R15 原有註解逐字照搬（含錯字、含 `FeaturePath` 檔頭）；所有建立或修改的檔在檔頭 JSDoc 追加一行 `Modified: YYYY/MM/DD Max Ho`（署名固定這串）。
 
 ---
 
@@ -195,7 +195,8 @@ CSS 也要換：R15 `frontend/react_15/index.js:17` 載 `react-bootstrap-table/d
 | 子節點文字（`>{t('name')}<`） | `text: t('name')` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:108` |
 | `isKey` | 移到表格層 `keyField="_id"` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:154` |
 | `dataSort` | `sort: true` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:109` |
-| `hidden` / `hidden={!flag}` | `hidden: true` / `hidden: !flag` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:105` |
+| `hidden`（字面 `true`，永久隱藏的欄位） | `hidden: true` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:105` |
+| `hidden={!flag}`（依 state／設定動態切換，例如 `TableColumnSelect` 的欄位顯示開關） | **不要寫 `hidden: !flag`**：整個欄位物件包 `hideColumnByCss(column, !flag)`（見 §5.2.1） | `frontend/react_18/src/containers/Table/supervisorVisitRecord/SupervisorVisitRecordTable.tsx:690-706`（同概念的內聯版）、`frontend/react_18/src/shared/utils/tableColumnUtil.ts` |
 | `dataFormat={fn}`，簽名 `(cell, row, formatExtraData, rowIndex)` | `formatter: fn`，簽名 `(cell, row, rowIndex, formatExtraData)`（**第 3、4 參數對調**） | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:119`、`frontend/react_18/src/pages/epidemicPreventionRecord/VaccineRecordTable.jsx:270` |
 | `formatExtraData={x}` | `formatExtraData: x` | 無先例（next 支援同名欄位） |
 | `filter={{ type: 'TextFilter', placeholder: 'x' }}` | `filter: textFilter({ placeholder: 'x' })` | `frontend/react_18/src/containers/ContactSelect/ContactTable.jsx:110` |
@@ -207,6 +208,28 @@ CSS 也要換：R15 `frontend/react_15/index.js:17` 載 `react-bootstrap-table/d
 | `editable={false}` | 不需要（next 預設不可編輯，編輯要另裝 `react-bootstrap-table2-editor`） | — |
 
 `sortFunc` 的機械改法：把 R15 的 `(a, b, order) => …a.foo…b.foo…` 改成 `(_a, _b, order, dataField, rowA, rowB) => 原函式(rowA, rowB, order)`，本體一字不動。先例 `frontend/react_18/src/containers/Table/formOverview/proPlan/DataTable.tsx:230` 就是這個形狀。
+
+### 5.2.1 動態欄位顯示開關：用 `hideColumnByCss`，不要用 `hidden`（1.2.1 起）
+
+R15 的 `hidden={!flag}` 是 CSS `display: none`：表頭（含篩選元件）一直掛著、勾選保留、動態切換永遠有效、隱藏期間篩選仍生效。R18 table-next 的 `hidden` 屬性**行為不同**（2026-10-23 用真的 React 15.6.2＋react-bootstrap-table 2.11.2 與 react-bootstrap-table-next 4.0.3 對照實測）：
+
+- **只在表格建構時判斷「有沒有 hidden 欄位」**（`contexts/index.js`）：建構時一個 hidden 欄都沒有，之後才把某欄改成 `hidden: true` → 表頭與儲存格都**還在**，開關完全沒作用。
+- 欄位被 `hidden` 時表頭**卸載**；欄位帶篩選元件時，再顯示會**重設勾選**。
+- 欄位從陣列移除後位移，Cell 不重繪、繼續顯示舊的 formatter（<TICKET>，`SupervisorVisitRecordTable` 已為此改用 CSS 隱藏）。
+
+做法：欄位物件整個交給 `hideColumnByCss(column, hidden)`（`frontend/react_18/src/shared/utils/tableColumnUtil.ts`，表頭與儲存格都加 `tw-hidden`，回傳新物件、不改傳入的物件，也接受函式型的 `classes`／`headerClasses`）：
+
+```tsx
+import { hideColumnByCss } from '<相對路徑>/shared/utils/tableColumnUtil';
+// R15: <TableHeaderColumn dataField="status" hidden={!employeeListTableColumn.status} …>
+hideColumnByCss({ dataField: 'status', text: t('status'), ...欄位其餘設定 }, !employeeListTableColumn.status)
+```
+
+- 只有字面 `true` 的永久隱藏欄位（例如 `_id`）才保留 `hidden: true`。
+- `shared/utils/tableColumnUtil.ts` **不存在**（對應 PR 還沒進整合分支）時，不要自己造一份，走 `blocked(no_mapping)`。
+- 欄位顯示開關列為**必測項目**（隱藏→顯示後勾選與列數要與隱藏前一致），不能只驗篩選。
+- 隱藏期間篩選仍生效，與 R15 相同，不是 bug；寫進報告的差異欄即可，不要「順手」清掉。
+- 多選篩選欄位（R15 `TableMultipleFilter`）另見 inventory 該 shared_dep 的備註與 `frontend/react_18/src/components/TableMultipleFilter.tsx` 檔頭：用 `getMultipleFilterColumn`，不要自己組 `customFilter()`（沒給 `type` 會讓選兩項以上 0 筆）。
 
 ### 5.3 表格層 props 對照
 
@@ -275,6 +298,21 @@ value={options.find((option) => option.value === this.props.filter.category) || 
 
 ⚠️ 不要替 v5 的 `<Select>` 手動加 `closeMenuOnScroll`（會造成捲動即關閉選單；v5 內建的浮動定位本來就會跟隨）。
 
+### 6.3 省略 prop 時預設值相反、scss 的 v1 class（建置與 eslint 都不會報）
+
+§6.2 只改**有寫出來**的 prop 名稱。下列兩項是 R15 **沒寫**時行為相反，或根本不在 JSX 裡，照 §6.2 逐個翻譯 prop 會整個漏掉：
+
+| 項目 | R15（v1）省略時 | R18（v5）省略時 | 遷移動作 |
+|---|---|---|---|
+| 單選的清除鈕 | `clearable` 預設 `true`（`frontend/react_15/node_modules/react-select/lib/Select.js:1417`），沒寫也能清除 | `isClearable` 預設 `false`（**多選**預設可清除，不用補） | R15 的單選（沒有 `multi`）**沒有** `clearable={false}` → R18 補 `isClearable`；有寫 `clearable={false}` → 不加。判斷依據是 R15 原檔，不是 R18 既有先例（R18 既有的單選有些本來就不能清） |
+| 同層 scss／css 針對 v1 class 的規則 | `.Select-control`、`.Select--multi`、`.Select-multi-value-wrapper`、`.Select-menu-outer` 等（v1 的固定 class 名） | v5 用 emotion 產生 class，這些 selector **不命中**，規則靜默失效 | 搬 scss 時跑 `grep -n -E "Select-|Select--|react-select" <同層 scss>`；每個命中改成該 `<Select>` 的 `styles={{ … }}`（key 如 `control`、`valueContainer`、`menu`、`option`，先例 `frontend/react_18/src/pages/remind/components/HeaderPanel.jsx:184` 的 `styles={SELECT_STYLE}`）；翻不出等價寫法的進報告 ⚠ 清單，不要原樣留著 |
+
+**事故（CUP-225 `caselist-modals`，PR #11400）**：①`CaseSettingModal` 的主責督導、副督導、主責居服員三個單選，R15 沒寫 `clearable`，搬完選了人就無法撤銷；②`CaseFilterBar.scss` 的 `.Select--multi .Select-control`（<TICKET>：多選限高 84px 並捲動）在 v5 不命中，已選項目多時撐開整列版面。兩者 vite build、eslint、smoke 都綠，是 codex review 與人工讀 diff 才抓到的。
+
+**限高／捲動的寫法**：放在 `valueContainer`（`maxHeight` 加 `overflowY: 'auto'`），不要放在 `control`——放 `control` 會連右側的清除／展開指示器一起捲走。已在 jsdom 以 react-select 5.8.0 驗證：單選有值、未設 `isClearable` 時沒有清除按鈕，設了才有，多選預設就有；`valueContainer` 的 computed style 為設定值。jsdom 沒有真實排版，視覺高度仍要實機看。
+
+**機械檢查（1.2.0 起）**：`python3 helpers/scan_select.py [--scss <同層 scss> …] <R15 檔>=<R18 檔> …`，exit 0 才算過。兩邊的 `<Select>` 依出現順序配對；元素數不同、R18 有展開 props、R18 不再 import react-select 都算命中（判斷不了就請人工看，不靜默放過）。
+
 ---
 
 ## 7. react-router 3 → 6（class component shim）
@@ -316,6 +354,7 @@ R15 頁面自帶樣式（`import './xxx.css'` / `'./xxx.scss'`，共 154 處）�
 - R15 先例：`frontend/react_15/daycaseShiftList/components/ShiftTable/index.js:17`
 - R18 先例：`frontend/react_18/src/pages/calendarManager/CompanyCalendar.tsx:50`、`frontend/react_18/src/pages/memberFAQ/MemberFAQ.tsx:14`
 - 整頁遷移含新增 `.scss` 的先例：commit `e5b7c0e52b`（新增 `frontend/react_18/src/pages/expertAcase/PlanHistory.scss`）
+- **單位例外**：「照搬」不含 `rem`。R15 與 R18 根字級不同，`rem` 原樣搬會比 R15 大 30%，見 §8.5。
 
 ### 8.2 R15 全域樣式的處置
 
@@ -346,6 +385,39 @@ R18 的全域樣式是 `frontend/react_18/src/assets/styles/`（`index.css`、`b
 ### 8.4 tailwind
 
 R18 有 tailwind（`tw-` 前綴，341 個檔在用）。**遷移時不得把 R15 的 CSS 改寫成 tailwind**；`tw-` 只用在遷移過程中確實必須新寫的樣式（例如 §8.3 的欄寬）。
+
+### 8.5 `rem` 單位與 viewport（必做，不換不會報錯、只會靜默變大）
+
+R15 與 R18 有**兩個**會讓同一份 CSS 看起來大小不同的差異，先判斷頁面屬於 A 或 B 再處理。
+
+**差異 1：根字級**。R15 是 10px（`bootstrap@3.4.1` 的 `html { font-size: 10px }`，見 `frontend/react_15/node_modules/bootstrap/dist/css/bootstrap.css`），R18 是 13px（`frontend/react_18/src/assets/styles/_default.scss` 的 `html { font-size: 13px }`）。同一個 `Nrem`，R15 是 `10N px`，R18 是 `13N px`。`rem` 永遠相對 `<html>`，在容器上設 `font-size` 救不了。
+
+**差異 2：viewport meta**。R15 的 `backend/views/index.ejs` **沒有** viewport meta，R18 的 `backend/views/index_18.ejs` 有 `width=device-width, initial-scale=1.0`。手機瀏覽器對沒有 viewport meta 的頁面用預設的約 980px 版面寬再整頁縮小到螢幕寬（iPhone 16 的 393pt 約縮成 0.4 倍），所以 R15 的 `4rem`（40px）在手機上實際看起來約 16px；R18 同樣的寫法不縮放，真的是 52px。**rem 與 px（`height: 60px`、`width: 600px`、`padding`）都一樣受影響。** 這是依瀏覽器預設行為與兩份 EJS 推得，未在實機量測；桌機瀏覽器忽略 viewport meta，不受影響。
+
+#### A. 桌機瀏覽器頁面（絕大多數）
+
+1. 複製過來的 css／scss，以及 **JS／JSX／TSX 裡的行內 style 字串**（`fontSize: '4rem'`、`minmax(4rem, 1fr)`、`calc(100% - 5rem)`），每個 `Nrem` 一律換成 `(N×10)px`，視覺大小與 R15 相同。`em`、`%`、`px` 不動（`em` 相對父層，不受根字級影響）。
+2. **不得**因為「看起來太大」自行改成別的 rem 值：那是設計決策，不屬於最小改動遷移。照 1 換算，並在報告 ⚠ 清單寫「待設計決定」。
+3. 只有兩種結果合法：換成 px，或同一行尾有 `/* rem-ok: <原因> */`（JS 用 `// rem-ok: <原因>`）且已寫進報告 ⚠ 清單。其他一律視為未處理。
+
+#### B. 手機瀏覽器頁面（家屬 App 等以 `Linking.openURL` 開在系統瀏覽器的頁面）
+
+判斷：頁面由 App 開在手機瀏覽器（例如家屬 App 的 `/activityList`、`/caseMealRecord`，見 `backend/config/redirectPage.json`），或元件傳 `isRWDWeb`。
+
+**不可套 A 的 ×10。** `4rem` 換成 `40px` 會比 R15 在手機上看起來的樣子（約 16px）大 2.5 倍。
+
+1. 以**既有的 R18 手機頁面**為基準，逐項對照同類元素：`frontend/react_18/src/pages/activityList/style.scss`（頁首標題 `1.4rem`、內文與標籤 `1.2rem`、頁首高 `30px`、日曆彈窗寬 `24rem`）。同類元素用同一個值，不要自己換算。
+2. 不只 `rem`，R15 的 `px` 尺寸（頁首高 `60px`、日曆寬 `600px`、間距）也一併對照同一個基準頁，不要原樣保留。
+3. 每個保留的 `rem` 行加 `rem-ok: 對齊 activityList` 標記，並在報告 ⚠ 清單寫「手機實機尚未與 R15 並排比對」。
+4. 無基準頁可對照（沒有同類 R18 手機頁面）→ `blocked(needs_human)`，不要自行決定尺寸。
+
+**自檢（Phase 4 必跑）**：對本 entry 複製或新增的所有 scss／css／js／jsx／ts／tsx 檔執行 `python3 helpers/scan_rem.py <檔…>`，exit 0 才算過。腳本沒有的環境用等價指令：`git grep -n -E '(^|[^0-9A-Za-z_.])[0-9]+(\.[0-9]+)?rem\b' -- <檔…>`（會連註解內的一起列出，自行排除）。
+
+**先例與事故**：
+
+- A 類正確先例：`frontend/react_18/src/r15-legacy/components/AccordinCard.scss`（`4rem` → `40px`，檔頭有完整說明）。
+- B 類正確先例：CUP-142（活動紀錄頁，commit `a35737c99e`，舊檔可用 `git show a35737c99e^:frontend/react_15/activityList/style.scss` 查）整頁縮小約 0.45～0.6 倍：頁首標題 `4rem` → `1.4rem`、頁首高 `60px` → `30px`、活動區塊高 `240px` → `140px`、圖片高 `220px` → `130px`、`2.8rem` → `1rem`。不只 `rem`，`px` 也一起縮，是對手機縮放的有意識補償。
+- 事故：CUP-228（用餐紀錄頁，B 類）的 `style.scss` 與同頁用的 `r15-legacy/components/Datepicker.js` 原樣搬了 `4rem`，在 App 上字體比活動紀錄頁大很多，建置、boot-smoke 全綠。在 R15 時期兩頁都是 `4rem`、手機上看起來一致；活動頁在 CUP-142 補償過、用餐頁沒有，差異才出現。同一頁的 `AccordinCard`（A 類換算成 40px）與頁面自己的 scss 也不一致，所以規則只寫在單一元件註解不夠，必須在步驟 2 與 Phase 4 各卡一次。
 
 ---
 
@@ -436,13 +508,27 @@ R15 呼叫點統計：`Swal(` 49 處、`swal(` 36 處、`.catch(() => {})` 收�
 | `async` | 2.6.3 | 3 | `frontend/react_15/daycase/components/CaseCalendar/Modal/CheckinModal.js:16` |
 | `qrcode.react` | 0.8.0 | 1 | `frontend/react_15/case/components/QRCodeHistory.js:16` |
 | `react-image-file-resizer` | 0.3.1 | 1 | `frontend/react_15/case/components/CaseForms/FormEditors/utils/ImageUpload/index.js:8` |
-| `react-open-app` | 1.0.3 | 1 | `frontend/react_15/caseMealRecord/index.jsx:15` |
 | `react-addons-css-transition-group` | 15.6.2 | 1 | `frontend/react_15/modules/notification/react-notifications.patch.js:7` |
 | `jquery` / `jquery-ui*` | 3.5.0 / 1.12.1 | 只在入口層 `frontend/react_15/index.js:15,25` 載入（頁面不 import） | 頁面若直接用全域 `$`，`blocked(no_mapping)` |
 
 ### 10.6 兩版都有但主版本差很多 → 逐案查證，先標 ⚠
 
 `react-dropzone` 3.13.4 → 14.2.3（R15 12 處，API 從 `<Dropzone onDrop>` 子元素改成 `useDropzone`/render prop）、`react-datetime` 2.8.10 → 3.3.1、`react-pdf` 3.0.6 → 6.2.0、`react-cropper` 1.3.0 → 2.3.3、`chart.js` 2.6.0 → 3.9.1 + `react-chartjs-2` 2.1.0 → 5.3.0（chart.js 3 是 tree-shaking 架構，需 `registerables`）、`react-loading` 1.0.5 → 2.0.3、`react-notifications` 1.6.0 → 1.7.4、`superagent` 3.8.3 → 8.1.2。**這些沒有現成逐 prop 對照，一律在 contract.md 標 ⚠ 並在 Phase 3 逐項驗證。**
+
+### 10.7 `react-open-app`（R15 1 處）→ 不裝套件，改點擊 handler 設 `document.location`
+
+R18 **沒有**這個套件，也**不要安裝**。R15 用它只有一個用途：`frontend/react_15/caseMealRecord/index.jsx:246` 的 `<OpenApp href="familymember://">…</OpenApp>`（頁首「返回家屬 App」箭頭）。套件核心（讀 `node_modules/react-open-app/dist/index.js`）是：渲染 `<a href onClick>`，點擊時 `preventDefault`，iOS／Android 把 `document.location` 設成 deep link，其他平台才 `window.open(href, '_blank')`；`familymember://` 不是它內建轉換的 app，所以手機上實際就是 `document.location = 'familymember://'`。
+
+**R18 先例**：`frontend/react_18/src/pages/activityList/activityList.tsx:40`（`const FAMILY_MEMBER_DEEP_LINK = 'familymember://';`）與 `:186-189`（返回鈕 handler：`e.preventDefault(); document.location = FAMILY_MEMBER_DEEP_LINK;`）。
+
+寫法（class component，最小改動）：
+
+- 檔案頂端加常數 `const FAMILY_MEMBER_DEEP_LINK = 'familymember://';`（附用途註解「家屬App deep link」）。
+- `<OpenApp href="familymember://">…</OpenApp>` 改成 `<a href={FAMILY_MEMBER_DEEP_LINK} onClick={this.onBackButtonClick}>…</a>`，**保留 `<a>` 標籤**（R15 的 `style.scss` 若有選 `.header a`，換成 `div` 會失效），子節點照 §1／既有 FontAwesome 規則處理（`<i className="fas …">` → `<FontAwesomeIcon>`，改完 grep 同元件 scss 的 `i` 選擇器）。
+- handler 與先例相同：`e.preventDefault(); document.location = FAMILY_MEMBER_DEEP_LINK;`。
+- 刪除 `import OpenApp from 'react-open-app'`；**不改** `react_18/package.json`／lockfile。
+
+**行為差異（寫進報告 ⚠）**：桌機瀏覽器原本會 `window.open(href, '_blank')` 開新分頁，R18 版改成同分頁導向 `familymember://`（桌機沒有註冊這個 scheme，原本也開不了 app，使用情境是家屬 App 內嵌的 WebView）。
 
 ---
 

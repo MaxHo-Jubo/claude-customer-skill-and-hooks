@@ -74,7 +74,7 @@
 | explore-report | `/explore-report <dir>` | 1.1.0 | 探索目錄並強制產出結構化報告 |
 | commit-review | `/commit-review [target]` | 1.5.0 | Commit 後分級 review chain 的**執行層**（Tier 0~3）；被動由 `post-commit-review.ts` hook 以 `tier=N target=HEAD engine=<agent\|codex>` 指派，也可手動對任意 commit（`HEAD~3` / `<hash>`）補跑。判準權威在 `harness/commit-review-policy.md`，強制力由 `commit-gate-guard.ts` 提供；v1.1.0 Tier 3 從委派 `/pr-review-toolkit:review-pr` 改為逐一明列 5 個面向 agent（該 command 會自行篩選 applicable，實測只跑 3 個）、新增 §3.1 fail loud 條款（未收齊禁止宣告完成、降級須標在報告開頭）、marker 解鎖改為唯一自動路徑；v1.4.0 新增 `engine=codex` 路徑（`scripts/codex-review.ts` 平行跑 `codex exec` 取代面向 subagent，結果 schema 強制落檔、機械判定成功與否），由 `scripts/lib/review-engine.ts` 在 post-commit hook 上鎖當下決定一次並寫入 marker，預設 codex、探測失敗降級 agent；v1.5.0 agent 路徑每個 `Agent()` 明寫 `effort: "high"`（不帶時吃 `modelSettings`、不繼承主 session） |
 | method-refactor | `/method-refactor <method>` | 1.0.0 | 7 項檢查結構化優化重構方法 |
-| weekly-review | `/weekly-review` | 1.10.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（8 步）；v1.10.0 STEP 09 環境檢討改派 subagent 照 `retro` skill 執行；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
+| weekly-review | `/weekly-review` | 1.11.0 | 每週工作回顧、記憶整理，整合 skill 錯誤 pattern 分析與修補建議（STEP 01~10）；v1.11.0 新增 STEP 10 模型使用效率報告（`scripts/model-efficiency.py`：模型×主/子 session token 占比、context 長度分桶、Agent 呼叫的 model 分布、advisor 次數、Haiku 任務清單，只統計不改檔，Haiku subagent 執行並原樣轉貼）；v1.10.0 STEP 09 環境檢討改派 subagent 照 `retro` skill 執行；v1.9.0 STEP 06 加 guard 擋下統計（DENIALS.jsonl）；v1.8.0 STEP 01 改用 `multi-repo-commit-scanner` agent 平行掃描（8 repo / 9 entry，luna_web 用 pathspec 拆 FE/BE） |
 | retro | `/retro [session 路徑或 uuid]` | — | 對 coding session 做環境檢討（只讀不改）：每個改善候選必附 session 檔路徑＋行號證據，產出候選清單由使用者逐項確認後另行執行；`weekly-review` STEP 09 也派 subagent 照本檔執行。`disable-model-invocation: true`。改寫自 mattpocock/skills 的 retro | 
 | sync-my-claude-setting | `/sync-my-claude-setting` | 1.9.2 | 同步本機 Claude 設定到 Repo（v1.9.2 補排除 `skills/.trash`、`__pycache__`，並明文禁止把排除規則放進未加引號的 shell 變數（zsh 不斷詞，`*.bak` 排除會靜默失效）；v1.9.0 `mods/` 納入雙向同步，排除各 mod 的 `.git/`、`node_modules/`、引擎產生的 `.claude-plugin/types/`（四處 rsync 逐字寫出，不用跨區塊 shell 變數），比對改用 rsync dry-run 與實際複製同一組旗標與規則；v1.8.2 私有內容偵測改用 `finditer`，修正整份檔案只回報第一個命中導致的漏報（全 repo 去重命中 91→146 筆）；v1.8.1 被過濾的 permission 改為逐條印出（誤濾三次靜默復發的根治）、`.maestro` 補進豁免清單、路徑 pattern 排除反引號與逗號；豁免判準維持具名 allowlist，改規則判準經實測為偵測能力迴歸故不採用；v1.7.0 `settings.json` 的 `autoMode` 區段雙向排除 + `*.bak-*` 日期後綴備份不進版控；v1.6.0 push 移到 review 之後，六步驟；v1.5.0 修補三個結構性缺陷；v1.4.0 納入 `harness/` 同步並雙向排除機器專屬檔；v1.3.0 排除 `settings.json` 的 `model` 欄位；v1.2.0 新增 source 標註） |
 | neat-freak | `/sync` `/neat`、「整理一下」 | — | 跨平台知識庫潔癖級整理（agent memory + CLAUDE.md + docs/ 三層同步），來源：[KKKKhazix/khazix-skills](https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak) |
@@ -85,9 +85,9 @@
 | upgrade-to-status | `/upgrade-to-status` | 1.1.0 | 將專案升級為 status.md 架構（Milestone / 北極星 / Insight / Current / Next） |
 | health | `/health` | 1.5.0 | 六層架構健康度稽核（CLAUDE.md/rules/skills/hooks/subagents/verifiers） |
 | claude-max-quota | `/claude-max-quota` | 1.0.0 | 多帳號 Claude Max 額度查詢與管理（cq 查額度、帳號切換建議） |
-| save-progress | `/save-progress` | 1.2.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md`；v1.2.0 新增 STEP 03 檢查 Teams 上有無未同步到 Jira 的討論 |
+| save-progress | `/save-progress` | 1.3.0 | 手動存檔工作進度，寫成可交接給新 session 的交接紀錄 + 保存未存 memory；v1.3.0 交接檔不再抄 commit hash（只記 subject 與分支，amend／rebase 後 hash 會失效）；v1.1.0 交接紀錄改寫進 `.claude/{ISSUE_ID}.md` 的 `## 交接紀錄` 段落（branch 無 Jira 編號則寫 `.claude/handoff-{branch}.md`），內容補上架構決策／已修改檔案（以 git 指令觀測）／驗證狀態／rollback 備註，不再寫 `tasks/progress-snapshot.md`；v1.2.0 新增 STEP 03 檢查 Teams 上有無未同步到 Jira 的討論 |
 | r15-r18-verify | `/r15-r18-verify` | 1.4.0 | R15→R18 頁面遷移功能等價性驗證，逐層比對 Redux、元件行為、錯誤處理 |
-| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.1.3 | 把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
+| r15-r18-migrate | `/r15-r18-migrate <entry-id> [--resume]` | 1.2.1 | v1.2.0 新增 `helpers/eslint_gate.py`（eslint 基準比對閘門）與 `helpers/scan_select.py`（react-select 預設值掃描），v1.2.1 動態欄位顯示開關改用 `hideColumnByCss`；把一個 R15 頁面 entry 以最小改動遷移到 R18（保留 class、不轉 hooks、命名沿用 R15、機制沿用 R18），headless 無人看管模式逐 entry 呼叫，一次一個 entry：Phase 0 輸入契約 → Phase 1 合約抽取（三群 subagent）→ Phase 2 六步機械轉換 → Phase 3 等價性驗證 → Phase 4 commit + 結構化輸出；八種 `blocked_reason`，不 push 不開 PR（由外層 runner 負責）；v1.1.2 修復兩個 CRITICAL（舊 entry 分支重跑無煞車、中斷後呼叫序號被下一次覆寫）並大量擴充 `helpers/tests/` 單元測試；v1.1.2 第七批（2026-09-29）再補 `runner.log.jsonl` 輪替（新模組 `helpers/event_log.py`）、中斷合併自動收拾、CLI 後暫停跨簽名煞車，測試 275 → 363 個；部署試點後修正（2026-09-30，未升版）：`Modified` 署名固定、新增 `runner.py mark-done` 子命令（人工處理完的 entry 標 done）、額度前置檢查改讀 stream 的 `rate_limit_event`（新模組 `helpers/rate_limit.py`，`quota-usage.py` 退役），測試 → 384 個 |
 | cup-build-test | `/cup-build-test` | 1.3.0 | CUP 項目從 commit 反推測試項目 → 產雙用途 spec → Playwright 腳本 → 正式環境半自動驗證 → 修正重產（6 階段）；v1.2.0 加入「斷言截圖三合一規範」+ evidence helper（純資料 step 必須補 UI 證據） |
 | token-analyze | `/token-analyze [filename] [uuid]` | 1.0.0 | 分析 session token 使用量，產出 markdown 報表（Session 摘要 + Summary + Top 5 + Per-turn） |
 | translate-claude-code-releases | `/translate-claude-code-releases [version]` | 1.0.0 | 翻譯 Claude Code GitHub releases 更新內容為繁體中文；帶版本號翻該版起到最新，不帶則從上次記錄版本續翻；`fetch-range.sh` 抓 release 範圍 + sonnet subagent 翻譯，`last-version.txt` 記錄進度 |
@@ -262,6 +262,16 @@ claude-mem 的 Stop hook（`worker-service.cjs hook claude-code summarize`）在
 - 新增 `SUBAGENT-USAGE`、`TOOL-USAGE` 區段（4.7 預設較少 spawn / call tool，需明確指示）
 
 ## 變更紀錄
+
+### 2026-10-26: 模型使用效率報告、advisor 閘門、ctx-handoff 門檻 400k
+
+- **`weekly-review` 1.11.0**：新增 STEP 10 與 `scripts/model-efficiency.py`。統計 token 以 message.id 去重只算一次、工具呼叫掃全部 chunk；advisor 的 block 類型是 `server_tool_use`（不是 `tool_use`），第一次統計用 `tool_use` 誤報 0 次，實際每週 3～4 次；期間以訊息時間戳篩選。
+- **harness**：`judgment-matrix.md` §5 新增「advisor 閘門」（否證後仍有 ≥2 個候選存活、修正後症狀仍在、全部候選被排除，三種情況在第一個修正性編輯前先叫 advisor）；`model-dispatch.md` §3 分工表補 advisor 一列與「advisor 與 Opus subagent 的分別」。
+- **`settings.json`**：`pluginConfigs["ctx-handoff@inline"].options.threshold` 設為 400000（預設 600000），`Edit(//**/*.md)` 加入 allow。
+- **`hooks/stop-claim-guard.ts`**：新增 `isWaitingForBackground`，回覆結尾自述還在等背景任務通知時放行，不再當成完成宣告。
+- **`save-progress` 1.3.0、`r15-r18-migrate` 1.2.1**：見上方 Skills 一覽。
+- **`rules/common/coding-style.md`**：新增 `claim-verify`（註解／PR 說明裡的事實性主張寫之前先查證）與 `why-claim-verify`。
+- **`cup-build-test`**：補「旗標回報紀律」與「equivalence 不可只在前言宣告」兩條說明（版本仍為 1.3.0）。
 
 ### 2026-10-16（三）: commit 指令偵測不再被引號與 heredoc 內的文字誤觸發
 

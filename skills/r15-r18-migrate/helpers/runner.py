@@ -339,6 +339,10 @@ GH_PR_STATE_MERGED = "merged"
 GH_OUTPUT_TAIL_CHARS = 200
 # 子行程 stderr 放進 detail／通知的摘要上限（stderr_excerpt 的預設；通知 300 字預算下沿用改前尾段 200 字的長度）
 STDERR_EXCERPT_CHARS = 200
+# PR 標題取自範圍內第一個 commit 標題；範圍內不只一個 commit 時，在後面接上這個後綴（%d＝commit 總數），讓人看得出不只一個
+PR_TITLE_MORE_COMMITS_SUFFIX = "（等 %d 個 commit）"
+# PR 標題改用 commit 標題失敗而退回舊標題時寫進 runner.log.jsonl 的事件名
+PR_TITLE_FALLBACK_EVENT = "pr_title_fallback"
 # stderr_excerpt 標示「中間省略」的分隔符
 STDERR_EXCERPT_ELLIPSIS = "…"
 # git commit sha 放進 detail／通知／status 輸出時的縮寫長度（完整 sha 另有需要時照寫全長）
@@ -2865,6 +2869,82 @@ def find_pr_by_head(config, branch, base, log_name=PR_LOOKUP_LOG_NAME, expected_
     return url, None
 
 
+def pr_title_from_commits(config, base_ref, head_ref, fallback):
+    """PR 標題取自 `base_ref..head_ref` 範圍內的 commit 標題（不含 merge commit，由舊到新）。
+
+    只有一個 commit 時標題與該 commit 的標題逐字相同（`[CUP-227] feat(FE): …`，審查者在 PR 清單就能對上 commit）；
+    不只一個時取最舊的那個，後面接 PR_TITLE_MORE_COMMITS_SUFFIX。範圍內沒有 commit 或 git 失敗時回傳 fallback，
+    並寫一筆 PR_TITLE_FALLBACK_EVENT：標題只是顯示用，不值得為它中斷開 PR，但不能靜默退回——否則 runner 又開出
+    與 commit 對不上的標題而沒人知道。
+
+    @param config runner 設定
+    @param base_ref 範圍起點（不含），例如 `origin/<pr_base>`
+    @param head_ref 範圍終點（含），例如 entry 分支或整合分支
+    @param fallback 取不到 commit 標題時的舊標題
+    @return PR 標題字串
+    """
+    # STEP 01: 讀範圍內的 commit 標題
+    code, out, err = git(config, "log", "--no-merges", "--reverse", "--format=%s", "%s..%s" % (base_ref, head_ref))
+    subjects = [line.strip() for line in out.splitlines() if line.strip()] if code == 0 else []
+    # STEP 02: 取不到就退回舊標題並留紀錄
+    if not subjects:
+        reason = "git log 失敗（退出碼 %d）: %s" % (code, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)) if code != 0 else "範圍內沒有 commit"
+        log_event(config, None, PR_TITLE_FALLBACK_EVENT, detail={"range": "%s..%s" % (base_ref, head_ref), "reason": reason})
+        return fallback
+    # STEP 03: 一個 commit 逐字照用；多個加後綴
+    return join_commit_subjects(subjects)
+
+
+def join_commit_subjects(subjects):
+    """把由舊到新的 commit 標題組成 PR 標題：只有一個逐字照用；多個取最舊的，後面接 PR_TITLE_MORE_COMMITS_SUFFIX。"""
+    if len(subjects) == 1:
+        return subjects[0]
+    return subjects[0] + PR_TITLE_MORE_COMMITS_SUFFIX % len(subjects)
+
+
+def pr_title_from_entry_commits(config, queue, fallback):
+    """斷點 PR 標題取自「這個斷點涵蓋的 entry」的 commit 標題（1.1.5）。
+
+    涵蓋集合與 begin_checkpoint_opening 寫進 covered_entries 的判準相同：status 為 done 且還沒蓋章（沒有 checkpoint_id）。
+    不用 `origin/<pr_base>..<凍結點>` 的 git 範圍——前一個斷點被關閉不合併（released）時，它的 commit 還留在整合分支上、
+    卻不在 pr_base 裡，範圍會把前一個 entry 的 commit 也算進來，標題變成別的模組（2026-10-19 #11364 實際發生）。
+    commit 由舊到新排序（依 commit 時間，同時間照 queue 順序）。任何一個涵蓋的 entry 沒有 last_commit 或讀不到標題、
+    或根本沒有涵蓋的 entry，都整個退回 fallback 並寫 PR_TITLE_FALLBACK_EVENT，不拿剩下的湊——湊出來的標題會少一個模組。
+
+    @param config runner 設定
+    @param queue 已載入的 queue 內容
+    @param fallback 取不到時的舊標題
+    @return PR 標題字串
+    """
+    # STEP 01: 找涵蓋的 entry 與它們的 commit
+    covered = [entry for entry in queue.get("modules", []) if entry.get("status") == "done" and not entry.get("checkpoint_id")]
+    problems = []
+    rows = []
+    for entry in covered:
+        sha = entry.get("last_commit")
+        if not sha:
+            problems.append("%s 沒有 last_commit" % entry.get("id"))
+            continue
+        # STEP 02: 讀 commit 時間與標題（%ct 是 unix 時間，tab 分隔以免標題內有空白）
+        code, out, err = git(config, "show", "-s", "--format=%ct%x09%s", sha)
+        parts = out.strip().split("\t", 1)
+        if code != 0 or len(parts) != 2 or not parts[1].strip():
+            problems.append("%s 的 commit %s 讀不到標題（退出碼 %d）: %s" % (entry.get("id"), sha[:GIT_SHA_SHORT_CHARS], code, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)))
+            continue
+        rows.append((int(parts[0]), parts[1].strip()))
+    # STEP 03: 沒有涵蓋的 entry 或有任何一個取不到 → 退回舊標題並留紀錄
+    if not covered or problems:
+        log_event(
+            config,
+            None,
+            PR_TITLE_FALLBACK_EVENT,
+            detail={"covered": [entry.get("id") for entry in covered], "reason": "；".join(problems) if problems else "沒有涵蓋的 entry"},
+        )
+        return fallback
+    # STEP 04: 依 commit 時間由舊到新（sorted 穩定，同時間保留 queue 順序），組標題
+    return join_commit_subjects([subject for _time, subject in sorted(rows, key=lambda row: row[0])])
+
+
 def push_branch_and_open_pr(config, entry, enter_deferral=None, expected_head=None):
     """推送頁面分支並開 PR（L1'）。
 
@@ -2907,7 +2987,7 @@ def push_branch_and_open_pr(config, entry, enter_deferral=None, expected_head=No
 
     # STEP 04: 組 PR 內文（只放統計與路徑，不放檔案內容），進入延後區間後開 PR：create 返回到連結落盤之間被訊號打斷就是 (a)
     body = pr_body_for_entry(config, entry)
-    title = "%s R18 升級: %s" % (entry.get("jira") or "", entry["id"])
+    title = pr_title_from_commits(config, integration, entry["branch"], "%s R18 升級: %s" % (entry.get("jira") or "", entry["id"]))
     log_path = session_log_path(config, "gh-pr-create")
     if enter_deferral is not None:
         enter_deferral()
@@ -3158,7 +3238,8 @@ def open_checkpoint(config, checkpoint_id, auto_title=None):
 
     @param config runner 設定
     @param checkpoint_id 斷點 id
-    @param auto_title auto 斷點的 PR 標題（宣告的斷點用自己的 title）
+    @param auto_title auto 斷點的 PR 標題退路（宣告的斷點用自己的 title）。1.1.4 起第一次開時標題改取斷點涵蓋的 commit 標題
+        （1.1.5 起取涵蓋 entry 的 last_commit，見 pr_title_from_entry_commits），取不到才用這個
     @return True 已開（opened），或補完時發現已合併（merged）；False 開啟失敗（hard 仍是 opening、soft／auto 已是 failed——
         開啟途中被 release 的維持 released）
     """
@@ -3172,6 +3253,10 @@ def open_checkpoint(config, checkpoint_id, auto_title=None):
     code, out, err = git(config, "rev-parse", "--verify", "refs/heads/%s" % integration)
     # 這一輪要凍結的整合分支 tip（記錄已有 frozen_sha 時 begin_checkpoint_opening 沿用記錄裡的）；讀不到是 None
     current_tip = out.strip() if code == 0 else None
+    # PR 標題：記錄還沒有標題（第一次開）時，改用這個斷點涵蓋的 entry 的 commit 標題（與 commit 逐字相同），
+    # 取代 auto 標題與「R18 遷移斷點 <id>」；宣告的斷點自己有 title 時 begin_checkpoint_opening 不會用到它
+    if not previous.get("title"):
+        auto_title = pr_title_from_entry_commits(config, load_queue(config), auto_title or ("R18 遷移斷點 %s" % checkpoint_id))
     checkpoint = begin_checkpoint_opening(config, checkpoint_id, branch, auto_title, current_tip)
     if not checkpoint.get("frozen_sha"):
         return checkpoint_open_failed(config, checkpoint, "讀取整合分支 %s 的 tip 失敗: %s" % (integration, stderr_excerpt(err, GH_OUTPUT_TAIL_CHARS)))

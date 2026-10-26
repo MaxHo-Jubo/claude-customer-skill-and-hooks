@@ -73,6 +73,9 @@ Agent 工具的 `model` 參數可填：`haiku` / `sonnet` / `opus`（本機另�
 | 搜尋研究、明確 spec 的實作、有測試保護的重構、checklist 式審查 | sonnet | 預設工作馬 |
 | 架構設計、模糊除錯、跨模組影響分析、多樣本評審的裁判 | opus | |
 | 升級狀態機的終點（§4） | opus | |
+| 多個方案或根因候選已列出、定案前要第二意見 | advisor（`advisorModel: opus`） | 無參數、自動看到整段對話，不需派工三件套 |
+
+**advisor 與 Opus subagent 的分別**：advisor 用於「我已有候選或方案、要第二意見」；Opus subagent 要自己帶 `model: "opus"`、只看得到 prompt，用於「獨立重做」（多樣本評審的裁判、不被目前假設污染的新視角）。架構決策與方案取捨：列出方案後、定案前叫 advisor。統計用量時 advisor 的 block 是 `type=server_tool_use, name=advisor`，不是 `tool_use`——2026-10-26 首次統計漏算，誤報 0 次，實際 4 次／週。
 
 **Haiku 禁區**（即使看起來簡單也不派 Haiku）：需要多步工具串接的除錯、需要理解跨檔案 invariant 的修改、任何「找原因」類任務。
 

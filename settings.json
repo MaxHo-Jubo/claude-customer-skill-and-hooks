@@ -11,6 +11,7 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:forum.developer.samsung.com)",
       "WebSearch",
+      "Edit(//**/*.md)",
       "Bash(git checkout:*)",
       "Bash(osascript -e 'display notification*)",
       "WebFetch(domain:raw.githubusercontent.com)",
@@ -424,7 +425,8 @@
     "playwright@claude-plugins-official": true,
     "mcp-outline@mcp-outline": true,
     "cc-plugin-you-should-know@builtin": true,
-    "ask-better@ask-better": true
+    "ask-better@ask-better": true,
+    "clangd-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-hud": {
@@ -463,7 +465,8 @@
   "pluginConfigs": {
     "ctx-handoff@inline": {
       "options": {
-        "auto_handoff": true
+        "auto_handoff": true,
+        "threshold": 400000
       }
     }
   },

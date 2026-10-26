@@ -1,5 +1,80 @@
 # CHANGELOG
 
+## 1.2.1 (2026-10-23，動態欄位顯示開關改用 `hideColumnByCss`)
+
+改 `docs/api-mapping.md`（§5.2 的 `hidden` 列拆成永久／動態兩列、新增 §5.2.1）與 `SKILL.md`（Phase 4 檢查表加一項、「常見失敗」加第 13 列、版本）；`runner.py` 與 helpers 不動。
+
+- **起因**：CUP-224 前置（PR #11401，R18 版 `TableMultipleFilter`）用真的 R15 套件（React 15.6.2＋react-bootstrap-table 2.11.2）與 R18 的 react-bootstrap-table-next 4.0.3 對照實測，發現 §5.2 原本把 `hidden={!flag}` 照搬成 `hidden: !flag` 是錯的：table-next 只在表格建構時判斷「有沒有 hidden 欄位」（`contexts/index.js`），建構時一個都沒有、之後才切換 → 完全沒作用；欄位被 `hidden` 時表頭卸載，帶篩選元件的欄位再顯示會重設勾選。R15 的 `hidden` 是 `display:none`（元件不卸載、勾選保留、隱藏期間篩選仍生效、動態切換永遠有效）。`SupervisorVisitRecordTable` 早在 <TICKET> 為同源問題改用 CSS 隱藏。
+- **修正**：§5.2 `hidden` 列拆成「字面 `true` 永久隱藏 → `hidden: true`」與「動態切換 → `hideColumnByCss(column, !flag)`」；新增 §5.2.1（三個行為差異、用法範例、`tableColumnUtil.ts` 不存在時 `blocked(no_mapping)`、欄位顯示開關列為必測、隱藏期間篩選仍生效不是 bug）；Phase 4 檢查表加機械檢查 `grep -nE 'hidden:' <檔…> | grep -vE 'hidden:[[:space:]]*true'` 輸出必須為空；「常見失敗」加第 13 列。
+- **驗證**：檢查用 grep 以已知答案的檔案對照——`caseRecordTable.tsx`（`hidden: !…`，有輸出）、`SupervisorVisitRecordTable.tsx`（只有字面 `hidden: true`，過濾後無輸出）、`ContactTable.jsx:105`（文件引用的 `hidden: true` 先例）。skill 完整測試套件重跑（見下方）。
+- **未做**：沒有寫成像 `scan_rem.py` 的 helper，只是 Phase 4 的 grep 檢查項，runner 的 L1 不會自動跑；`hideColumnByCss` 所在的 `shared/utils/tableColumnUtil.ts` 在 PR #11401 合併前只存在於 PR 分支（文件已寫「不存在就 blocked」）；已遷移的現役 R18 頁面沒有回頭掃，已知 `containers/Table/caseRecordTable.tsx:399` 是 `hidden: !…`（是否受影響沒驗證）；**尚未同步 Mac Studio**（要等 PR 合併、與 queue.json 同步一起做）。
+
+## 1.2.0 (2026-10-23，eslint 基準比對閘門與 react-select 掃描器)
+
+新增 `helpers/eslint_gate.py`、`helpers/scan_select.py` 與各自的測試；改 `SKILL.md`（步驟 5.4 改寫、Phase 4 檢查表、「常見失敗」第 11／12 列、blocked 原因表、參考清單）與 `docs/api-mapping.md`（§6.3 補機械檢查）；`runner.py` 不動。
+
+- **起因（eslint）**：2026-10-23 對剩下 76 個 entry 的 283 個 R15 檔，用 R18 的 eslint 設定各跑一次（R15 原檔放在假落點、不加 fix）：281 個檔有 error、71 個 entry 全都有（對照組：已知答案的 `caselist-modals` 估算排除 `import/*` 後 235、真實 231，誤差約 2%；`import/*` 在假路徑下被放大，不能採信）。舊規則「有 error 就 blocked、又不准 eslint-disable」下，runner 幾乎每個 page entry 都會停在 `build_failed`；整檔 `eslint-disable` 又會讓 eslint 失去抓「翻譯新引入的錯」的用處。user 選「基準比對閘門＋自動檔頭」。
+- **`eslint_gate.py`**：對每個 R15→R18 檔對，先用 R18 的 eslint 設定跑 R15 原文（基準），再跑搬遷後的檔（先去掉自己寫過的檔頭）。parse error 與 `import/no-unresolved` 必須為 0；`import/no-relative-packages` 等路徑相關規則放行；其餘每條規則搬遷後的數量不得超過基準。全部通過才寫檔頭（只列實際觸發的規則），任一檔不過一個檔都不寫；被關掉的風險類規則印 `RISK:` 請寫進 ⚠ 清單。不用 `--fix`。eslint 本身出錯、輸出不是 JSON、檔案被忽略一律結束碼 2（不當成 0 error）。
+- **`scan_select.py`**：成對檔機械檢查 react-select v1→v5 的 `clearable`／`isClearable` 預設值差異（含 R15 明寫 `clearable={false}` 的反向、R18 展開 props、元素數不同、R18 不再 import），`--scss` 檢查殘留的 v1 class。
+- **已知答案驗證**：對已合併的 `caselist-modals` 跑閘門，6 個檔的規則清單與人工寫的檔頭逐檔一致，並額外揪出兩個當初沒標進 ⚠ 的風險（`eqeqeq`、`lodash` 未宣告依賴）；三種新引入的錯（`no-undef`、壞 import、語法錯誤）都轉紅。`scan_select.py` 對修正前的 commit 抓到 3 個單選＋2 條 scss 規則，現況 0。
+- **測試與突變**：`test_eslint_gate.py` 53 項（含用真 eslint 的整合測試，找不到 react_18 的 eslint 才略過）、`test_scan_select.py` 30 項。單點突變探針：`eslint_gate.py` 23 個、`scan_select.py` 17 個，最終全數擊殺。第一輪各有存活者，分類後處理：`exit2_ok`（eslint 結束碼 2 但 stdout 剛好是合法 JSON 時會被當成正常結果）與 `depth_not_tracked`（大括號深度追蹤壞掉，因測試把 `{o}` 放在 `=>` 之前、深度先變負數而被蓋住）是真的測試漏洞，補測試後擊殺；`count_mismatch_silent` 是我寫的突變本身無效（`[] or x` 的結果仍是 `x`），換成真的改法後擊殺。突變探針腳本不進 repo（在 session scratchpad）。
+- **未做**：閘門沒有在真實 runner 流程跑過；「每條規則不得超過基準」是粗粒度（同一條規則內一個減少、一個新增會互相抵銷）；R15 基準以假落點估算的 `import/*` 不可信所以排除；已遷移的 `r15-legacy` 檔與既有 entry 不回頭處理。
+
+## 1.1.9 (2026-10-23，react-select 省略 prop 的預設值與 scss v1 class 納入對照表)
+
+改 `docs/api-mapping.md`（新增 §6.3）與 `SKILL.md`（Phase 4 檢查表加一項、「常見失敗」加第 11 列）；`runner.py` 與 helpers 不動。
+
+- **起因**：CUP-225 `caselist-modals` 手動收尾時，codex review 與人工讀 diff 抓到兩個遷移造成的靜默退化，runner 與合約表都沒抓到：①R15 react-select 1.3.0 的 `clearable` 預設 `true`、R18 5.8.0 單選的 `isClearable` 預設 `false`，R15 沒寫 `clearable` 的單選搬完就失去清除鈕（`CaseSettingModal` 三個單選）；②`CaseFilterBar.scss` 針對 v1 class 的規則在 v5 不命中（<TICKET> 多選限高捲動失效）。§6.2 只有「顯式 `clearable` → `isClearable`」，沒寫省略時預設相反，也沒要求檢查 scss。
+- **修正**：新增 §6.3（兩項的 R15／R18 省略行為、遷移動作、`valueContainer` 限高的寫法與驗證方式）；Phase 4 檢查表加一項（單選補 `isClearable`、scss 無殘留 v1 class）；「常見失敗」加第 11 列。
+- **驗證**：預設值差異用 jsdom 渲染 react-select 5.8.0 實證（單選有值未設 `isClearable` → 0 個清除鈕，設了 → 1 個，多選預設 1 個）；v1 預設值取自 `react_15/node_modules/react-select/lib/Select.js:1417`。`valueContainer` 限高在 jsdom 驗到 computed style，**沒有真實排版驗證**。
+- **未做**：沒有寫像 `scan_rem.py` 的掃描 helper，這版只讓 skill 流程與手動檢查能攔下，runner 的 L1 不會自動檢查；已遷移的既有 entry 沒有回頭掃描；R15 單選有沒有寫 `clearable={false}` 目前要人工看原檔。
+
+## 1.1.8 (2026-10-21，`rem` 單位換算納入遷移流程)
+
+改 `SKILL.md`（步驟 2、Phase 4 檢查表、§10）與 `docs/api-mapping.md`（§8.1、新增 §8.5），新增 `helpers/scan_rem.py` 與 `helpers/tests/test_scan_rem.py`；`runner.py` 與其他 helpers 不動。
+
+- **起因**：CUP-228（用餐紀錄頁）遷到 R18 後，在家屬 App 上字體比活動紀錄頁大很多。兩個差異疊加：(1) 根字級 R15 10px（`bootstrap@3.4.1`）、R18 13px（`_default.scss`）；(2) R15 的 `index.ejs` 沒有 viewport meta、R18 的 `index_18.ejs` 有 `width=device-width`，而家屬 App 用 `Linking.openURL` 開系統瀏覽器，R15 頁面在手機上被整頁縮小（約 0.4 倍），R18 不縮。頁面 `style.scss` 與 `r15-legacy/components/Datepicker.js` 的 `4rem` 原樣搬過來，在 App 上由約 16px 變 52px；建置與 boot-smoke 全綠。活動紀錄頁在 CUP-142 遷移時已把整頁縮小補償（`4rem` → `1.4rem`、頁首 `60px` → `30px`），用餐頁沒有，兩頁在 R15 時期看起來一致、R18 才分開。根因在 skill：`api-mapping.md` §8.1 寫「同層 css/scss：照搬」、「原樣保留」，沒有單位例外；換算規則只寫在 `AccordinCard.jsx` 檔頭與 memory，沒進流程。
+- **修正**：§8.1 加單位例外；新增 §8.5，分 A 類（桌機頁：`Nrem` → `N×10 px`）與 B 類（手機瀏覽器頁：**不可** ×10，對照既有 R18 手機頁面、rem 與 px 一併處理，無基準頁就 `blocked(needs_human)`）；行內 style 字串也要處理、`em` 不動、刻意保留要加 `rem-ok` 並進 ⚠ 清單；步驟 2 的「同層 css/scss 照搬」補註；Phase 4 檢查表加一項掃描；§10 加第 10 項。
+- **新增 `helpers/scan_rem.py`**：掃 `.scss .css .js .jsx .ts .tsx`，註解內的 rem 不算，行尾 `rem-ok` 放行；檔案不存在回 exit 2（不靜默略過），最後一行一定印出掃描檔數。
+- **未動 runner**：這版只讓 skill 流程與手動檢查能攔下；要不要在 runner 的 L1 驗證自動跑 `scan_rem.py` 是下一步的決定。
+- **測試**：`test_scan_rem.py` 16 項，命中樣本取自事故的 R15 原檔內容（`caseMealRecord/style.scss`、`Datepicker.js`），對照組為修正後寫法。突變探針 12 個全部轉紅（小數值、識別字邊界、放行標記、三種註解處理、URL 內 `//`、缺檔略過、命中卻回 0、`.js` 副檔名、摘要行、行號錯位）。用事故當下的 master 版跑掃描，命中 11 行（含 `gap: 2rem`）。
+- **未回頭處理**：已遷移的既有 entry 不在本版範圍；審計出的殘留清單另案處理。
+
+## 1.1.7 (2026-10-19，`Modified` 署名改為 `Max Ho`)
+
+只改 `SKILL.md`（輸入契約）與 `docs/api-mapping.md`（註解規則）兩處文字，不動 `helpers/`。
+
+- **改動**：檔頭 `Modified` 欄位的署名由 `YYYY/MM/DD Claude subscribe by Max Ho` 改為 `YYYY/MM/DD Max Ho`（user 指示；與 repo 的 `Modified: YYYY/MM/DD 修改人` 慣例一致）。
+- **未改**：`runner.py` 與測試沒有硬編這個字串。已 commit 進整合分支的 entry（`companydashboard` 已 revert 不計；`casemealrecord` 的 `92d54b5672` 與 1.1.1～1.1.6 期間的其他 commit）仍是舊署名，不回頭改歷史；之後新搬的檔才用新署名。
+- **舊紀錄**：下方 1.1.x 的條目提到的舊署名是當時的事實，保留原文。
+
+## 1.1.6 (2026-10-19，斷點 PR 標題改取「涵蓋 entry 的 commit」，不用 git 範圍)
+
+只改 `helpers/runner.py` 與 `helpers/tests/test_pr_title.py`；`queue.json` 欄位、CLI、子命令都不變。
+
+- **起因**：1.1.4 的斷點標題用 `origin/<pr_base>..<凍結點>` 的 git 範圍取 commit。`companydashboard` 的斷點 PR #11362 被關閉不合併、revert 留在整合分支，下一個斷點 PR #11364（`casemealrecord`）的範圍就把 `companydashboard` 的 commit 與 revert 也算進去，標題變成 `[CUP-227] … companydashboard（等 3 個 commit）`（已手動改回 `[CUP-228] …`）。1.1.4 的測試只涵蓋乾淨拓撲，漏了「前一個斷點被關閉」。
+- **修正**：新增 `pr_title_from_entry_commits`：涵蓋集合與 `begin_checkpoint_opening` 寫進 `covered_entries` 的判準相同（`status == done` 且沒有 `checkpoint_id`），標題取這些 entry 的 `last_commit`（依 commit 時間由舊到新；一個逐字照用，多個取最舊＋「（等 N 個 commit）」）。任何涵蓋的 entry 沒有 `last_commit` 或讀不到標題、或沒有涵蓋的 entry，整個退回舊標題並寫 `pr_title_fallback` 事件，不拿剩下的湊。抽出 `join_commit_subjects` 給兩個 helper 共用。
+- **未動**：頁面 PR（`push_branch_and_open_pr`）仍用 `pr_title_from_commits`（範圍 `<整合分支>..<entry 分支>`，entry 分支只含自己的 commit，沒有這個問題）。
+- **測試**：`test_pr_title.py` 由 8 項增為 15 項，新增 `PrTitleFromEntryCommitsTest`（單一、已蓋章與未 done 排除、依 commit 時間而非 queue 順序、缺 `last_commit` 整個退回、讀不到 commit、無涵蓋 entry）與「前一個斷點被關閉」的端到端案例（含舊做法在同拓撲下會取錯的對照組）。突變探針 10 個全部轉紅。
+
+## 1.1.5 (2026-10-19，`react-open-app` 有對照了)
+
+只改 `docs/api-mapping.md`（文字規則）與版本號，不動 `helpers/`。
+
+- **起因**：`casemealrecord`（CUP-228）被擋在 `blocked(no_mapping)`（$0.653）：§10.5 把 `react-open-app` 列為「R18 沒有、blocked」，但 R18 其實有現成寫法——`activityList.tsx:40,186-189` 用 `document.location = 'familymember://'` 取代同樣的 `<OpenApp href="familymember://">`（CUP-142，commit `38efc95e3c`）。skill 文件沒記這個先例，runner 找不到對照。
+- **修正**：§10.5 表刪除 `react-open-app` 一列；新增 §10.7 寫明不裝套件、改點擊 handler 設 `document.location`、保留 `<a>` 標籤、桌機不再開新分頁的行為差異（進 ⚠）。
+- **查證**：套件行為讀 `react_15/node_modules/react-open-app/dist/index.js`；`familymember://` 不是它內建轉換的 app，手機上實際等同 `document.location = href`。
+
+## 1.1.4 (2026-10-19，runner 開的 PR 標題與 commit 標題逐字相同)
+
+只改 `helpers/runner.py` 的 PR 標題來源，加一支測試；`queue.json` 欄位、CLI 旗標、子命令、`result.schema.json` 都沒動。
+
+- **起因**：斷點 PR #11362 的標題是「R18 遷移自動斷點（累積 1 個模組未進斷點）」，裡面唯一的 commit 是 `[CUP-227] feat(FE): 未使用-R18遷移-companydashboard`，審查者在 PR 清單看不出是哪個模組（user 要求「至少要跟 commit 一樣文字」）。
+- **新 helper `pr_title_from_commits(config, base_ref, head_ref, fallback)`**：取 `base_ref..head_ref` 範圍內不含 merge commit 的 commit 標題。只有一個 commit → 逐字照用；多個 → 取最舊的那個，後面接「（等 N 個 commit）」；範圍內沒有 commit 或 git 失敗 → 回 `fallback`，並寫 `pr_title_fallback` 事件（不靜默退回）。
+- **兩處套用**：①頁面 PR（`push_branch_and_open_pr`）範圍 `<整合分支>..<entry 分支>`，舊標題「`<jira> R18 升級: <id>`」改為退路；②斷點 PR（`open_checkpoint`）範圍 `origin/<pr_base>..<凍結點>`，記錄還沒有 `title` 時才算（宣告的斷點自己寫了 `title` 就照用；補完 `opening` 時沿用已落盤的標題）。auto 標題「R18 遷移自動斷點（…）」與「R18 遷移斷點 <id>」改為退路。
+- **已知限制**：①斷點範圍用本機的 `origin/<pr_base>`，這個 ref 比遠端舊時（沒 fetch）範圍會多算已合併的 commit，標題的「等 N 個 commit」會偏大，第一個 commit 也可能是舊的；②已開的 PR 不會被改標題（只影響之後新開的）；③人工在斷點分支上疊的 commit 不會回頭改標題。
+- **測試**：新增 `helpers/tests/test_pr_title.py`（8 項）：單一 commit 逐字、真實格式（Jira 編號／全形字）、多 commit 取最舊＋後綴、merge commit 不計、空範圍與壞 ref 退回並留事件，以及攔截 `gh pr create` 的 `--title` 驗證頁面 PR 與 auto 斷點 PR 真的用到。完整套件 392 項通過；5 個突變（頁面標題改回舊格式、斷點不用 commit 標題、不加 `--reverse`、不加後綴、退回時不寫事件）全部轉紅。
+
 ## 1.1.3 (2026-10-16，消費端 import `r15-legacy/` 元件前必讀元件註解)
 
 只改 SKILL.md 與 `templates/contract.template.md` 的文字規則，不動 `helpers/`（runner 行為、`result.schema.json`、`queue.json` 欄位、CLI 旗標、子命令都不變）。

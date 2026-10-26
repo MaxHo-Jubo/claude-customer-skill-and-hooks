@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildReason, canBlock, MAX_BLOCKS, shouldBlock, shouldSkip } from './stop-claim-guard';
+import { buildReason, canBlock, isWaitingForBackground, MAX_BLOCKS, shouldBlock, shouldSkip } from './stop-claim-guard';
 
 /** 產生單題判定 */
 const v = (pred: boolean, conf: number) => ({ pred, conf });
@@ -46,6 +46,36 @@ describe('shouldSkip', () => {
   test('沒有回覆文字 → 略過', () => {
     expect(shouldSkip({ ...base, last_assistant_message: '   ' })).toBe(true);
     expect(shouldSkip({ ...base, last_assistant_message: undefined })).toBe(true);
+  });
+});
+
+describe('isWaitingForBackground', () => {
+  test('S2 實例：「修正進行中、等探針通知」→ 等待中', () => {
+    expect(isWaitingForBackground('codex review 的處理方向已定，修正進行中，表格突變探針在背景循序跑（等探針通知，期間不開其他重工作）')).toBe(true);
+  });
+  test('等 agent 回報 → 等待中', () => {
+    expect(isWaitingForBackground('已派出三個檢討 agent，等 agent 回報後再合併')).toBe(true);
+  });
+  test('背景任務執行中 → 等待中', () => {
+    expect(isWaitingForBackground('目前背景任務執行中，先不下結論')).toBe(true);
+  });
+  test('只有 Jira 狀態字樣「進行中」→ 不算等待（避免誤放行真正的完成宣告）', () => {
+    expect(isWaitingForBackground('已修好，測試全綠。Jira 狀態：進行中')).toBe(false);
+  });
+  test('一般完成宣告 → 不算等待', () => {
+    expect(isWaitingForBackground('根因是 A，已改 B，測試 12 pass 0 fail')).toBe(false);
+  });
+  test('「等於」「相等」這類無關字樣 → 不算等待', () => {
+    expect(isWaitingForBackground('兩者相等，回傳值等於 5，結果已寫入')).toBe(false);
+  });
+  test('只看結尾：等待字樣在很前面、結尾是完成宣告 → 不算等待', () => {
+    expect(isWaitingForBackground(`先前在等探針通知。${'已確認。'.repeat(120)}全部完成，測試通過。`)).toBe(false);
+  });
+});
+
+describe('shouldSkip：等待背景任務', () => {
+  test('回覆結尾自述等背景通知 → 略過（中途回報不是完成宣告）', () => {
+    expect(shouldSkip({ hook_event_name: 'Stop', session_id: 's1', stop_hook_active: false, last_assistant_message: '修正進行中，等探針通知' })).toBe(true);
   });
 });
 
