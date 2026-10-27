@@ -216,6 +216,10 @@ DIRECTIVE_CASES = [
     ('模板字串內跳脫反引號之後的運算式字串含指令文字', 'const s = `a \\` ${ "// eslint-disable x" } b`;\n', []),
     ('JSX 閉合標籤的斜線不會吞掉後面行的註解', 'const a = <a>x</a>;\n// eslint-disable-line\n', [2]),
     ('JSX 屬性字串內的指令文字', 'const a = <div title="// eslint-disable x" />;\n', []),
+    # --- `/` 是除法還是正規表示式：`)`／`]` 之後是除法，不能把後面的 `//` 註解當成正規表示式吞掉（漏報方向，正是閘門要擋的） ---
+    ('右小括號之後的除法，同一行真有註解', 'const q = (a) / 2; // eslint-disable-line\n', [1]),
+    ('右中括號之後的除法，同一行真有註解', 'const q = [a][0] / 2; // eslint-disable-line\n', [1]),
+    ('反斜線接換行不是合法的正規表示式，下一行的指令仍要計入', 'const r = /a\\\n// eslint-disable-line\n', [2]),
 ]
 
 

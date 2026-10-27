@@ -84,10 +84,10 @@
 | `branch` | 這個斷點凍結出來的分支名稱；`opening` 時就已寫入（write-ahead，分支與 PR 可能還沒建） |
 | `pr_url` | 對應的 PR 連結；`status` 是 `opened` 但這裡是空字串＝連結未知，見 `pr_unverified` |
 | `pr_unverified` | `true`＝`gh pr create` 退出碼 0 卻沒印連結，而且再查失敗而無法確認、或斷點是 soft／auto（再查確定沒有 open 的 PR 也算）：runner 仍寫 `opened`、蓋章（閘門與 auto 門檻照常），但不知道 PR 有沒有真的開成。**hard** 斷點再查確定沒有 open 的 PR 則是開啟失敗、不寫這個旗標（保持 `opening` 並暫停，05aeecf review）。runner 啟動時、每完成一個模組後、hard 斷點等待放行期間（第 1、3、7、15…次輪詢，間隔倍增、上限 6 小時，1.1.2 第五批收尾）用 `gh pr list --head <branch>` 補查，查到就補上 `pr_url` 並改回 `false`；查詢失敗只記事件（`checkpoint_pr_verify_failed`），不改狀態（1.1.2 第五批階段三）。補查不只看 `opened`：之後被 `release` 或判成 `merged` 的也照查、狀態不動，`merged` 用 `--state merged`、其餘用 `--state open`；`release` 之後 PR 才被合併的查不到（05aeecf review）。重新 `import-inventory` 會保留 |
-| `last_error` | 上一次開啟失敗的原因（hard 斷點保持 `opening` 時由暫停通知、`PROGRESS.md` 顯示）；開成功時清成 `null`。重新 `import-inventory` 會保留 |
+| `last_error` | 上一次開啟失敗的原因（hard 斷點保持 `opening` 時由暫停通知、`PROGRESS.md` 顯示；soft／auto 標 `failed` 時也寫入，完成通知只帶動作與斷點 id，原因看這個欄位）；開成功時清成 `null`。重新 `import-inventory` 會保留 |
 | `opened_at` / `last_remind_at` | 時間戳 |
 | `frozen_sha` | write-ahead 時凍結的整合分支 tip（1.1.2 第五批收尾 review）：cp 分支一律建在這裡、重試不跟著整合分支前進；補完 `opening` 時「已合併」只看它。重新 `import-inventory` 會保留 |
-| `covered_entries` | write-ahead 時已 `done`、還沒蓋章的 entry id 清單：開成 `opened` 或判 `merged` 時只替它們蓋章（之後才 done 的不在凍結的 commit 裡）；`null`＝舊記錄，蓋所有還沒蓋章的 done entry。重新 `import-inventory` 會保留 |
+| `covered_entries` | write-ahead 時已 `done`、還沒蓋章的 entry id 清單：開成 `opened` 或判 `merged` 時只替它們蓋章（之後才 done 的不在凍結的 commit 裡）。跟 `frozen_sha` 同一次寫入；讀不到整合分支 tip（`frozen_sha` 為空）時也先記一份 provisional 值，之後凍結成功以凍結當下的集合覆寫。完成出口（`cmd_run` 宣告佇列完成之前）也讀它：不在任何非 `pending` 斷點的 `covered_entries` 裡的 done 未蓋章 entry，視為「沒有斷點嘗試過涵蓋」，會依 auto 門檻補看一次。`null`＝舊記錄，兩處解讀**不同**：蓋章時（`stamp_covered_entries`）蓋所有還沒蓋章的 done entry；完成出口（`unattempted_done_entries`）不涵蓋任何 entry。重新 `import-inventory` 會保留 |
 
 `hard` 斷點卡住時，靠外部下 release 指令來放行，不是靠人工直接改這個欄位。
 

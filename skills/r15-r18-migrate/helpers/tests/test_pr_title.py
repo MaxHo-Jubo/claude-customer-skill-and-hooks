@@ -326,9 +326,10 @@ def count_gh_creates(fixture):
 class DoneMissingCommitRestartTest(unittest.TestCase):
     """完成出口的狀態不變量（方案 b）：存在「done 且還沒蓋章、卻缺 last_commit」的 entry，cmd_run 不得宣告佇列完成。
 
-    起因：auto 斷點取標題失敗（PrTitleError）發生在斷點意圖落盤之前，runner 走 crash → paused；重啟時 cmd_run 不再看 auto 斷點
+    起因：auto 斷點取標題失敗（PrTitleError）發生在斷點意圖落盤之前，runner 走 crash → paused；重啟時啟動段不看 auto 斷點
     （include_auto=False），主迴圈 ready 為空就判「佇列全部完成」、改 idle 並通知，斷點 PR 從頭到尾沒建立，也沒有任何可辨識的暫停原因。
-    修正只記一個可辨識的暫停原因（不保存斷點意圖、不動斷點狀態機）。cmd_run 的外部依賴隔離方式同 test_reconcile.RestartHarness。
+    現在的兩層防線：完成出口先擋「取不到標題」並換成可辨識的暫停原因（STEP 03.03.01，本類別測的就是這層），標題讀得到才依佇列現況補看 auto 斷點（STEP 03.03.02）。
+    都不保存斷點意圖、不動斷點狀態機。cmd_run 的外部依賴隔離方式同 test_reconcile.RestartHarness。
     """
 
     def setUp(self):
@@ -581,7 +582,7 @@ class DoneMissingCommitRestartTest(unittest.TestCase):
         """補開 auto 斷點失敗（cp 分支推不上去）：只嘗試一次，之後每次重啟不再推新 id 的 cp 分支（launchd 每 300 秒重啟一次）。
 
         條件是 unattempted_done_entries：write-ahead 把 covered_entries 落盤，失敗（failed）之後它還在，集合就變空。
-        每次重啟都要正常走到完成（EXIT_OK、idle），而且完成通知帶出「斷點開失敗、它涵蓋的模組沒有 PR」。
+        每次重啟都要正常走到完成（EXIT_OK、idle），而且完成通知帶出「斷點 PR 沒開成、涵蓋的模組需人工開斷點 PR」，並落盤失敗原因（last_error）。
         """
         # STEP 01: 遠端拒絕所有 cp 分支的推送；entry 正常 done 且未蓋章，runner 因別的原因（crash）暫停
         reject_entry_branch_push(self.fixture["remote"], branch=runner.CHECKPOINT_BRANCH_TEMPLATE % "", prefix=True)
@@ -596,11 +597,15 @@ class DoneMissingCommitRestartTest(unittest.TestCase):
         self.assertEqual(checkpoints[0]["status"], runner.CheckpointStatus.FAILED)
         self.assertEqual(count_gh_creates(self.fixture), 0)
         self.assertEqual(run_git(self.fixture["remote"], "branch", "--list", "r18-migration/cp-*"), "")
-        # STEP 03: 每一則完成通知都帶出失敗的斷點 id（notify 的第 4 個位置參數是內文）
+        # STEP 03: 完成通知帶出失敗的斷點 id、分支與動作句（notify 的第 4 個位置參數是內文）；失敗原因已落盤
+        # 目前每次重啟（launchd KeepAlive）都會重發完成通知；日後做一次性去重不該讓這個測試誤紅，所以只要求至少一則
         complete_bodies = [call.args[3] for call in self.mocks["notify"].call_args_list if call.args[1] == QUEUE_COMPLETE_EVENT]
-        self.assertEqual(len(complete_bodies), 3)
+        self.assertGreaterEqual(len(complete_bodies), 1)
         for body in complete_bodies:
             self.assertIn(checkpoints[0]["id"], body)
+            self.assertIn(checkpoints[0]["branch"], body)
+            self.assertIn("需人工開斷點 PR", body)
+        self.assertTrue(checkpoints[0]["last_error"], checkpoints[0])
 
     def test_healthy_completion_notification_does_not_mention_failed_checkpoints(self):
         """沒有開失敗的斷點時，完成通知內文只有模組數（不帶任何警告）。"""
@@ -669,6 +674,72 @@ class DoneMissingCommitRestartTest(unittest.TestCase):
         third = runner.begin_checkpoint_opening(self.config, "auto-t", "r18-migration/cp-auto-t", "標題", self.sha)
         self.assertEqual(third["covered_entries"], ["a", "b", "c"])
 
+    def test_provisional_covered_entries_is_not_widened_by_a_second_unreadable_tip(self):
+        """連續兩次讀不到 tip：第二次不被新完成的模組擴大涵蓋集合（provisional 值只在第一次寫、凍結成功才覆寫）。"""
+        # STEP 01: 兩個 done 未蓋章的 entry；第一次讀不到 tip
+        set_entries(self.config, [entry_spec("a", self.sha), entry_spec("b", self.sha)])
+        first = runner.begin_checkpoint_opening(self.config, "auto-t", "r18-migration/cp-auto-t", "標題", None)
+        self.assertEqual(first["covered_entries"], ["a", "b"])
+        # STEP 02: 中間又多一個 done 的 entry；第二次仍讀不到 tip：集合不變
+        runner.mutate_queue(self.config, lambda queue: queue["modules"].append(entry_spec("c", self.sha)))
+        second = runner.begin_checkpoint_opening(self.config, "auto-t", "r18-migration/cp-auto-t", "標題", None)
+        self.assertIsNone(second.get("frozen_sha"))
+        self.assertEqual(second["covered_entries"], ["a", "b"])
+
+    def test_failed_checkpoints_notice_puts_action_first_and_caps_the_listed_ids(self):
+        """failed_checkpoints_notice：動作句在 id 之前；只列前 N 個「id（分支）」，其餘用「等 M 個」帶過；沒分支寫「尚未建立」；沒有就空字串。"""
+        # STEP 01: 沒有失敗斷點：空字串
+        self.assertEqual(runner.failed_checkpoints_notice([]), "")
+        # STEP 02: 超過上限：只列前 N 個，總數用「等 M 個」帶出
+        total = runner.COMPLETE_NOTICE_MAX_FAILED_CHECKPOINTS + 1
+        failed = [{"id": "f%d" % number, "branch": "cp-f%d" % number} for number in range(total)]
+        notice = runner.failed_checkpoints_notice(failed)
+        self.assertLess(notice.index("需人工開斷點 PR"), notice.index("f0"))
+        for checkpoint in failed[: runner.COMPLETE_NOTICE_MAX_FAILED_CHECKPOINTS]:
+            self.assertIn("%s（分支 %s）" % (checkpoint["id"], checkpoint["branch"]), notice)
+        self.assertNotIn(failed[-1]["id"], notice)
+        self.assertIn("等 %d 個" % total, notice)
+        # STEP 03: 沒有分支（tip 讀不到、cp 分支沒建成）：寫「尚未建立」；沒超過上限不帶「等 M 個」
+        no_branch = runner.failed_checkpoints_notice([{"id": "f-x", "branch": None}, {"id": "f-y", "branch": "cp-f-y"}])
+        self.assertIn("f-x（分支 尚未建立）", no_branch)
+        self.assertIn("f-y（分支 cp-f-y）", no_branch)
+        self.assertNotIn("等 ", no_branch)
+
+    def test_released_checkpoint_covering_the_entries_is_not_reopened_at_completion(self):
+        """cmd_run 層：released 的斷點帶涵蓋集合，完成出口不再補開（沒有新斷點、沒有 pr create、照常完成）。"""
+        # STEP 01: entry a done 未蓋章，被一筆 released 斷點涵蓋
+        set_entries(self.config, [entry_spec("a", self.sha)])
+
+        def add_released(queue):
+            """加一筆 released 的斷點，涵蓋 a。"""
+            checkpoint = dict(runner.CHECKPOINT_FIELD_DEFAULTS)
+            checkpoint.update({"id": "rel-1", "status": runner.CheckpointStatus.RELEASED, "mode": "soft", "covered_entries": ["a"]})
+            queue.setdefault("checkpoints", []).append(checkpoint)
+
+        runner.mutate_queue(self.config, add_released)
+        # STEP 02: 重啟：完成，斷點還是只有那一筆，沒有 pr create
+        self.assert_completed(self.restart())
+        self.assertEqual(len(runner.load_queue(self.config).get("checkpoints") or []), 1)
+        self.assertEqual(count_gh_creates(self.fixture), 0)
+
+    def test_completion_exit_returns_the_settle_checkpoints_code(self):
+        """完成出口的 settle_checkpoints(include_auto=True) 回非 None（宣告的 hard 斷點要暫停／等待）：cmd_run 原樣回傳，不通知完成。
+
+        實務上啟動段與 STEP 03.02 會先處理 hard 斷點，這條路徑是保險；用替身證明保險有接上（忽略回傳碼的突變會讓它變紅）。
+        """
+        # STEP 01: entry a done 未蓋章（完成出口會進補看）；替身只在 include_auto=True 時回暫停碼
+        set_entries(self.config, [entry_spec("a", self.sha)])
+        sentinel = runner.EXIT_PAUSED
+
+        def fake_settle(_config, include_auto=False):
+            """代替 settle_checkpoints：完成出口（include_auto=True）回暫停碼，其餘（啟動段）回 None。"""
+            return sentinel if include_auto else None
+
+        # STEP 02: 重啟：回傳碼被原樣帶出，沒有完成通知
+        with mock.patch.object(runner, "settle_checkpoints", side_effect=fake_settle):
+            self.assertEqual(self.restart(), sentinel)
+        self.assertNotIn(QUEUE_COMPLETE_EVENT, self.notified_events())
+
     def test_below_threshold_restart_does_not_open_an_auto_checkpoint(self):
         """沒到 auto 門檻（模組數、行數都沒超）：完成出口補看之後也不開斷點，照常宣告完成。"""
         # STEP 01: 門檻拉高，entry 正常 done 且未蓋章
@@ -712,8 +783,13 @@ class DoneMissingCommitRestartTest(unittest.TestCase):
             {"id": "f-legacy", "status": "failed", "covered_entries": None},
             {"id": "o", "status": "opened", "covered_entries": ["x"]},
         ]
-        self.assertEqual(runner.failed_checkpoints_with_unstamped_entries({"modules": modules, "checkpoints": checkpoints}), ["f-open"])
-        self.assertEqual(runner.failed_checkpoints_with_unstamped_entries({"modules": modules}), [])
+        ids = lambda queue: [checkpoint["id"] for checkpoint in runner.failed_checkpoints_with_unstamped_entries(queue)]
+        # f-legacy：涵蓋範圍不明（None），還有未蓋章的 done entry（x）就列入；f-stamped 涵蓋的 y 已蓋章，不列
+        self.assertEqual(ids({"modules": modules, "checkpoints": checkpoints}), ["f-open", "f-legacy"])
+        self.assertEqual(ids({"modules": modules}), [])
+        # 全部 entry 都蓋章了：連舊記錄也不列
+        stamped_only = [entry_spec("y", self.sha, checkpoint_id="auto-ok")]
+        self.assertEqual(ids({"modules": stamped_only, "checkpoints": checkpoints}), [])
 
     def test_mark_done_entry_has_last_commit_and_completes(self):
         """mark-done 路徑寫入的 done entry 有 last_commit：不被新檢查誤擋，佇列照常完成。"""

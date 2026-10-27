@@ -540,6 +540,30 @@ class JsLexingTest(unittest.TestCase):
         ok = "{ 'a\\\nb' }"
         self.assertEqual(scan_select.scan_braces(ok, 0), len(ok))
 
+    def test_slash_after_a_closing_brace_is_unparsable_not_guessed(self):
+        """`}` 之後的 `/` 無法判定是除法（物件字面值）還是 regex（區塊結尾）：丟 UnparsableError 要求人工確認，不猜。
+
+        對照組：`)` 之後的 `/` 是除法，照常解析。
+        """
+        # STEP 01: `{` 收尾之後的 `/`
+        with self.assertRaises(scan_select.UnparsableError):
+            scan_select.scan_braces('{ {a: 1} / 2 }', 0)
+        # STEP 02: 對照組：`)` 之後的除法合法，回傳結尾索引
+        ok = '{ (a) / 2 }'
+        self.assertEqual(scan_select.scan_braces(ok, 0), len(ok))
+
+    def test_less_than_operator_is_not_mistaken_for_a_jsx_tag(self):
+        """運算式內的 `<` 比較運算子：前一個 token 是識別字或 `)` 時不是 JSX 起點；`<b` 之類緊貼識別字的寫法不能被當成標籤吞掉後面的文字。"""
+        for expr in ('{ a <b && c }', '{ (a) <b }', '{ a.length <n }'):
+            with self.subTest(expr=expr):
+                self.assertEqual(scan_select.scan_braces(expr, 0), len(expr))
+
+    def test_jsx_inside_an_expression_is_skipped_as_a_whole(self):
+        """運算式內的 JSX（含自閉合標籤、文字裡的撇號與大括號）整段跳過，標籤文字不被當成字串或括號。"""
+        for expr in ("{ x && <i>it's</i> }", '{ x && <p>a } b</p> }', '{ x && <Foo a={1} /> }', '{ x ? <br /> : <hr /> }'):
+            with self.subTest(expr=expr):
+                self.assertEqual(scan_select.scan_braces(expr, 0), len(expr))
+
     def test_regex_literal_with_backslash_newline_raises(self):
         """正規表示式字面值不能跨行，「反斜線＋換行」也算跨行：skip_regex 與 scan_braces 都丟 UnparsableError。
 

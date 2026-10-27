@@ -586,7 +586,7 @@ class StartupCheckpointTest(RestartHarness):
         self.assert_gate_held()
 
     def test_startup_does_not_open_auto_checkpoint(self):
-        """護欄：啟動時只看宣告的斷點，不開 auto 斷點——auto 開失敗不落盤，每次 launchd 重啟都會再推一支新 id 的 cp 分支。
+        """護欄：啟動時（沒有對帳補 done）只看宣告的斷點，不開 auto 斷點——auto 開失敗雖然會落盤成 failed，但 failed 不蓋章、auto 門檻仍成立，啟動時若看 auto 斷點，每次 launchd 重啟都會再推一支新 id 的 cp 分支。
 
         @return None
         """

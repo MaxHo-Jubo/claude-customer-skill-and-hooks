@@ -421,7 +421,7 @@
 
 #### `/r15-r18-migrate <entry-id> [--resume]` — R15→R18 單 entry 最小改動遷移（v1.2.2）
 
-- **v1.2.2 修正（codex review）**：`scan_select.py` 改布林 prop 狀態模型，修掉 R18 `isClearable={false}`、`multi={false}`、動態運算式三個漏判；`scan_rem.py` 支援 `.5rem`；`eslint_gate.py` 加 `--no-inline-config` 並對 R18 多出的手寫停用指令列違規；`runner.py` 抽 `uncovered_done_entries` 四處共用，PR 標題取不到改拋 `PrTitleError`（頁面 PR 走 `pr_error`、斷點走 crash → paused）。測試 498 → 615 項。第二輪 review 後再補：括號掃描改真正解析 regex／模板字串／JSX、解析不了走「需人工確認」，`eslint_gate` 只計註解 token 內的指令，runner 在宣告佇列完成前檢查 done 缺 `last_commit`（以 `done_missing_last_commit` 暫停，補好後重啟會補看 auto 斷點）。細節與未做項見 `CHANGELOG.md`。
+- **v1.2.2 修正（codex review）**：`scan_select.py` 改布林 prop 狀態模型，修掉 R18 `isClearable={false}`、`multi={false}`、動態運算式三個漏判；`scan_rem.py` 支援 `.5rem`；`eslint_gate.py` 加 `--no-inline-config` 並對 R18 多出的手寫停用指令列違規；`runner.py` 抽 `uncovered_done_entries` 四處共用，PR 標題取不到改拋 `PrTitleError`（頁面 PR 走 `pr_error`、斷點走 crash → paused）。測試 498 → 622 項。第二輪 review 後再補：括號掃描改真正解析 regex／模板字串／JSX、解析不了走「需人工確認」，`eslint_gate` 只計註解 token 內的指令，runner 在宣告佇列完成前檢查 done 缺 `last_commit`（以 `done_missing_last_commit` 暫停，補好後重啟會補看 auto 斷點）。細節與未做項見 `CHANGELOG.md`。
 - **v1.2.0／v1.2.1 新增**：`helpers/eslint_gate.py`（對每個 R15→R18 檔對先用 R18 的 eslint 設定跑 R15 原文取基準，parse error 與 `import/no-unresolved` 必須為 0，其餘規則數量不得超過基準）、`helpers/scan_select.py`（react-select v1→v5 的 `clearable`／`isClearable` 預設值差異掃描）；`docs/api-mapping.md` 的動態欄位顯示開關改用 `hideColumnByCss`。詳見該 skill 的 `CHANGELOG.md`。
 
 - **位置**：`~/.claude/skills/r15-r18-migrate/SKILL.md`（含 `docs/` 六份細則文件、`templates/`、`helpers/`（`runner.py`／`diagnostics.py`／`event_log.py`／`stream_events.py`／`boot-smoke.cjs`／`diff-test/` harness／`tests/` 單元測試）、`CHANGELOG.md`）

@@ -291,8 +291,11 @@ CHECKPOINT_ID_RULE = "不可含 `--` 或 `/`，也不可以 `-` 開頭"
 CHECKPOINT_ID_INVALID_REASON = "checkpoint_id_invalid"
 # cmd_run 在判定「佇列全部完成」之前發現 done 的不變量被破壞（有 entry 是 done、還沒蓋章，卻取不到 commit 標題：
 # 缺 last_commit 或 last_commit 在 repo 裡讀不到）的暫停原因：不帶簽名、不鎖定（hold）——人工補好 modules[].last_commit 後
-# 下次重啟會依 auto 門檻補看一次斷點（cmd_run STEP 03.03.02，沒到門檻就不開）再宣告完成；重啟不會自己好
+# 下次重啟會依 auto 門檻補看斷點（cmd_run STEP 03.03.02，沒到門檻就不開；每次重啟都重算）再宣告完成；重啟不會自己好
 DONE_MISSING_COMMIT_REASON = "done_missing_last_commit"
+# 完成通知（queue_complete）最多列出幾個「斷點 PR 沒開成」的斷點：notify.sh 把整則訊息截在 300 字，動作句排在前面、id 與分支只列前幾個，
+# 其餘用「等 N 個」帶過（全部清單看 queue.json 的 checkpoints[].status == failed）
+COMPLETE_NOTICE_MAX_FAILED_CHECKPOINTS = 3
 # 呼叫序號佔號檔（sessions/<entry>-<n>.claim）的權限：檔案是空的、只當「這一號已被用過」的紀錄，擁有者讀寫即可
 CLAIM_FILE_MODE = 0o600
 # 工作樹髒污／未追蹤檔清單放進 detail 時最多列幾行，其餘只給總數（通知會截尾，前幾行比尾端有用）
@@ -565,7 +568,8 @@ CHECKPOINT_FIELD_DEFAULTS = {
     "last_remind_at": None,
     # write-ahead 時凍結的整合分支 tip：cp 分支一律建在這裡、重試不前進；補完 opening 時「已合併」只看它（1.1.2 第五批收尾 review）
     "frozen_sha": None,
-    # write-ahead 時已 done、還沒蓋章的 entry id（開成或判 merged 時只替它們蓋章）；None＝舊記錄，蓋所有還沒蓋章的 done entry
+    # write-ahead 時已 done、還沒蓋章的 entry id（開成或判 merged 時只替它們蓋章）；讀不到整合分支 tip 時先記 provisional 值、凍結成功再覆寫；
+    # 完成出口（unattempted_done_entries）也讀它。None＝舊記錄：蓋章時蓋所有還沒蓋章的 done entry（stamp_covered_entries），完成出口則不涵蓋任何 entry
     "covered_entries": None,
 }
 
@@ -2939,11 +2943,12 @@ def unattempted_done_entries(queue):
     只回答「有沒有斷點嘗試過涵蓋」，不判斷「該不該開」（那是 auto_checkpoint_needed 的事）。開啟斷點的 write-ahead 會同一次
     寫入 covered_entries（begin_checkpoint_opening；讀不到整合分支 tip 凍結不了時也先記），之後不論開成功、failed、停在 opening
     或被 released，這份紀錄都還在；只有嘗試在 write-ahead 之前就拋錯（取標題的 PrTitleError、crash）才不留紀錄。
-    所以真的進了 open_checkpoint 的那一批，這個集合會把它們排除，不會因為開失敗而每次重啟都再推一支新 id 的 cp 分支。
+    所以走過 write-ahead（begin_checkpoint_opening）的那一批，這個集合會把它們排除，不會因為開失敗而每次重啟都再推一支新 id 的 cp 分支。
     沒到 auto 門檻時 handle_checkpoints 什麼都沒嘗試，集合維持非空，呼叫端每次重算、結果相同（見 cmd_run STEP 03.03.02）。
     pending 的斷點還沒開始開啟，不算。沒有 covered_entries 的記錄（只剩這版之前寫的舊記錄）不涵蓋任何 entry——
     最壞多補開一次，補開的新記錄帶著涵蓋集合，之後不會再重複；OPENED／MERGED 的舊記錄涵蓋的 entry 當時已蓋過章，本來就不在這裡。
-    RELEASED 的舊記錄同理（release 不蓋章）：會多補開一次，這是舊記錄才有的取捨。
+    RELEASED 的舊記錄只在放行當時 entry 還沒蓋章（從 opening／failed 放行；從 opened 放行的 entry 當時已蓋章）才會多補開一次，這是舊記錄才有的取捨。
+    import-inventory 重匯入會清掉 auto 斷點記錄（1.1.x 既有行為），它涵蓋的 entry 會被當成沒嘗試過，完成出口再依門檻補看一次（每次重匯入最多一次）。
 
     @param queue 整份 queue（讀 modules、checkpoints）
     @return 新的 list，順序同 queue；元素是 queue 裡的原 entry 物件
@@ -2960,22 +2965,45 @@ def unattempted_done_entries(queue):
 
 
 def failed_checkpoints_with_unstamped_entries(queue):
-    """開失敗（failed）、而且它涵蓋的 entry 至今沒蓋章的斷點 id：這些模組沒有任何 PR（宣告佇列完成時要帶在通知裡）。
+    """開失敗（failed）、而且它涵蓋的 entry 至今沒蓋章的斷點記錄：這些模組沒有任何斷點 PR（宣告佇列完成時要帶在通知裡）。
 
     failed 不會再被重開（不在 CHECKPOINT_OPENABLE_STATUSES），涵蓋的 entry 也不會自動補上 PR，只剩 mark_checkpoint_failed 當時的一則通知；
-    完成通知若只寫「共 N 個模組」，看起來就像全部都有 PR。
+    完成通知若只寫「共 N 個模組」，看起來就像全部都有 PR。「不會自動補上 PR」只在宣告完成的當下成立——佇列中途的下一個 auto 斷點
+    會把還沒蓋章的 entry 一併涵蓋。
+    沒有 covered_entries 的 failed 舊記錄（None）：涵蓋範圍不明，只要還有 done 未蓋章的 entry 就列入（寧可多提醒，
+    不讓舊資料回到「完成通知看起來全部都有 PR」）。released 不列入（人已決定不開）。
 
     @param queue 整份 queue（讀 modules、checkpoints）
-    @return 斷點 id 的 list，順序同 queue；沒有回空 list
+    @return 斷點記錄的 list（原物件，唯讀使用），順序同 queue；沒有回空 list
     """
     # STEP 01: 還沒蓋章的 done entry id
     unstamped = {entry.get("id") for entry in uncovered_done_entries(queue)}
-    # STEP 02: failed 的斷點裡，涵蓋集合和它有交集的
+    # STEP 02: failed 的斷點裡，涵蓋集合和它有交集的；舊記錄（None）有任何未蓋章 entry 就算
     return [
-        checkpoint["id"]
+        checkpoint
         for checkpoint in queue.get("checkpoints", [])
-        if checkpoint.get("status") == CheckpointStatus.FAILED and unstamped.intersection(checkpoint.get("covered_entries") or [])
+        if checkpoint.get("status") == CheckpointStatus.FAILED
+        and (bool(unstamped) if checkpoint.get("covered_entries") is None else bool(unstamped.intersection(checkpoint["covered_entries"])))
     ]
+
+
+def failed_checkpoints_notice(failed_checkpoints):
+    """完成通知（queue_complete）附註：哪些斷點的斷點 PR 沒開成、涵蓋的模組要人工處理。
+
+    頁面 PR 其實都已存在，缺的是斷點 PR（整合分支 → pr_base）；tip 讀不到、`branch -f` 失敗或 push 被拒時 origin 上連 cp 分支都沒有。
+    notify.sh 把整則截在 300 字，所以動作句放最前面，id 與分支只列前 COMPLETE_NOTICE_MAX_FAILED_CHECKPOINTS 個。
+
+    @param failed_checkpoints failed_checkpoints_with_unstamped_entries 的回傳（斷點記錄 list）
+    @return 附註字串；list 為空回空字串
+    """
+    # STEP 01: 沒有就不附註
+    if not failed_checkpoints:
+        return ""
+    # STEP 02: 動作句 → 前幾個「id（分支）」→ 其餘用「等 N 個」帶過
+    listed = failed_checkpoints[:COMPLETE_NOTICE_MAX_FAILED_CHECKPOINTS]
+    names = "、".join("%s（分支 %s）" % (checkpoint["id"], checkpoint.get("branch") or "尚未建立") for checkpoint in listed)
+    more = "等 %d 個" % len(failed_checkpoints) if len(failed_checkpoints) > len(listed) else ""
+    return "；注意：斷點 PR 沒開成，涵蓋的模組需人工開斷點 PR（failed 不會自動重開，cp 分支可能尚未推上 origin，原因見 queue.json 的 last_error）：%s%s" % (names, more)
 
 
 def done_title_problem(config, queue):
@@ -3599,7 +3627,7 @@ def begin_checkpoint_opening(config, checkpoint_id, branch, auto_title, frozen_s
             target["title"] = auto_title or ("R18 遷移斷點 %s" % checkpoint_id)
         target["status"] = CheckpointStatus.OPENING
         target["branch"] = branch
-        # STEP 03: 凍結點與涵蓋集合只寫一次（已有就沿用）
+        # STEP 03: 凍結點只寫一次（已有就沿用）；涵蓋集合在讀不到 tip 時先記 provisional 值，凍結成功時覆寫一次
         if not target.get("frozen_sha"):
             # 此刻已 done、還沒蓋章的 entry id（涵蓋集合）
             covered = [entry["id"] for entry in uncovered_done_entries(queue_data)]
@@ -3763,7 +3791,7 @@ def checkpoint_open_failed(config, checkpoint, reason):
 
 
 def mark_checkpoint_failed(config, checkpoint_id, reason):
-    """把斷點標成 failed 並通知。
+    """把斷點標成 failed、記下原因（last_error）並通知。
 
     只有仍是 opening 才改：開啟途中被人 release 的維持 released（1.1.2 第五批收尾 MINOR 4 的反方向；唯一呼叫端是
     checkpoint_open_failed，write-ahead 之後狀態只可能是 opening 或被 release）。事件與通知照發——開啟確實失敗了。
@@ -3780,6 +3808,8 @@ def mark_checkpoint_failed(config, checkpoint_id, reason):
         target = find_checkpoint(queue_data, checkpoint_id)
         if target is not None and target.get("status") == CheckpointStatus.OPENING:
             target["status"] = CheckpointStatus.FAILED
+            # 原因落盤：完成通知只帶動作與 id，原因看這個欄位（hard 斷點在 checkpoint_open_failed 就寫了）
+            target["last_error"] = reason
         return target
 
     mutate_queue(config, mutator)
@@ -6792,7 +6822,8 @@ def cmd_run(config, args):
                 counts = count_status(queue)
                 if counts.get("done", 0) == len(queue.get("modules", [])) and queue.get("modules"):
                     # STEP 03.03.01: 宣告完成之前的狀態不變量（cmd_run 唯一的完成出口）：done 缺 last_commit 就不得宣告完成。
-                    # 標題讀不到時，STEP 03.03.02 補看 auto 斷點會再拋 PrTitleError、走 crash 流程；這裡先把它換成可辨識的暫停原因，
+                    # 這道閘門獨立於 auto 門檻：標題讀不到的資料本身就是異常，不論後面會不會開斷點都要擋。到了 auto 門檻時，
+                    # STEP 03.03.02 補看 auto 斷點會再拋 PrTitleError、走 crash 流程；這裡先把它換成可辨識的暫停原因，
                     # 避免暫停原因在 runner_crashed 與 done_missing_last_commit 之間來回翻（不重複通知），也不保存斷點意圖
                     problem = done_title_problem(config, queue)
                     if problem:
@@ -6801,7 +6832,7 @@ def cmd_run(config, args):
                             DONE_MISSING_COMMIT_REASON,
                             "佇列看起來全部完成，但有 done 的 entry 取不到 commit 標題（done 的不變量被破壞，斷點 PR 會開不出來）：%s。"
                             "請在 queue.json 的 modules[] 把這些 entry 的 last_commit 補成它們在遠端整合分支上存在的 commit"
-                            "（mark-done 只收 pending／blocked／failed，補不了 done）；補好重啟後會依自動斷點門檻補看一次再宣告完成"
+                            "（mark-done 只收 pending／blocked／failed，補不了 done）；補好重啟後會依自動斷點門檻（每次重啟都重算）補看斷點再宣告完成"
                             % problem,
                         )
                     # STEP 03.03.02: 標題讀得到了，但有 done 的 entry 沒被任何斷點嘗試涵蓋（上一輪 auto 斷點在 write-ahead 之前就 crash，
@@ -6818,9 +6849,7 @@ def cmd_run(config, args):
                             return code
                     # STEP 03.03.03: 完成通知帶出開失敗而沒有 PR 的模組（failed 不會自動重開，只靠失敗當下那一則通知很容易被完成通知蓋過）
                     complete_detail = "共 %d 個模組" % counts.get("done", 0)
-                    failed_ids = failed_checkpoints_with_unstamped_entries(load_queue(config))
-                    if failed_ids:
-                        complete_detail += "；注意：斷點 %s 開失敗，它涵蓋的模組沒有 PR，需人工處理（failed 不會自動重開，要自行開 PR）" % "、".join(failed_ids)
+                    complete_detail += failed_checkpoints_notice(failed_checkpoints_with_unstamped_entries(load_queue(config)))
                     notify(config, "queue_complete", "佇列全部完成", complete_detail)
                     set_runner_state(config, "idle")
                     return EXIT_OK
