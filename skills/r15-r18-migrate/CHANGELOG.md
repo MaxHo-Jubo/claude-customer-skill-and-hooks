@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 1.2.3 (2026-10-27，1.2.2 第三輪 review 的 D 組：斷點記錄驗證與 `covered_entries` 語意集中)
+
+改 `helpers/runner.py`、`docs/queue-schema.md` 與測試（新檔 `tests/test_queue_validation.py`）。
+
+- **載入驗證（D2）**：新增 `validate_queue_checkpoints`，掛在 `load_queue`（`mutate_queue` 在鎖內重讀也走它）：`checkpoints` 必須是 list、每筆必須是 JSON 物件、斷點 `status` 必須是字串且在 `CheckpointStatus.ALL`（review 抓到：`status` 為 `[]`／`{}` 時成員檢查先丟 `TypeError`，繞過呼叫端只接 `ValueError` 的 queue_corrupt 處理；原本這個常數是死程式碼，`load_queue` 只做 `json.load`）、`covered_entries` 必須是 `null` 或字串 list，否則 `ValueError`（`queue_corrupt`）。原本的風險：`unattempted_done_entries` 是「跳過 PENDING、其餘一律算已嘗試」的黑名單，未知狀態帶 list 時整批 entry 永遠不補開也沒有通知；字串的 `covered_entries` 會被 `set.update` 拆成字元。**行為變更**：手改壞的 `queue.json` 現在會在載入時失敗（runner 走既有的 queue_corrupt 路徑），不再靜默誤判。`null`／欄位缺漏的舊記錄仍合法。
+- **`null` 語意集中（D1）**：新增 `checkpoint_covered_ids`；`stamp_covered_entries`（蓋全部）、`unattempted_done_entries`（不涵蓋）、`failed_checkpoints_with_unstamped_entries`（有未蓋章就列入）三處改用它，行為不變，三種處理與理由寫成 docstring 的對照表。決策：不遷移資料、不 raise——本機沒有真實 `queue.json`，無法確認舊資料長相，擋下反而可能讓 runner 啟動就暫停。補不變量測試：離開 `pending` 的路徑（宣告的斷點／新 auto 斷點 × 讀得到／讀不到 tip）都留下非 `null` 的 `covered_entries`。
+- **雜訊（D4）**：`done_title_problem` 在沒有 done 未蓋章的 entry 時直接回 `None`，不再呼叫 `pr_title_from_entry_commits`（它在沒有涵蓋的 entry 時會寫 `pr_title_fallback` 事件，正常完成也會多寫一筆）。
+- **測試**：622 → 637 項。各項修正都做突變探針（8 個，全數擊殺）。
+- **未做**：D3（完成出口沒有「已評估」記錄，沒到 auto 門檻時每次重啟重算）維持 1.2.2 寫明並接受的行為；`null` 舊記錄的一次性遷移；真實 `queue.json` 沒驗證（本機沒有 state 目錄）。
+
 ## 1.2.2 (2026-10-26，codex review 修正：閘門漏判、PR 標題取不到不再退回舊標題)
 
 改 `helpers/scan_select.py`、`scan_rem.py`、`eslint_gate.py`、`runner.py` 與對應測試（含 `tests/review_fixtures.py`）。

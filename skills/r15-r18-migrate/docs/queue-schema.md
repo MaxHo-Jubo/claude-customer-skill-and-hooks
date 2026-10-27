@@ -118,6 +118,8 @@
 
 `merged`、`released` 之後沒有任何轉移（`CHECKPOINT_PASSED_STATUSES`：人工閘門已過）；`failed` 只能被 `release`。
 
+**載入驗證**（1.2.3，`validate_queue_checkpoints`，掛在 `load_queue`，`mutate_queue` 的重讀也走它）：`checkpoints` 必須是 list（缺欄位視為沒有斷點）、每筆必須是 JSON 物件；每個斷點的 `status` 必須是字串且是上表六個值之一（缺欄位、非字串也算不合法，一律 `ValueError` 而非 `TypeError`）；`covered_entries` 必須是 `null`（或欄位缺漏，舊記錄）或 entry id 字串的 list。違反就以 `queue_corrupt` 為首的 `ValueError` 拒絕載入，訊息帶斷點 id 與實際值——手改 `queue.json` 打錯狀態或把 `covered_entries` 寫成字串，不會再被當成「已嘗試」而讓整批 entry 永遠不補開。`covered_entries` 為 `null` 的舊記錄仍合法，三個讀取點對它的處理各自不同（蓋章：蓋全部；完成出口補看：不涵蓋任何 entry；完成通知：有未蓋章的 done entry 就列入），集中定義在 `checkpoint_covered_ids` 的 docstring；新資料不會是 `null`（離開 `pending` 的寫入都同一次記下涵蓋集合）。
+
 ## entry 物件（`modules[]` 的元素）
 
 ### 盤點期欄位（`import-inventory` 寫入）

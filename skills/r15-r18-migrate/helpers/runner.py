@@ -1254,8 +1254,50 @@ def queue_file(config):
     return state_path(config, "queue.json")
 
 
+def validate_queue_checkpoints(queue):
+    """檢查 queue 裡每個斷點記錄的形狀；不合法就 raise，不讓壞資料流進狀態機。
+
+    先驗容器與型別（checkpoints 必須是 list、每筆必須是 JSON 物件、status 必須是字串，否則後面的成員檢查會丟 TypeError 而不是
+    queue_corrupt 的 ValueError，呼叫端只接 ValueError），再驗「讀的人會被騙」的兩個欄位：status 必須是 CheckpointStatus.ALL 的成員（unattempted_done_entries 之類跳過 PENDING、
+    其餘一律當成已嘗試的黑名單，遇到未知狀態會讓那批 entry 永遠不補開也沒有通知）；covered_entries 必須是 None（舊記錄，
+    語意見 checkpoint_covered_ids）或字串 list（字串會被 set.update 拆成字元，非字串元素永遠對不上 entry id）。
+    欄位缺漏視同 None（舊記錄）；沒有 checkpoints 欄位視為沒有斷點。
+
+    @param queue 已解析的 queue 內容
+    @return None
+    @raises ValueError checkpoints 不是 list、斷點記錄不是 JSON 物件、斷點狀態不是合法值（含非字串），或 covered_entries 型別不對
+        （訊息帶 queue_corrupt，並盡量帶斷點 id 與實際值）
+    """
+    # STEP 01: checkpoints 必須是 list（欄位缺漏視為沒有斷點）
+    checkpoints = queue.get("checkpoints", [])
+    if not isinstance(checkpoints, list):
+        raise ValueError("queue.json 的 checkpoints 必須是 list（queue_corrupt），實際是 %r" % (checkpoints,))
+    # STEP 02: 逐一檢查斷點記錄
+    for index, checkpoint in enumerate(checkpoints):
+        # STEP 02.01: 每筆必須是 JSON 物件
+        if not isinstance(checkpoint, dict):
+            raise ValueError("queue.json 的 checkpoints[%d] 必須是 JSON 物件（queue_corrupt），實際是 %r" % (index, checkpoint))
+        # STEP 02.02: 狀態必須是字串，而且是合法值（先收窄型別：list／dict 放進 frozenset 成員檢查會丟 TypeError）
+        status = checkpoint.get("status")
+        if not isinstance(status, str) or status not in CheckpointStatus.ALL:
+            raise ValueError(
+                "queue.json 的斷點 %s 狀態 %r 不是合法值（queue_corrupt）；合法值：%s"
+                % (checkpoint.get("id"), status, "／".join(sorted(CheckpointStatus.ALL)))
+            )
+        # STEP 02.03: covered_entries 必須是 None 或字串 list
+        covered = checkpoint.get("covered_entries")
+        if covered is not None and not (isinstance(covered, list) and all(isinstance(entry_id, str) for entry_id in covered)):
+            raise ValueError(
+                "queue.json 的斷點 %s 的 covered_entries 必須是 null 或 entry id 字串的 list（queue_corrupt），實際是 %r"
+                % (checkpoint.get("id"), covered)
+            )
+
+
 def load_queue(config):
-    """唯讀載入 queue.json；檔案不存在或壞掉時丟出明確的例外訊息。"""
+    """唯讀載入 queue.json；檔案不存在或壞掉時丟出明確的例外訊息。
+
+    解析成功後再過 validate_queue_checkpoints；mutate_queue 在鎖內重讀時也走這裡，所以寫入前的讀取同樣被擋。
+    """
     path = queue_file(config)
     # STEP 01: 不存在就給可行動的錯誤訊息，不讓呼叫端看到 traceback
     if not os.path.exists(path):
@@ -1265,9 +1307,12 @@ def load_queue(config):
     # STEP 02: 解析失敗一律視為 queue_corrupt
     with open(path, "r", encoding="utf-8") as handle:
         try:
-            return json.load(handle)
+            queue = json.load(handle)
         except ValueError as exc:
             raise ValueError("queue.json 解析失敗（queue_corrupt）: %s" % exc)
+    # STEP 03: 斷點記錄的形狀檢查
+    validate_queue_checkpoints(queue)
+    return queue
 
 
 def atomic_write_json(path, payload):
@@ -2937,6 +2982,28 @@ def uncovered_done_entries(queue):
     return [entry for entry in queue.get("modules", []) if entry.get("status") == "done" and not entry.get("checkpoint_id")]
 
 
+def checkpoint_covered_ids(checkpoint):
+    """斷點記錄涵蓋的 entry id 集合；None＝涵蓋範圍不明（沒有 covered_entries 的舊記錄）。
+
+    None 在三個讀取點各有刻意不同的處理（不是遺漏，是各自選了「出錯時代價較小」的那一邊），集中寫在這裡：
+
+    | 讀取點 | None 的處理 | 理由 |
+    |---|---|---|
+    | stamp_covered_entries（蓋章） | 蓋所有還沒蓋章的 done entry | 舊行為；舊記錄開成功時涵蓋的就是當時全部未蓋章的 entry |
+    | unattempted_done_entries（完成出口補看） | 不涵蓋任何 entry | 寧可多補開一次，也不讓一筆舊記錄永久關掉補開路徑 |
+    | failed_checkpoints_with_unstamped_entries（完成通知） | 還有未蓋章的 done entry 就列入 | 寧可多提醒，不讓舊資料回到「看起來全部都有 PR」 |
+
+    新資料不會是 None：所有離開 PENDING 的寫入都經過 begin_checkpoint_opening，同一次寫入就記下涵蓋集合
+    （測試 CoveredEntriesInvariantTest 釘住這點）；PENDING 的斷點還沒開始開啟，None 是正常的初始值。
+
+    @param checkpoint 斷點記錄
+    @return frozenset（涵蓋的 entry id）；舊記錄回 None
+    """
+    # STEP 01: 欄位缺漏或 None 都是舊記錄
+    covered = checkpoint.get("covered_entries")
+    return None if covered is None else frozenset(covered)
+
+
 def unattempted_done_entries(queue):
     """done、沒蓋章，而且不在任何「已開始開啟」的斷點的涵蓋集合（covered_entries）裡的 entry：沒有斷點嘗試過涵蓋它們。
 
@@ -2959,7 +3026,7 @@ def unattempted_done_entries(queue):
     for checkpoint in queue.get("checkpoints", []):
         if checkpoint.get("status") == CheckpointStatus.PENDING:
             continue
-        covered_ids.update(checkpoint.get("covered_entries") or [])
+        covered_ids.update(checkpoint_covered_ids(checkpoint) or ())
     # STEP 02: 還沒蓋章的 done entry 扣掉已被涵蓋的
     return [entry for entry in uncovered_done_entries(queue) if entry.get("id") not in covered_ids]
 
@@ -2978,13 +3045,19 @@ def failed_checkpoints_with_unstamped_entries(queue):
     """
     # STEP 01: 還沒蓋章的 done entry id
     unstamped = {entry.get("id") for entry in uncovered_done_entries(queue)}
-    # STEP 02: failed 的斷點裡，涵蓋集合和它有交集的；舊記錄（None）有任何未蓋章 entry 就算
-    return [
-        checkpoint
-        for checkpoint in queue.get("checkpoints", [])
-        if checkpoint.get("status") == CheckpointStatus.FAILED
-        and (bool(unstamped) if checkpoint.get("covered_entries") is None else bool(unstamped.intersection(checkpoint["covered_entries"])))
-    ]
+    # STEP 02: failed 的斷點裡，涵蓋集合和它有交集的；舊記錄（None）有任何未蓋章 entry 就算（政策見 checkpoint_covered_ids）
+    # 要列入通知的斷點
+    listed = []
+    for checkpoint in queue.get("checkpoints", []):
+        # STEP 02.01: 只看 failed
+        if checkpoint.get("status") != CheckpointStatus.FAILED:
+            continue
+        # STEP 02.02: 涵蓋集合與未蓋章 entry 比對
+        # 斷點涵蓋的 entry id 集合；None＝涵蓋範圍不明（舊記錄），空集合＝確定什麼都沒涵蓋，兩者語意不同
+        covered = checkpoint_covered_ids(checkpoint)
+        if (covered is None and unstamped) or (covered is not None and unstamped & covered):
+            listed.append(checkpoint)
+    return listed
 
 
 def failed_checkpoints_notice(failed_checkpoints):
@@ -3019,7 +3092,11 @@ def done_title_problem(config, queue):
     @param queue 已載入的 queue 內容
     @return 標題讀不到時回問題描述（PrTitleError 的訊息，列出每個有問題的 entry id 與原因）；都讀得到、或沒有涵蓋的 entry 回 None
     """
-    # STEP 01: 與開斷點取標題同一條路徑；只接 PrTitleError，其他例外（程式錯誤）照常往外拋
+    # STEP 01: 沒有 done 未蓋章的 entry 就沒有標題要檢查；不呼叫 pr_title_from_entry_commits（它在沒有涵蓋的 entry 時會寫一筆
+    # pr_title_fallback 事件，正常完成也會多寫）
+    if not uncovered_done_entries(queue):
+        return None
+    # STEP 02: 與開斷點取標題同一條路徑；只接 PrTitleError，其他例外（程式錯誤）照常往外拋
     try:
         pr_title_from_entry_commits(config, queue)
     except PrTitleError as exc:
@@ -3511,8 +3588,8 @@ def stamp_covered_entries(queue_data, target):
     @param target 斷點記錄
     @return None
     """
-    # 要蓋章的 entry id；None＝舊記錄
-    covered = target.get("covered_entries")
+    # 要蓋章的 entry id；None＝舊記錄（政策見 checkpoint_covered_ids）
+    covered = checkpoint_covered_ids(target)
     # STEP 01: 逐一蓋（已被別的斷點蓋過的不動）
     for entry in uncovered_done_entries(queue_data):
         if covered is None or entry.get("id") in covered:

@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import runner  # noqa: E402  pylint: disable=wrong-import-position
 from review_fixtures import (  # noqa: E402  pylint: disable=wrong-import-position
     ENTRY_BRANCH,
+    IMPOSSIBLE_SHA,
     INTEGRATION_BRANCH,
     build_fixture,
     git_with_failure,
@@ -739,6 +740,35 @@ class DoneMissingCommitRestartTest(unittest.TestCase):
         with mock.patch.object(runner, "settle_checkpoints", side_effect=fake_settle):
             self.assertEqual(self.restart(), sentinel)
         self.assertNotIn(QUEUE_COMPLETE_EVENT, self.notified_events())
+
+    def test_done_title_problem_with_nothing_to_check_writes_no_fallback_event(self):
+        """沒有 done 未蓋章的 entry：done_title_problem 回 None，而且不寫 pr_title_fallback 事件（正常完成不該多出這種雜訊）。
+
+        對照組：直接呼叫 pr_title_from_entry_commits 在同樣的 queue 上會寫一筆，證明事件檔看得到這個事件、檢查不是空綠。
+
+        @return None
+        """
+        # STEP 01: 所有 entry 都已蓋章
+        set_entries(self.config, [entry_spec("a", self.sha, checkpoint_id="auto-x")])
+        queue = runner.load_queue(self.config)
+        # STEP 02: 對照組：直接取標題會寫 fallback 事件
+        self.assertIsNone(runner.pr_title_from_entry_commits(self.config, queue))
+        self.assertEqual(len(read_events_safe(self.config, runner.PR_TITLE_FALLBACK_EVENT)), 1)
+        # STEP 03: done_title_problem：回 None，事件筆數不增加
+        self.assertIsNone(runner.done_title_problem(self.config, queue))
+        self.assertEqual(len(read_events_safe(self.config, runner.PR_TITLE_FALLBACK_EVENT)), 1)
+
+    def test_done_title_problem_still_reports_unreadable_titles(self):
+        """有 done 未蓋章的 entry 時，done_title_problem 仍照常檢查標題（提前 return 沒有放過真正的問題）。
+
+        @return None
+        """
+        # STEP 01: done 未蓋章、last_commit 指向不存在的 commit
+        set_entries(self.config, [entry_spec("a", IMPOSSIBLE_SHA)])
+        # STEP 02: 回問題描述並列出 entry id
+        problem = runner.done_title_problem(self.config, runner.load_queue(self.config))
+        self.assertIsNotNone(problem)
+        self.assertIn("a", problem)
 
     def test_below_threshold_restart_does_not_open_an_auto_checkpoint(self):
         """沒到 auto 門檻（模組數、行數都沒超）：完成出口補看之後也不開斷點，照常宣告完成。"""
