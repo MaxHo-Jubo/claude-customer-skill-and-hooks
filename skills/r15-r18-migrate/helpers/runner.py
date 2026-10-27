@@ -7012,7 +7012,9 @@ def cmd_release(config, args):
     """release 子命令：放行一個等待人工檢視的斷點。
 
     opening 也可以放行（1.1.2 第五批階段三）：hard 斷點開不起來、runner 以 checkpoint_open_failed 暫停時，人決定不開 PR、
-    直接過閘門用。放行後 runner 不再替它開 PR；涵蓋的模組沒有蓋章（蓋章只在 opened 時做），會算進下一個自動斷點。
+    直接過閘門用。放行後 runner 不再替它開 PR；涵蓋的模組沒有蓋章（蓋章只在 opened 時做）：佇列還有模組要跑時，它們仍計入 auto 門檻、
+    會被下一個自動斷點涵蓋；佇列全部完成時，完成出口把 released 視為已嘗試過涵蓋（unattempted_done_entries），不會為它們補開，
+    需要斷點 PR 得自行開。
     """
 
     def mutator(queue):
@@ -7046,7 +7048,7 @@ def cmd_release(config, args):
     if result.get("released_from") == CheckpointStatus.OPENING:
         print(
             "已放行斷點 %s（原本開啟未完成）：runner 不會再替它開 PR，分支 %s／PR 若已部分建立請自行處理；"
-            "這個斷點涵蓋的模組沒有蓋章，會算進下一個自動斷點。runner 若已鎖定（status 顯示 hold），"
+            "這個斷點涵蓋的模組沒有蓋章：佇列還有模組要跑時會算進下一個自動斷點；佇列已全部完成就不會補開，需要斷點 PR 請自行開。runner 若已鎖定（status 顯示 hold），"
             "再跑 `runner.py unblock --runner`，下次啟動就會續跑" % (args.checkpoint_id, result.get("branch"))
         )
         return EXIT_OK

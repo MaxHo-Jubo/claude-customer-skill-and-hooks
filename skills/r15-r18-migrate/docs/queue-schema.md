@@ -99,7 +99,7 @@
 - `opening` 補完時先看遠端（1.1.2 第五批收尾）：先 `git fetch origin`；`frozen_sha` 是 `origin/<pr_base>` 的**真祖先**（人在重啟前把 PR 合併了；不看本機 cp 分支，沒有 `frozen_sha` 的舊記錄不判）→ 直接 `opening` → `merged`，不再開、hard 閘門視為已過、替 `covered_entries` 蓋章；遠端 cp 分支已含本機 tip（人在 cp 分支上推了修正）→ 不推，以遠端 tip 查 PR 沿用。fetch、`ls-remote`、祖先判斷本身失敗都當開啟失敗（hard 暫停、soft／auto `failed`），不猜。
 - `opening` → `failed`：soft／auto 斷點開啟失敗（沿用 1.1.1 起的行為，不暫停、不擋下一個模組）。開啟途中已被 `release` 的維持 `released`。
 - `opened` → `merged`：cp 分支已是基準分支的祖先（前置作業偵測）。
-- `opened`／`failed`／`opening` → `released`：`runner.py release <id>`。從 `opening` 放行＝放棄讓 runner 開 PR：分支／PR 若已部分建立要人工處理，涵蓋的模組沒有蓋章、會算進下一個 auto 斷點。例外：放行時開啟正在進行、之後 PR 真的開成——狀態維持 `released`，連結照補、模組照蓋章（1.1.2 第五批收尾）。
+- `opened`／`failed`／`opening` → `released`：`runner.py release <id>`。從 `opening` 放行＝放棄讓 runner 開 PR：分支／PR 若已部分建立要人工處理，涵蓋的模組沒有蓋章：佇列還有模組要跑時會算進下一個 auto 斷點；佇列已全部完成則完成出口不會補開（released 視為已嘗試過涵蓋），需要斷點 PR 要自行開。例外：放行時開啟正在進行、之後 PR 真的開成——狀態維持 `released`，連結照補、模組照蓋章（1.1.2 第五批收尾）。
 - 只有 `pending`／`opening` 可以被開：其他狀態 runner 一律拒絕重開（`CheckpointStateConflict`，不改寫 queue），不會把在審的 cp 分支往前移。
 - 讀取點：只有 `opened`（加上 hard 的 `opening`）會擋取件；前置作業只回流 `opened` 的分支（`opening` 的分支就是整合分支當時的 tip，沒有東西要回流）；auto 門檻的比較基準是 `opened`／`merged`／`released` 中最新、而且本機分支真的存在的那一支（從 `opening` 放行、分支從沒建立的跳過；查分支或 diff 失敗會 raise，不當成 0 行）。
 
